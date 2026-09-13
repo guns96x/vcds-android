@@ -1,0 +1,1 @@
+﻿# VCDS Android Proguard Rules

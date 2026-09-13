@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VCDS Mobile</string>
+    <string name="app_subtitle">EDC16 Diagnostics &amp; High-Speed Logger</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_connecting">Connecting...</string>
+    <string name="status_connected">Connected (KWP2000 @ 10400 bps)</string>
+    <string name="status_mock">Demo / Mock Mode (Simulated EDC16)</string>
+    <string name="btn_connect">Connect USB</string>
+    <string name="btn_disconnect">Disconnect</string>
+    <string name="btn_start_log">Start WOT Log</string>
+    <string name="btn_stop_log">Stop Log</string>
+    <string name="btn_read_dtc">Scan Fault Codes</string>
+    <string name="btn_clear_dtc">Clear DTCs</string>
+</resources>
