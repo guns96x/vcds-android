@@ -47,29 +47,44 @@ class MainActivity : AppCompatActivity() {
     private var lastSmokeLim: Double = 0.0
     private var lastMafAct: Double = 0.0
 
-    private val usbReceiver = object : BroadcastReceiver() {
+    private var currentDevice: UsbDevice? = null
+    private var isPermissionRequested: Boolean = false
+
+    private val usbPermissionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                UsbKwpTransport.ACTION_USB_PERMISSION -> {
-                    val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
-                    } else {
-                        @Suppress("DEPRECATION")
-                        intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
-                    }
-                    val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
-                    if (granted && device != null) {
-                        Toast.makeText(this@MainActivity, "USB Permission Granted", Toast.LENGTH_SHORT).show()
-                        performConnect()
-                    } else {
-                        Toast.makeText(this@MainActivity, "USB Permission Denied", Toast.LENGTH_SHORT).show()
-                    }
+            if (intent?.action == UsbKwpTransport.ACTION_USB_PERMISSION) {
+                val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
                 }
-                UsbManager.ACTION_USB_DEVICE_ATTACHED -> {
-                    Toast.makeText(this@MainActivity, "USB Cable Attached", Toast.LENGTH_SHORT).show()
+                val granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false)
+                isPermissionRequested = false
+                if (granted && device != null) {
+                    currentDevice = device
+                    Toast.makeText(this@MainActivity, "USB Permission Granted", Toast.LENGTH_SHORT).show()
+                    updateStatusUI()
+                } else {
+                    Toast.makeText(this@MainActivity, "USB Permission Denied", Toast.LENGTH_SHORT).show()
                     updateStatusUI()
                 }
-                UsbManager.ACTION_USB_DEVICE_DETACHED -> {
+            }
+        }
+    }
+
+    private val usbDetachedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == UsbManager.ACTION_USB_DEVICE_DETACHED) {
+                val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+                }
+                if (device == null || device == currentDevice) {
+                    currentDevice = null
+                    isPermissionRequested = false
                     Toast.makeText(this@MainActivity, "USB Cable Detached", Toast.LENGTH_SHORT).show()
                     performDisconnect()
                 }
@@ -87,26 +102,74 @@ class MainActivity : AppCompatActivity() {
         logger = CsvLogger(this)
 
         setupListeners()
+        handleUsbIntent(intent)
+        checkAttachedDevice()
         updateStatusUI()
 
-        val filter = IntentFilter().apply {
-            addAction(UsbKwpTransport.ACTION_USB_PERMISSION)
-            addAction(UsbManager.ACTION_USB_DEVICE_ATTACHED)
-            addAction(UsbManager.ACTION_USB_DEVICE_DETACHED)
-        }
+        val permFilter = IntentFilter(UsbKwpTransport.ACTION_USB_PERMISSION)
+        val detachFilter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(usbReceiver, filter, RECEIVER_NOT_EXPORTED)
+            registerReceiver(usbPermissionReceiver, permFilter, RECEIVER_NOT_EXPORTED)
+            registerReceiver(usbDetachedReceiver, detachFilter, RECEIVER_NOT_EXPORTED)
         } else {
-            registerReceiver(usbReceiver, filter)
+            registerReceiver(usbPermissionReceiver, permFilter)
+            registerReceiver(usbDetachedReceiver, detachFilter)
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleUsbIntent(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (engine.mode == TransportMode.USB_HARDWARE && engine.state == DiagState.DISCONNECTED) {
+            checkAttachedDevice()
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
         try {
-            unregisterReceiver(usbReceiver)
+            unregisterReceiver(usbPermissionReceiver)
+        } catch (_: Exception) {}
+        try {
+            unregisterReceiver(usbDetachedReceiver)
         } catch (_: Exception) {}
         performDisconnect()
+    }
+
+    private fun handleUsbIntent(intent: Intent?) {
+        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
+            val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+            }
+            if (device != null) {
+                currentDevice = device
+                val info = UsbKwpTransport.identifyDevice(device)
+                Toast.makeText(this, "USB Attached: ${info.displayName}", Toast.LENGTH_SHORT).show()
+                updateStatusUI()
+            }
+        }
+    }
+
+    private fun checkAttachedDevice() {
+        val dev = currentDevice ?: transport.findAvailableDevice()
+        if (dev != null) {
+            currentDevice = dev
+            if (!transport.hasPermission(dev) && !isPermissionRequested) {
+                isPermissionRequested = true
+                transport.requestPermission(dev)
+            }
+        } else {
+            currentDevice = null
+        }
+        updateStatusUI()
     }
 
     private fun setupListeners() {
@@ -153,13 +216,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkAndConnect() {
         if (engine.mode == TransportMode.USB_HARDWARE) {
-            val device = transport.findAvailableDevice()
+            val device = currentDevice ?: transport.findAvailableDevice()
             if (device == null) {
                 Toast.makeText(this, "No USB FTDI / KKL cable detected. Plug in OTG adapter.", Toast.LENGTH_LONG).show()
+                updateStatusUI()
                 return
             }
+            currentDevice = device
             if (!transport.hasPermission(device)) {
+                isPermissionRequested = true
                 transport.requestPermission(device)
+                Toast.makeText(this, "Requesting USB permission...", Toast.LENGTH_SHORT).show()
+                updateStatusUI()
                 return
             }
         }
@@ -167,11 +235,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performConnect() {
-        binding.tvStatus.text = "Connecting via K-Line (10400 bps)..."
+        binding.tvStatus.text = "Connecting to EDC16..."
+        binding.tvSubStatus.text = "Syncing K-Line (10400 bps)..."
         binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+        binding.btnConnect.isEnabled = false
 
         lifecycleScope.launch {
-            val success = engine.connect()
+            val success = engine.connect(currentDevice)
+            binding.btnConnect.isEnabled = true
             if (success) {
                 updateStatusUI()
                 startPolling()
@@ -338,32 +409,81 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatusUI() {
+        if (engine.mode == TransportMode.SIMULATOR_DEMO) {
+            when (engine.state) {
+                DiagState.CONNECTED, DiagState.POLLING -> {
+                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
+                    binding.tvStatus.text = "Simulated EDC16 (Demo Mode)"
+                    binding.tvSubStatus.text = "Virtual Golf 5 1.9 TDI BLS active"
+                    binding.btnConnect.text = "Disconnect"
+                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#30363D"))
+                }
+                DiagState.CONNECTING -> {
+                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                    binding.tvStatus.text = "Starting Simulation..."
+                    binding.tvSubStatus.text = "Initializing virtual ECU telemetry"
+                }
+                else -> {
+                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                    binding.tvStatus.text = "Simulator Ready"
+                    binding.tvSubStatus.text = "Tap Connect to start simulated telemetry"
+                    binding.btnConnect.text = "Connect"
+                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                }
+            }
+            return
+        }
+
+        // Hardware mode
         when (engine.state) {
             DiagState.CONNECTED, DiagState.POLLING -> {
                 binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
-                binding.tvStatus.text = if (engine.mode == TransportMode.SIMULATOR_DEMO) {
-                    "Simulated EDC16 (Demo Mode)"
-                } else {
-                    "Connected (K-Line 10400 bps)"
-                }
+                val info = transport.getActiveAdapterInfo()
+                binding.tvStatus.text = "Connected (K-Line 10400 bps)"
+                binding.tvSubStatus.text = "ECU Online | ${info?.displayName ?: "USB Adapter"}"
                 binding.btnConnect.text = "Disconnect"
                 binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#30363D"))
             }
             DiagState.CONNECTING -> {
                 binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
                 binding.tvStatus.text = "Connecting..."
+                binding.tvSubStatus.text = "Negotiating K-Line protocol"
             }
             DiagState.ERROR -> {
                 binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
-                binding.tvStatus.text = "Error: ${engine.lastError ?: "Failed"}"
+                binding.tvStatus.text = "Error Connecting"
+                binding.tvSubStatus.text = engine.lastError ?: "K-Line timeout"
                 binding.btnConnect.text = "Retry"
                 binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
             }
             DiagState.DISCONNECTED -> {
-                binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
-                binding.tvStatus.text = "Disconnected"
-                binding.btnConnect.text = "Connect"
-                binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                val dev = currentDevice ?: transport.findAvailableDevice()
+                if (dev == null) {
+                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
+                    binding.tvStatus.text = "No USB Adapter"
+                    binding.tvSubStatus.text = "Plug in USB-OTG diagnostic cable"
+                    binding.btnConnect.text = "Connect"
+                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                } else {
+                    val info = UsbKwpTransport.identifyDevice(dev)
+                    if (!transport.hasPermission(dev)) {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                        binding.tvStatus.text = "Permission Required"
+                        binding.tvSubStatus.text = "Tap Authorize for ${info.displayName}"
+                        binding.btnConnect.text = "Authorize"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D29922"))
+                    } else {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                        binding.tvStatus.text = "Ready: ${info.displayName}"
+                        binding.tvSubStatus.text = if (info.isRossTechIntelligent) {
+                            "Ignition ON (LED lit) -> Tap Connect"
+                        } else {
+                            "Ignition ON (Terminal 15) -> Tap Connect"
+                        }
+                        binding.btnConnect.text = "Connect"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                    }
+                }
             }
         }
     }

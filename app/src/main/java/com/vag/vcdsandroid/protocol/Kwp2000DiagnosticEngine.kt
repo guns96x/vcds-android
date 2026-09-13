@@ -1,11 +1,14 @@
 package com.vag.vcdsandroid.protocol
 
 import android.content.Context
+import android.hardware.usb.UsbDevice
 import com.vag.vcdsandroid.model.FaultCode
 import com.vag.vcdsandroid.model.MeasuringGroup
 import com.vag.vcdsandroid.usb.UsbKwpTransport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.InputStreamReader
@@ -36,6 +39,8 @@ class Kwp2000DiagnosticEngine(
     var lastError: String? = null
         private set
 
+    private var targetEcuAddress: Byte = 0x01
+    private val commMutex = Mutex()
     private val dtcLookup = HashMap<String, Pair<String, String>>()
 
     // Mock engine state for simulation mode
@@ -75,55 +80,125 @@ class Kwp2000DiagnosticEngine(
         }
     }
 
-    suspend fun connect(targetAddress: Byte = 0x01): Boolean = withContext(Dispatchers.IO) {
-        state = DiagState.CONNECTING
-        lastError = null
+    suspend fun connect(targetDevice: UsbDevice? = null, targetAddress: Byte = 0x01): Boolean = withContext(Dispatchers.IO) {
+        commMutex.withLock {
+            targetEcuAddress = targetAddress
+            state = DiagState.CONNECTING
+            lastError = null
 
-        if (mode == TransportMode.SIMULATOR_DEMO) {
-            delay(400) // Emulate fast init delay
-            state = DiagState.CONNECTED
-            return@withContext true
-        }
-
-        try {
-            if (!transport.connect(UsbKwpTransport.KLINE_BAUD_RATE)) {
-                lastError = "Cannot open USB Serial Port. Check OTG cable & permission."
-                state = DiagState.ERROR
-                return@withContext false
+            if (mode == TransportMode.SIMULATOR_DEMO) {
+                delay(400) // Emulate fast init delay
+                state = DiagState.CONNECTED
+                return@withContext true
             }
 
-            // Purge lines
-            transport.purge()
-            delay(50)
+            try {
+                if (!transport.connect(targetDevice, UsbKwpTransport.KLINE_BAUD_RATE)) {
+                    lastError = "Cannot open USB Serial Port. Check OTG cable & permission."
+                    state = DiagState.ERROR
+                    return@withContext false
+                }
 
-            // Step 1: Send Fast Init 25ms Break / 25ms Mark pulse
-            transport.sendFastInitPulse()
+                // Step 0: Flush stale buffer bytes
+                transport.purge()
+                delay(60)
 
-            // Step 2: Send StartCommunication request: 0x81, 0x01 (Engine), 0xF1 (Tester), 0x81 (StartComm), CS
-            val startComm = buildMessage(targetAddress, 0xF1.toByte(), byteArrayOf(0x81.toByte()))
-            transport.write(startComm)
+                // Strategy 1: Direct KWP2000 StartCommunication (81 01 F1 81 F4) without destructive break pulse
+                // Strategy 2: Direct Read ECU ID (82 01 F1 1A 9B 69) as used by EDC16/MPPS
+                // Strategy 3: Fast Init 25ms break/mark pulse + StartCommunication (81 01 F1 81 F4)
+                // Strategy 4: Functional OBD2 Broadcast (C1 33 F1 81 66)
 
-            val respBuffer = ByteArray(64)
-            val readBytes = transport.read(respBuffer, 500)
-            if (readBytes < 4) {
-                lastError = "No response from ECU on K-Line (10400 bps fast init)."
+                var ok = tryInitDirect(targetEcuAddress)
+                if (!ok) {
+                    delay(80)
+                    ok = tryInitDirectId(targetEcuAddress)
+                }
+                if (!ok) {
+                    delay(80)
+                    ok = tryInitFastPulse(targetEcuAddress)
+                }
+                if (!ok) {
+                    delay(80)
+                    ok = tryInitDirect(0x33.toByte())
+                }
+
+                if (!ok) {
+                    val info = transport.getActiveAdapterInfo()
+                    lastError = if (info?.isRossTechIntelligent == true) {
+                        "ECU did not respond on K-Line. ${info.displayName} detected: check ignition ON and adapter LED lit (12V OBD power)!"
+                    } else {
+                        "ECU did not respond on K-Line. Turn ignition ON (Terminal 15)!"
+                    }
+                    state = DiagState.ERROR
+                    transport.disconnect()
+                    return@withContext false
+                }
+
+                // Optional diagnostic session setup (0x10 0x89)
+                try {
+                    val sessionReq = buildMessage(targetEcuAddress, 0xF1.toByte(), byteArrayOf(0x10.toByte(), 0x89.toByte()))
+                    transport.write(sessionReq)
+                    val respBuffer = ByteArray(64)
+                    transport.read(respBuffer, 200)
+                } catch (_: Exception) {}
+
+                state = DiagState.CONNECTED
+                return@withContext true
+            } catch (e: Exception) {
+                lastError = "Connection error: ${e.message}"
                 state = DiagState.ERROR
                 transport.disconnect()
                 return@withContext false
             }
+        }
+    }
 
-            // Step 3: Start Diagnostic Session (0x10, 0x89 standard or 0x81)
-            val sessionReq = buildMessage(targetAddress, 0xF1.toByte(), byteArrayOf(0x10.toByte(), 0x89.toByte()))
-            transport.write(sessionReq)
-            transport.read(respBuffer, 300)
+    private fun tryInitDirect(target: Byte): Boolean {
+        try {
+            transport.purge()
+            val startComm = buildMessage(target, 0xF1.toByte(), byteArrayOf(0x81.toByte()))
+            transport.write(startComm)
+            val respBuffer = ByteArray(64)
+            val readBytes = transport.read(respBuffer, 450)
+            if (readBytes <= 0) return false
 
-            state = DiagState.CONNECTED
-            return@withContext true
-        } catch (e: Exception) {
-            lastError = "Connection error: ${e.message}"
-            state = DiagState.ERROR
-            transport.disconnect()
-            return@withContext false
+            val payload = extractPayload(respBuffer, readBytes) ?: return false
+            return payload.isNotEmpty() && (payload[0] == 0xC1.toByte() || payload[0] == 0x50.toByte())
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    private fun tryInitDirectId(target: Byte): Boolean {
+        try {
+            transport.purge()
+            val idReq = buildMessage(target, 0xF1.toByte(), byteArrayOf(0x1A.toByte(), 0x9B.toByte()))
+            transport.write(idReq)
+            val respBuffer = ByteArray(128)
+            val readBytes = transport.read(respBuffer, 600)
+            if (readBytes <= 0) return false
+
+            val payload = extractPayload(respBuffer, readBytes) ?: return false
+            return payload.isNotEmpty() && (payload[0] == 0x5A.toByte() || payload[0] == 0x61.toByte())
+        } catch (_: Exception) {
+            return false
+        }
+    }
+
+    private fun tryInitFastPulse(target: Byte): Boolean {
+        try {
+            transport.purge()
+            transport.sendFastInitPulse()
+            val startComm = buildMessage(target, 0xF1.toByte(), byteArrayOf(0x81.toByte()))
+            transport.write(startComm)
+            val respBuffer = ByteArray(64)
+            val readBytes = transport.read(respBuffer, 450)
+            if (readBytes <= 0) return false
+
+            val payload = extractPayload(respBuffer, readBytes) ?: return false
+            return payload.isNotEmpty() && (payload[0] == 0xC1.toByte() || payload[0] == 0x50.toByte())
+        } catch (_: Exception) {
+            return false
         }
     }
 
@@ -146,20 +221,23 @@ class Kwp2000DiagnosticEngine(
             return@withContext generateMockGroup(groupNumber)
         }
 
-        try {
-            // Service 0x21 <GroupNumber>
-            val request = buildMessage(0x01.toByte(), 0xF1.toByte(), byteArrayOf(0x21.toByte(), groupNumber.toByte()))
-            transport.write(request)
+        commMutex.withLock {
+            try {
+                // Service 0x21 <GroupNumber>
+                transport.purge()
+                val request = buildMessage(targetEcuAddress, 0xF1.toByte(), byteArrayOf(0x21.toByte(), groupNumber.toByte()))
+                transport.write(request)
 
-            val buffer = ByteArray(64)
-            val count = transport.read(buffer, 250)
-            if (count < 6) return@withContext null
+                val buffer = ByteArray(128)
+                val count = transport.read(buffer, 350)
+                if (count < 6) return@withContext null
 
-            val payload = extractPayload(buffer, count) ?: return@withContext null
-            return@withContext MeasuringGroup.decode(payload)
-        } catch (e: Exception) {
-            lastError = "Read Group $groupNumber failed: ${e.message}"
-            return@withContext null
+                val payload = extractPayload(buffer, count) ?: return@withContext null
+                return@withContext MeasuringGroup.decode(payload)
+            } catch (e: Exception) {
+                lastError = "Read Group $groupNumber failed: ${e.message}"
+                return@withContext null
+            }
         }
     }
 
@@ -179,37 +257,39 @@ class Kwp2000DiagnosticEngine(
             )
         }
 
-        try {
-            // Service 0x18 0x02 0xFF 0x00 (Read DTC by status mask)
-            val request = buildMessage(0x01.toByte(), 0xF1.toByte(), byteArrayOf(0x18.toByte(), 0x02.toByte(), 0xFF.toByte(), 0x00.toByte()))
-            transport.write(request)
+        commMutex.withLock {
+            try {
+                // Service 0x18 0x02 0xFF 0x00 (Read DTC by status mask)
+                val request = buildMessage(targetEcuAddress, 0xF1.toByte(), byteArrayOf(0x18.toByte(), 0x02.toByte(), 0xFF.toByte(), 0x00.toByte()))
+                transport.write(request)
 
-            val buffer = ByteArray(256)
-            val count = transport.read(buffer, 600)
-            val payload = extractPayload(buffer, count) ?: return@withContext emptyList()
+                val buffer = ByteArray(256)
+                val count = transport.read(buffer, 600)
+                val payload = extractPayload(buffer, count) ?: return@withContext emptyList()
 
-            if (payload.isEmpty() || payload[0] != 0x58.toByte()) {
+                if (payload.isEmpty() || payload[0] != 0x58.toByte()) {
+                    return@withContext emptyList()
+                }
+
+                val dtcList = ArrayList<FaultCode>()
+
+                var offset = 2
+                while (offset + 2 < payload.size) {
+                    val high = payload[offset].toInt() and 0xFF
+                    val low = payload[offset + 1].toInt() and 0xFF
+                    val status = payload[offset + 2].toInt() and 0xFF
+
+                    if (high != 0 || low != 0) {
+                        dtcList.add(FaultCode.parseFromBytes(high, low, status, dtcLookup))
+                    }
+                    offset += 3
+                }
+
+                return@withContext dtcList
+            } catch (e: Exception) {
+                lastError = "Scan DTC failed: ${e.message}"
                 return@withContext emptyList()
             }
-
-            val dtcList = ArrayList<FaultCode>()
-
-            var offset = 2
-            while (offset + 2 < payload.size) {
-                val high = payload[offset].toInt() and 0xFF
-                val low = payload[offset + 1].toInt() and 0xFF
-                val status = payload[offset + 2].toInt() and 0xFF
-
-                if (high != 0 || low != 0) {
-                    dtcList.add(FaultCode.parseFromBytes(high, low, status, dtcLookup))
-                }
-                offset += 3
-            }
-
-            return@withContext dtcList
-        } catch (e: Exception) {
-            lastError = "Scan DTC failed: ${e.message}"
-            return@withContext emptyList()
         }
     }
 
@@ -226,18 +306,20 @@ class Kwp2000DiagnosticEngine(
             return@withContext true
         }
 
-        try {
-            val request = buildMessage(0x01.toByte(), 0xF1.toByte(), byteArrayOf(0x14.toByte(), 0xFF.toByte(), 0x00.toByte()))
-            transport.write(request)
+        commMutex.withLock {
+            try {
+                val request = buildMessage(targetEcuAddress, 0xF1.toByte(), byteArrayOf(0x14.toByte(), 0xFF.toByte(), 0x00.toByte()))
+                transport.write(request)
 
-            val buffer = ByteArray(32)
-            val count = transport.read(buffer, 500)
-            val payload = extractPayload(buffer, count) ?: return@withContext false
+                val buffer = ByteArray(32)
+                val count = transport.read(buffer, 500)
+                val payload = extractPayload(buffer, count) ?: return@withContext false
 
-            return@withContext payload.isNotEmpty() && payload[0] == 0x54.toByte()
-        } catch (e: Exception) {
-            lastError = "Clear DTC failed: ${e.message}"
-            return@withContext false
+                return@withContext payload.isNotEmpty() && payload[0] == 0x54.toByte()
+            } catch (e: Exception) {
+                lastError = "Clear DTC failed: ${e.message}"
+                return@withContext false
+            }
         }
     }
 
@@ -260,34 +342,57 @@ class Kwp2000DiagnosticEngine(
 
     private fun extractPayload(buffer: ByteArray, count: Int): ByteArray? {
         if (count < 4) return null
-        
-        // Find valid KWP2000 header: Format byte where bits 7..6 == 10b
-        var startIdx = -1
+
+        // Pass 1: Search for valid KWP2000 response addressed to Tester (target == 0xF1, source != 0xF1)
         for (i in 0 until count - 3) {
             val fmt = buffer[i].toInt() and 0xFF
-            if ((fmt and 0xC0) == 0x80) {
-                startIdx = i
-                break
+            if ((fmt and 0xC0) != 0x80) continue
+
+            val target = buffer[i + 1].toInt() and 0xFF
+            val source = buffer[i + 2].toInt() and 0xFF
+
+            // Filter out local transmission echo (where source is Tester 0xF1)
+            if (target != 0xF1 || source == 0xF1) continue
+
+            val length = fmt and 0x3F
+            val totalMsgLen = length + 4
+            if (i + totalMsgLen > count) continue
+
+            var calculatedCs = 0
+            for (k in i until i + totalMsgLen - 1) {
+                calculatedCs += (buffer[k].toInt() and 0xFF)
+            }
+            calculatedCs = calculatedCs and 0xFF
+            val receivedCs = buffer[i + totalMsgLen - 1].toInt() and 0xFF
+            if (calculatedCs == receivedCs) {
+                val payload = ByteArray(length)
+                System.arraycopy(buffer, i + 3, payload, 0, length)
+                return payload
             }
         }
-        if (startIdx == -1) return null
 
-        val fmt = buffer[startIdx].toInt() and 0xFF
-        val length = fmt and 0x3F
-        val totalMsgLen = length + 4
+        // Pass 2: Fallback for generic frames if address bytes vary
+        for (i in 0 until count - 3) {
+            val fmt = buffer[i].toInt() and 0xFF
+            if ((fmt and 0xC0) != 0x80) continue
+            val length = fmt and 0x3F
+            val totalMsgLen = length + 4
+            if (i + totalMsgLen > count) continue
 
-        if (startIdx + totalMsgLen > count) {
-            // Incomplete frame
-            val available = count - startIdx - 4
-            if (available <= 0) return null
-            val payload = ByteArray(available)
-            System.arraycopy(buffer, startIdx + 3, payload, 0, available)
-            return payload
+            var calculatedCs = 0
+            for (k in i until i + totalMsgLen - 1) {
+                calculatedCs += (buffer[k].toInt() and 0xFF)
+            }
+            calculatedCs = calculatedCs and 0xFF
+            val receivedCs = buffer[i + totalMsgLen - 1].toInt() and 0xFF
+            if (calculatedCs == receivedCs) {
+                val payload = ByteArray(length)
+                System.arraycopy(buffer, i + 3, payload, 0, length)
+                return payload
+            }
         }
 
-        val payload = ByteArray(length)
-        System.arraycopy(buffer, startIdx + 3, payload, 0, length)
-        return payload
+        return null
     }
 
     /**

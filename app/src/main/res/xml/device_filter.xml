@@ -1,21 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- FTDI: FT232R, FT232BM, FT2232, FT4232 (Used by VCDS, KKL, MPPS, Galletto) -->
-    <usb-device vendor-id="1027" />
+    <!-- Ross-Tech VCDS / HEX-USB+CAN (FA24), HEX-USB (FA20), Micro-CAN (FA23), HEX-NET (FA30) -->
+    <usb-device vendor-id="1027" product-id="64036" />
+    <usb-device vendor-id="1027" product-id="64032" />
+    <usb-device vendor-id="1027" product-id="64035" />
+    <usb-device vendor-id="1027" product-id="64037" />
+    <usb-device vendor-id="1027" product-id="64048" />
+
+    <!-- FTDI FT232R / FT232BM Generic KKL & FTDI devices -->
     <usb-device vendor-id="1027" product-id="24577" />
     <usb-device vendor-id="1027" product-id="24592" />
     <usb-device vendor-id="1027" product-id="24593" />
-    <usb-device vendor-id="1027" product-id="60000" />
-    <usb-device vendor-id="1027" product-id="60001" />
+    <usb-device vendor-id="1027" />
 
-    <!-- QinHeng CH340 / CH341 -->
-    <usb-device vendor-id="6790" />
+    <!-- QinHeng CH340 / CH341 KKL -->
     <usb-device vendor-id="6790" product-id="29987" />
     <usb-device vendor-id="6790" product-id="21795" />
+    <usb-device vendor-id="6790" />
 
-    <!-- Silicon Labs CP210x -->
+    <!-- Silicon Labs CP2102 / CP210x -->
+    <usb-device vendor-id="4292" product-id="60000" />
     <usb-device vendor-id="4292" />
 
     <!-- Prolific PL2303 -->
+    <usb-device vendor-id="1659" product-id="8963" />
     <usb-device vendor-id="1659" />
 </resources>
