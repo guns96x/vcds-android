@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="14dp">
+        android:padding="16dp">
 
         <!-- Header -->
         <LinearLayout
@@ -31,7 +31,7 @@
                     android:layout_height="wrap_content"
                     android:text="VCDS Mobile"
                     android:textColor="@color/text_primary"
-                    android:textSize="20sp"
+                    android:textSize="22sp"
                     android:textStyle="bold" />
 
                 <TextView
@@ -39,7 +39,7 @@
                     android:layout_height="wrap_content"
                     android:text="EDC16 1.9 TDI Diag &amp; WOT Logger"
                     android:textColor="@color/text_secondary"
-                    android:textSize="11sp" />
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <com.google.android.material.button.MaterialButton
@@ -47,7 +47,7 @@
                 style="@style/Widget.Material3.Button.TonalButton"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
-                android:text="Mode: Turbo Fast"
+                android:text="Mode: USB"
                 android:textSize="11sp"
                 app:cornerRadius="18dp" />
         </LinearLayout>
@@ -56,7 +56,7 @@
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="12dp"
             app:cardBackgroundColor="@color/surface_card"
             app:cardCornerRadius="12dp"
             app:strokeColor="@color/border_subtle"
@@ -96,7 +96,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="2dp"
-                        android:text="Select Bluetooth ELM327 or plug USB cable"
+                        android:text="Plug in USB-OTG diagnostic cable"
                         android:textColor="@color/text_secondary"
                         android:textSize="11sp" />
                 </LinearLayout>
@@ -112,9 +112,8 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ========================================================================= -->
-        <!-- MODE A: TURBO FAST STREAMLINED TELEMETRY COCKPIT                           -->
-        <!-- ========================================================================= -->
+
+        <!-- ==================== MODE A: TURBO FAST TELEMETRY ==================== -->
         <LinearLayout
             android:id="@+id/layoutTurboFast"
             android:layout_width="match_parent"
@@ -122,11 +121,588 @@
             android:orientation="vertical"
             android:visibility="visible">
 
-            <!-- Bus & Logger Live Stats Card -->
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="12dp"
+                app:cardBackgroundColor="@color/surface_card"
+                app:cardCornerRadius="14dp"
+                app:strokeColor="@color/border_subtle"
+                app:strokeWidth="1dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="14dp">
+
+                    <!-- Header row: Title + Check Data Button -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="TURBO FAST TELEMETRY"
+                            android:textColor="@color/accent_cyan"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnCheckData"
+                            style="@style/Widget.Material3.Button.OutlinedButton"
+                            android:layout_width="wrap_content"
+                            android:layout_height="34dp"
+                            android:text="CHECK DATA"
+                            android:textSize="11sp"
+                            android:textStyle="bold"
+                            app:strokeColor="@color/accent_cyan"
+                            android:textColor="@color/accent_cyan"
+                            app:cornerRadius="6dp" />
+                    </LinearLayout>
+
+                    <!-- Pre-flight Status Line -->
+                    <TextView
+                        android:id="@+id/tvPreFlightStatus"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Pre-flight: Tap 'CHECK DATA' to test all 9 PIDs"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+
+                    <!-- Bus Performance Stats Line -->
+                    <TextView
+                        android:id="@+id/tvBusStats"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:fontFamily="monospace"
+                        android:text="0.0 req/s | RPM: 0.0 Hz | MAP: 0.0 Hz | Lat: 0 ms"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
+
+                    <!-- Recording / Queue Stats Line -->
+                    <TextView
+                        android:id="@+id/tvLogMetrics"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="monospace"
+                        android:text="REC OFF | Rows: 0 | Queue: 0 | Dropped: 0 | 0 KB"
+                        android:textColor="@color/text_muted"
+                        android:textSize="11sp" />
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="10dp"
+                        android:layout_marginBottom="10dp"
+                        android:background="@color/border_subtle" />
+
+                    <!-- ВЕЛИКІ: RPM, BOOST, MAP -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <!-- RPM -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="RPM (010C)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:id="@+id/tvHeroRpm"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="---"
+                                android:textColor="@color/text_primary"
+                                android:textSize="22sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvRpmStatusAge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IDLE | --- ms"
+                                android:textColor="@color/text_muted"
+                                android:textSize="10sp" />
+                        </LinearLayout>
+
+                        <!-- BOOST -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="BOOST REL"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:id="@+id/tvHeroBoost"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--- bar"
+                                android:textColor="@color/accent_green"
+                                android:textSize="22sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvBoostStatusAge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IDLE | Rel Gauge"
+                                android:textColor="@color/text_muted"
+                                android:textSize="10sp" />
+                        </LinearLayout>
+
+                        <!-- MAP -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="MAP (010B)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="11sp" />
+
+                            <TextView
+                                android:id="@+id/tvHeroMap"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--- mbar"
+                                android:textColor="@color/accent_cyan"
+                                android:textSize="22sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvMapStatusAge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IDLE | --- ms"
+                                android:textColor="@color/text_muted"
+                                android:textSize="10sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="10dp"
+                        android:layout_marginBottom="10dp"
+                        android:background="@color/border_subtle" />
+
+                    <!-- КОМПАКТНІ: MAF, Speed, Load, BARO -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:weightSum="4">
+
+                        <!-- MAF -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="MAF (0110)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="10sp" />
+
+                            <TextView
+                                android:id="@+id/tvMafVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--- g/s"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvMafStatusAge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IDLE | ---"
+                                android:textColor="@color/text_muted"
+                                android:textSize="9sp" />
+                        </LinearLayout>
+
+                        <!-- SPEED -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="SPEED (010D)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="10sp" />
+
+                            <TextView
+                                android:id="@+id/tvSpeedVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--- km/h"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvSpeedStatusAge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IDLE | ---"
+                                android:textColor="@color/text_muted"
+                                android:textSize="9sp" />
+                        </LinearLayout>
+
+                        <!-- LOAD -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="LOAD (0104)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="10sp" />
+
+                            <TextView
+                                android:id="@+id/tvLoadVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--- %"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvLoadStatusAge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IDLE | ---"
+                                android:textColor="@color/text_muted"
+                                android:textSize="9sp" />
+                        </LinearLayout>
+
+                        <!-- BARO -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="BARO (0133)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="10sp" />
+
+                            <TextView
+                                android:id="@+id/tvBaroVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--- mbar"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvBaroStatusAge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IDLE | ---"
+                                android:textColor="@color/text_muted"
+                                android:textSize="9sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- Toggle Log Button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnToggleLog"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_marginTop="14dp"
+                        android:text="START 4TH GEAR WOT LOG"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        android:textStyle="bold"
+                        app:backgroundTint="@color/accent_green"
+                        app:cornerRadius="8dp" />
+
+                    <!-- Collapsible RAW DEBUG toggle -->
+                    <LinearLayout
+                        android:id="@+id/layoutRawDebugHeader"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="10dp"
+                        android:clickable="true"
+                        android:focusable="true"
+                        android:orientation="horizontal"
+                        android:padding="4dp">
+
+                        <TextView
+                            android:id="@+id/tvRawDebugHeaderTitle"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:text="▶ RAW DEBUG (tap to toggle)"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <!-- Collapsible RAW DEBUG container -->
+                    <LinearLayout
+                        android:id="@+id/layoutRawDebugContent"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:background="@color/surface_card_secondary"
+                        android:orientation="vertical"
+                        android:padding="10dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tvDebugLastTx"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="monospace"
+                            android:text="TX: ---"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/tvDebugLastRx"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="monospace"
+                            android:text="RX: ---"
+                            android:textColor="@color/accent_green"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/tvDebugParsed"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="monospace"
+                            android:text="Parsed: ---"
+                            android:textColor="@color/text_primary"
+                            android:textSize="11sp" />
+
+                        <TextView
+                            android:id="@+id/tvDebugLatency"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:fontFamily="monospace"
+                            android:text="Latency: --- ms"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+        </LinearLayout>
+
+
+        <!-- ==================== MODE B: VAG OEM MEASURING GROUPS ==================== -->
+        <LinearLayout
+            android:id="@+id/layoutOemGroups"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+        <!-- Hero Telemetry: Group 011 Turbo & Spool -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:cardBackgroundColor="@color/surface_card"
+            app:cardCornerRadius="14dp"
+            app:strokeColor="@color/border_subtle"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="14dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="GROUP 011 — CHARGE PRESSURE"
+                        android:textColor="@color/accent_cyan"
+                        android:textSize="12sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvRpm"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="--- RPM"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal"
+                    android:weightSum="3">
+
+                    <!-- Specified Boost -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Target Boost"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+                        <TextView
+                            android:id="@+id/tvBoostSpecified"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="---"
+                            android:textColor="@color/accent_cyan"
+                            android:textSize="20sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="mbar"
+                            android:textColor="@color/text_muted"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <!-- Actual Boost -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Actual Boost"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+                        <TextView
+                            android:id="@+id/tvBoostActual"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="---"
+                            android:textColor="@color/accent_green"
+                            android:textSize="20sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="mbar"
+                            android:textColor="@color/text_muted"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+
+                    <!-- N75 Duty -->
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="N75 Duty Cycle"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="11sp" />
+                        <TextView
+                            android:id="@+id/tvN75"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="---"
+                            android:textColor="@color/accent_orange"
+                            android:textSize="20sp"
+                            android:textStyle="bold" />
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="%"
+                            android:textColor="@color/text_muted"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Live Oscilloscope Chart -->
+                <com.vag.vcdsandroid.ui.LiveGraphView
+                    android:id="@+id/liveGraphView"
+                    android:layout_width="match_parent"
+                    android:layout_height="140dp"
+                    android:layout_marginTop="12dp" />
+
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Secondary Telemetry: Groups 008 (IQ Limit) & 003 (MAF) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+
+            <!-- Group 008 Card -->
+            <com.google.android.material.card.MaterialCardView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
                 app:cardBackgroundColor="@color/surface_card"
                 app:cardCornerRadius="12dp"
                 app:strokeColor="@color/border_subtle"
@@ -138,964 +714,50 @@
                     android:orientation="vertical"
                     android:padding="10dp">
 
-                    <!-- Status Banner Row -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
+                        android:text="GROUP 008 (IQ)"
+                        android:textColor="@color/accent_purple"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
 
-                        <TextView
-                            android:id="@+id/tvElmBusState"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="ELM: IDLE"
-                            android:textColor="@color/accent_cyan"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvLogState"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="LOG: OFF"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvLogDuration"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="00:00"
-                            android:textColor="@color/text_primary"
-                            android:textSize="11sp"
-                            android:fontFamily="monospace" />
-                    </LinearLayout>
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:layout_marginTop="6dp"
-                        android:layout_marginBottom="6dp"
-                        android:background="@color/border_subtle" />
-
-                    <!-- Telemetry Frequencies Grid -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:weightSum="4">
-
-                        <TextView
-                            android:id="@+id/tvBusReqRate"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="0.0 req/s"
-                            android:textColor="@color/text_primary"
-                            android:textSize="11sp"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:id="@+id/tvBusRpmHz"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="RPM: 0.0Hz"
-                            android:textColor="@color/accent_blue"
-                            android:textSize="11sp"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:id="@+id/tvBusMapHz"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="MAP: 0.0Hz"
-                            android:textColor="@color/accent_green"
-                            android:textSize="11sp"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:id="@+id/tvBusMafHz"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="MAF: 0.0Hz"
-                            android:textColor="@color/accent_orange"
-                            android:textSize="11sp"
-                            android:fontFamily="monospace" />
-                    </LinearLayout>
-
-                    <!-- Logger Metrics Row -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:id="@+id/tvDriverWish"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:orientation="horizontal"
-                        android:weightSum="5">
+                        android:text="Driver: --- mg"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp" />
 
-                        <TextView
-                            android:id="@+id/tvBusAvgLatency"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Lat: 0ms"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="10sp" />
+                    <TextView
+                        android:id="@+id/tvTorqueLimit"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Torque: --- mg"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp" />
 
-                        <TextView
-                            android:id="@+id/tvLogRows"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Rows: 0"
-                            android:textColor="@color/text_primary"
-                            android:textSize="10sp" />
-
-                        <TextView
-                            android:id="@+id/tvLogQueue"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Queue: 0"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="10sp" />
-
-                        <TextView
-                            android:id="@+id/tvLogDropped"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Drop: 0"
-                            android:textColor="@color/accent_red"
-                            android:textSize="10sp" />
-
-                        <TextView
-                            android:id="@+id/tvLogSize"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="0 KB"
-                            android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
-                    </LinearLayout>
+                    <TextView
+                        android:id="@+id/tvSmokeLimit"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Smoke: --- mg"
+                        android:textColor="@color/accent_orange"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Pre-Flight Readiness Verdict Banner -->
-            <LinearLayout
-                android:id="@+id/layoutVerdictBanner"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="#1E2330"
-                android:padding="8dp"
-                android:gravity="center">
-
-                <TextView
-                    android:id="@+id/tvPreFlightVerdict"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="PRE-FLIGHT: TAP 'CHECK DATA' BEFORE DRIVING"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="11sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <!-- Hero Telemetry Cards (Large: RPM, Boost Gauge, MAP) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal"
-                android:weightSum="3">
-
-                <!-- RPM Card -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="4dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="12dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="10dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="RPM (010C)"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="10sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastRpm"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/text_primary"
-                            android:textSize="24sp"
-                            android:textStyle="bold"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="RPM"
-                            android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <TextView
-                                android:id="@+id/tvFastRpmStatus"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:background="@drawable/bg_status_pill_idle"
-                                android:paddingStart="4dp"
-                                android:paddingEnd="4dp"
-                                android:paddingTop="1dp"
-                                android:paddingBottom="1dp"
-                                android:text="IDLE"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="9sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:id="@+id/tvFastRpmLatency"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4dp"
-                                android:text="--ms"
-                                android:textColor="@color/text_muted"
-                                android:textSize="9sp" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:id="@+id/tvFastRpmAge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="--- ago"
-                            android:textColor="@color/text_muted"
-                            android:textSize="9sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Boost Gauge Card -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="12dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="10dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="BOOST (REL)"
-                            android:textColor="@color/accent_cyan"
-                            android:textSize="10sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastBoost"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/accent_cyan"
-                            android:textSize="24sp"
-                            android:textStyle="bold"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:id="@+id/tvFastBoostMbar"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="bar (--- mbar)"
-                            android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <TextView
-                                android:id="@+id/tvFastBoostStatus"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:background="@drawable/bg_status_pill_idle"
-                                android:paddingStart="4dp"
-                                android:paddingEnd="4dp"
-                                android:paddingTop="1dp"
-                                android:paddingBottom="1dp"
-                                android:text="IDLE"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="9sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:id="@+id/tvFastBoostSource"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4dp"
-                                android:text="MAP-BARO"
-                                android:textColor="@color/text_muted"
-                                android:textSize="9sp" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Relative Gauge"
-                            android:textColor="@color/text_muted"
-                            android:textSize="9sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- MAP Absolute Card -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="4dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="12dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="10dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="MAP ABS (010B)"
-                            android:textColor="@color/accent_green"
-                            android:textSize="10sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastMap"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/accent_green"
-                            android:textSize="24sp"
-                            android:textStyle="bold"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="mbar"
-                            android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <TextView
-                                android:id="@+id/tvFastMapStatus"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:background="@drawable/bg_status_pill_idle"
-                                android:paddingStart="4dp"
-                                android:paddingEnd="4dp"
-                                android:paddingTop="1dp"
-                                android:paddingBottom="1dp"
-                                android:text="IDLE"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="9sp"
-                                android:textStyle="bold" />
-
-                            <TextView
-                                android:id="@+id/tvFastMapLatency"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4dp"
-                                android:text="--ms"
-                                android:textColor="@color/text_muted"
-                                android:textSize="9sp" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:id="@+id/tvFastMapAge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="--- ago"
-                            android:textColor="@color/text_muted"
-                            android:textSize="9sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-            </LinearLayout>
-
-            <!-- Medium Telemetry Cards (MAF, Speed, Load) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal"
-                android:weightSum="3">
-
-                <!-- MAF Card -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="4dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="12dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="10dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="MAF (0110)"
-                            android:textColor="@color/accent_orange"
-                            android:textSize="10sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastMaf"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/accent_orange"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="g/s"
-                            android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="3dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <TextView
-                                android:id="@+id/tvFastMafStatus"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:background="@drawable/bg_status_pill_idle"
-                                android:paddingStart="4dp"
-                                android:paddingEnd="4dp"
-                                android:text="IDLE"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="9sp" />
-
-                            <TextView
-                                android:id="@+id/tvFastMafLatency"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4dp"
-                                android:text="--ms"
-                                android:textColor="@color/text_muted"
-                                android:textSize="9sp" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:id="@+id/tvFastMafAge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:text="--- ago"
-                            android:textColor="@color/text_muted"
-                            android:textSize="9sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Speed Card -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="12dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="10dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="SPEED (010D)"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="10sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastSpeed"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/text_primary"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="km/h"
-                            android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="3dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <TextView
-                                android:id="@+id/tvFastSpeedStatus"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:background="@drawable/bg_status_pill_idle"
-                                android:paddingStart="4dp"
-                                android:paddingEnd="4dp"
-                                android:text="IDLE"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="9sp" />
-
-                            <TextView
-                                android:id="@+id/tvFastSpeedLatency"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4dp"
-                                android:text="--ms"
-                                android:textColor="@color/text_muted"
-                                android:textSize="9sp" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:id="@+id/tvFastSpeedAge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:text="--- ago"
-                            android:textColor="@color/text_muted"
-                            android:textSize="9sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Load Card -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="4dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="12dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="10dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="LOAD (0104)"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="10sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastLoad"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/text_primary"
-                            android:textSize="18sp"
-                            android:textStyle="bold"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="%"
-                            android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
-
-                        <LinearLayout
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="3dp"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <TextView
-                                android:id="@+id/tvFastLoadStatus"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:background="@drawable/bg_status_pill_idle"
-                                android:paddingStart="4dp"
-                                android:paddingEnd="4dp"
-                                android:text="IDLE"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="9sp" />
-
-                            <TextView
-                                android:id="@+id/tvFastLoadLatency"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_marginStart="4dp"
-                                android:text="--ms"
-                                android:textColor="@color/text_muted"
-                                android:textSize="9sp" />
-                        </LinearLayout>
-
-                        <TextView
-                            android:id="@+id/tvFastLoadAge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="1dp"
-                            android:text="--- ago"
-                            android:textColor="@color/text_muted"
-                            android:textSize="9sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-            </LinearLayout>
-
-            <!-- Aux 4-Column Sensors Grid (BARO, Coolant, IAT, Voltage) -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal"
-                android:weightSum="4">
-
-                <!-- BARO -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="3dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="10dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="6dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="BARO"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="9sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastBaro"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/text_primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastBaroSource"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="PID_0133"
-                            android:textColor="@color/text_muted"
-                            android:textSize="8sp" />
-
-                        <TextView
-                            android:id="@+id/tvFastBaroStatus"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:background="@drawable/bg_status_pill_idle"
-                            android:paddingStart="3dp"
-                            android:paddingEnd="3dp"
-                            android:text="IDLE"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="8sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Coolant -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="10dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="6dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="COOLANT"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="9sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastCoolant"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/text_primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastCoolantAge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/text_muted"
-                            android:textSize="8sp" />
-
-                        <TextView
-                            android:id="@+id/tvFastCoolantStatus"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:background="@drawable/bg_status_pill_idle"
-                            android:paddingStart="3dp"
-                            android:paddingEnd="3dp"
-                            android:text="IDLE"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="8sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- IAT -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="10dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="6dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="IAT"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="9sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastIat"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/text_primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastIatAge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/text_muted"
-                            android:textSize="8sp" />
-
-                        <TextView
-                            android:id="@+id/tvFastIatStatus"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:background="@drawable/bg_status_pill_idle"
-                            android:paddingStart="3dp"
-                            android:paddingEnd="3dp"
-                            android:text="IDLE"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="8sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Voltage -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="3dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="10dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="6dp">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="VOLTS"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="9sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastVoltage"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/text_primary"
-                            android:textSize="13sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvFastVoltageAge"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="---"
-                            android:textColor="@color/text_muted"
-                            android:textSize="8sp" />
-
-                        <TextView
-                            android:id="@+id/tvFastVoltageStatus"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:background="@drawable/bg_status_pill_idle"
-                            android:paddingStart="3dp"
-                            android:paddingEnd="3dp"
-                            android:text="IDLE"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="8sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-            </LinearLayout>
-
-            <!-- Actions Panel: CHECK DATA & START LOG -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnCheckData"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="0dp"
-                    android:layout_height="52dp"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="6dp"
-                    android:text="CHECK DATA"
-                    android:textColor="@color/accent_cyan"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    app:strokeColor="@color/accent_cyan"
-                    app:cornerRadius="10dp" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnToggleLog"
-                    android:layout_width="0dp"
-                    android:layout_height="52dp"
-                    android:layout_weight="1.5"
-                    android:layout_marginStart="6dp"
-                    android:text="START LOG"
-                    android:textColor="@color/text_primary"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    app:backgroundTint="@color/accent_green"
-                    app:cornerRadius="10dp" />
-            </LinearLayout>
-
-            <!-- Collapsible RAW DEBUG Section -->
+            <!-- Group 003 Card -->
             <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
                 app:cardBackgroundColor="@color/surface_card"
                 app:cardCornerRadius="12dp"
                 app:strokeColor="@color/border_subtle"
@@ -1104,516 +766,159 @@
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical">
+                    android:orientation="vertical"
+                    android:padding="10dp">
 
-                    <LinearLayout
-                        android:id="@+id/layoutRawDebugHeader"
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:padding="10dp"
-                        android:background="?attr/selectableItemBackground"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:gravity="center_vertical">
+                        android:text="GROUP 003 (MAF)"
+                        android:textColor="@color/accent_blue"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
 
-                        <TextView
-                            android:id="@+id/tvRawDebugHeaderTitle"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="▶ RAW TELEMETRY DEBUG (COLLAPSED)"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="TAP TO TOGGLE"
-                            android:textColor="@color/text_muted"
-                            android:textSize="9sp" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:id="@+id/layoutRawDebugContent"
-                        android:layout_width="match_parent"
+                    <TextView
+                        android:id="@+id/tvMafSpecified"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:paddingStart="10dp"
-                        android:paddingEnd="10dp"
-                        android:paddingBottom="10dp"
-                        android:visibility="gone">
+                        android:layout_marginTop="4dp"
+                        android:text="Target: --- mg/s"
+                        android:textColor="@color/text_primary"
+                        android:textSize="11sp" />
 
-                        <TextView
-                            android:id="@+id/tvDebugLastTx"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="Last TX: ---"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
-                            android:fontFamily="monospace" />
+                    <TextView
+                        android:id="@+id/tvMafActual"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="Actual: --- mg/s"
+                        android:textColor="@color/accent_green"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
 
-                        <TextView
-                            android:id="@+id/tvDebugLastRx"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Last RX: ---"
-                            android:textColor="@color/accent_cyan"
-                            android:textSize="11sp"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:id="@+id/tvDebugParsed"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Parsed: ---"
-                            android:textColor="@color/accent_green"
-                            android:textSize="11sp"
-                            android:fontFamily="monospace" />
-
-                        <TextView
-                            android:id="@+id/tvDebugLatency"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Latency: -- ms"
-                            android:textColor="@color/text_muted"
-                            android:textSize="10sp" />
-                    </LinearLayout>
+                    <TextView
+                        android:id="@+id/tvEgrDuty"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:text="EGR: --- %"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
-
         </LinearLayout>
 
-        <!-- ========================================================================= -->
-        <!-- MODE B & USB LEGACY CONTAINERS (SHOWN ONLY WHEN NOT IN MODE A)            -->
-        <!-- ========================================================================= -->
-        <LinearLayout
-            android:id="@+id/layoutOemGroups"
+        <!-- WOT Logger Control Card -->
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone">
+            android:layout_marginTop="12dp"
+            app:cardBackgroundColor="@color/surface_card"
+            app:cardCornerRadius="14dp"
+            app:strokeColor="@color/border_subtle"
+            app:strokeWidth="1dp">
 
-            <!-- TP 2.0 Status Badge -->
-            <TextView
-                android:id="@+id/tvTp20Badge"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:background="#2D2005"
-                android:gravity="center"
-                android:padding="6dp"
-                android:text="⚠️ TP2.0 IMPLEMENTED BUT NOT VERIFIED ON REAL CAR"
-                android:textColor="#FFB74D"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:visibility="gone" />
-
-            <!-- Hero Telemetry: Group 011 Turbo & Spool -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                app:cardBackgroundColor="@color/surface_card"
-                app:cardCornerRadius="14dp"
-                app:strokeColor="@color/border_subtle"
-                app:strokeWidth="1dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="14dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:id="@+id/tvGroup011Header"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="GROUP 011 — CHARGE PRESSURE"
-                            android:textColor="@color/accent_cyan"
-                            android:textSize="12sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvRpm"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="--- RPM"
-                            android:textColor="@color/text_primary"
-                            android:textSize="14sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:orientation="horizontal"
-                        android:weightSum="3">
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/tvBoostSpecifiedLabel"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Boost Gauge"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="11sp" />
-                            <TextView
-                                android:id="@+id/tvBoostSpecified"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="---"
-                                android:textColor="@color/accent_cyan"
-                                android:textSize="20sp"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:id="@+id/tvBoostSpecifiedUnit"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="bar"
-                                android:textColor="@color/text_muted"
-                                android:textSize="10sp" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/tvBoostActualLabel"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="MAP absolute"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="11sp" />
-                            <TextView
-                                android:id="@+id/tvBoostActual"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="---"
-                                android:textColor="@color/accent_green"
-                                android:textSize="20sp"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="mbar"
-                                android:textColor="@color/text_muted"
-                                android:textSize="10sp" />
-                        </LinearLayout>
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/tvN75Label"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="Air Flow (MAF)"
-                                android:textColor="@color/text_secondary"
-                                android:textSize="11sp" />
-                            <TextView
-                                android:id="@+id/tvN75"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="---"
-                                android:textColor="@color/accent_orange"
-                                android:textSize="20sp"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:id="@+id/tvN75Unit"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="g/s"
-                                android:textColor="@color/text_muted"
-                                android:textSize="10sp" />
-                        </LinearLayout>
-                    </LinearLayout>
-
-                    <com.vag.vcdsandroid.ui.LiveGraphView
-                        android:id="@+id/liveGraphView"
-                        android:layout_width="match_parent"
-                        android:layout_height="140dp"
-                        android:layout_marginTop="12dp"
-                        android:visibility="gone" />
-
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Secondary Telemetry: Groups 008 & 003 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:orientation="horizontal"
-                android:baselineAligned="false">
+                android:orientation="vertical"
+                android:padding="14dp">
 
-                <!-- Group 008 Card -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
+                <TextView
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="6dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="12dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
+                    android:text="HIGH-SPEED WOT RECORDER"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="10dp">
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnToggleLogOem"
+                    android:layout_width="match_parent"
+                    android:layout_height="54dp"
+                    android:layout_marginTop="10dp"
+                    android:text="START 4TH GEAR WOT LOG"
+                    android:textColor="@color/text_primary"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    app:backgroundTint="@color/accent_green"
+                    app:cornerRadius="10dp" />
 
-                        <TextView
-                            android:id="@+id/tvGroup008Header"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="ENGINE TELEMETRY"
-                            android:textColor="@color/accent_purple"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvDriverWish"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="Driver: --- mg"
-                            android:textColor="@color/text_primary"
-                            android:textSize="11sp" />
-
-                        <TextView
-                            android:id="@+id/tvTorqueLimit"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Torque: --- mg"
-                            android:textColor="@color/text_primary"
-                            android:textSize="11sp" />
-
-                        <TextView
-                            android:id="@+id/tvSmokeLimit"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Smoke: --- mg"
-                            android:textColor="@color/accent_orange"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <!-- Group 003 Card -->
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
+                <TextView
+                    android:id="@+id/tvLogMetricsOem"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="6dp"
-                    app:cardBackgroundColor="@color/surface_card"
-                    app:cardCornerRadius="12dp"
-                    app:strokeColor="@color/border_subtle"
-                    app:strokeWidth="1dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="10dp">
-
-                        <TextView
-                            android:id="@+id/tvGroup003Header"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="BUS PERFORMANCE"
-                            android:textColor="@color/accent_blue"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvMafSpecified"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="4dp"
-                            android:text="Target: --- mg/s"
-                            android:textColor="@color/text_primary"
-                            android:textSize="11sp" />
-
-                        <TextView
-                            android:id="@+id/tvMafActual"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="Actual: --- mg/s"
-                            android:textColor="@color/accent_green"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/tvEgrDuty"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="2dp"
-                            android:text="EGR: --- %"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp" />
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
+                    android:layout_marginTop="8dp"
+                    android:text="Log: Idle | 0 samples recorded"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp"
+                    android:gravity="center" />
             </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
-            <!-- Diagnostic Benchmark & Stress Tools -->
-            <com.google.android.material.card.MaterialCardView
+        <!-- Fault Codes Diagnostics (DTC) -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:cardBackgroundColor="@color/surface_card"
+            app:cardCornerRadius="14dp"
+            app:strokeColor="@color/border_subtle"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                app:cardBackgroundColor="@color/surface_card"
-                app:cardCornerRadius="14dp"
-                app:strokeColor="@color/border_subtle"
-                app:strokeWidth="1dp">
+                android:orientation="vertical"
+                android:padding="14dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="12dp">
+                    android:orientation="horizontal">
 
                     <TextView
-                        android:id="@+id/tvLogMetrics"
-                        android:layout_width="match_parent"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:text="Log: Idle | 0 samples recorded"
+                        android:layout_weight="1"
+                        android:text="DIAGNOSTIC TROUBLE CODES (DTC)"
                         android:textColor="@color/text_secondary"
-                        android:textSize="12sp"
-                        android:gravity="center" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:orientation="horizontal">
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnRpmTest"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="0dp"
-                            android:layout_height="36dp"
-                            android:layout_weight="1"
-                            android:layout_marginEnd="4dp"
-                            android:padding="0dp"
-                            android:text="10s RPM Test"
-                            android:textSize="11sp"
-                            app:cornerRadius="8dp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnBenchmark"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="0dp"
-                            android:layout_height="36dp"
-                            android:layout_weight="1"
-                            android:layout_marginStart="2dp"
-                            android:layout_marginEnd="2dp"
-                            android:padding="0dp"
-                            android:text="Timing Bench"
-                            android:textSize="11sp"
-                            app:cornerRadius="8dp" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnCalibrateBaro"
-                            style="@style/Widget.Material3.Button.OutlinedButton"
-                            android:layout_width="0dp"
-                            android:layout_height="36dp"
-                            android:layout_weight="1"
-                            android:layout_marginStart="4dp"
-                            android:padding="0dp"
-                            android:text="Calib Baro"
-                            android:textSize="11sp"
-                            app:cornerRadius="8dp" />
-                    </LinearLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Fault Codes Diagnostics (DTC) -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardDtc"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                app:cardBackgroundColor="@color/surface_card"
-                app:cardCornerRadius="14dp"
-                app:strokeColor="@color/border_subtle"
-                app:strokeWidth="1dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="14dp">
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal">
-
-                        <TextView
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="DIAGNOSTIC TROUBLE CODES (DTC)"
-                            android:textColor="@color/text_secondary"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnClearDtc"
-                            style="@style/Widget.Material3.Button.TextButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="32dp"
-                            android:text="Clear DTCs"
-                            android:textColor="@color/accent_red"
-                            android:textSize="11sp" />
-                    </LinearLayout>
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
 
                     <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnScanDtc"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="match_parent"
-                        android:layout_height="40dp"
-                        android:layout_marginTop="8dp"
-                        android:text="Scan Engine Fault Codes"
-                        android:textSize="12sp"
-                        app:cornerRadius="8dp" />
-
-                    <TextView
-                        android:id="@+id/tvDtcList"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:background="@color/surface_card_secondary"
-                        android:padding="10dp"
-                        android:text="No scan performed yet. Tap 'Scan Engine Fault Codes'."
-                        android:textColor="@color/text_primary"
-                        android:textSize="12sp"
-                        android:fontFamily="monospace" />
+                        android:id="@+id/btnClearDtc"
+                        style="@style/Widget.Material3.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:text="Clear DTCs"
+                        android:textColor="@color/accent_red"
+                        android:textSize="11sp" />
                 </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnScanDtc"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="8dp"
+                    android:text="Scan Engine Fault Codes"
+                    android:textSize="12sp"
+                    app:cornerRadius="8dp" />
+
+                <TextView
+                    android:id="@+id/tvDtcList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:background="@color/surface_card_secondary"
+                    android:padding="10dp"
+                    android:text="No scan performed yet. Tap 'Scan Engine Fault Codes'."
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         </LinearLayout>
 
