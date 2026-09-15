@@ -16,6 +16,10 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import android.os.Environment
 
 enum class ElmDiagnosticState {
     DISCONNECTED,
@@ -57,6 +61,39 @@ class Elm327DiagnosticEngine(private val context: Context) {
 
     var lastConnectTrace: String = ""
         private set
+
+    var lastConnectStage: String = ""
+        private set
+
+    var obdProtocol: String = ""
+        private set
+
+    private fun saveConnectionTrace(isSuccess: Boolean, stage: String, deviceName: String) {
+        try {
+            val dir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "VCDS_Logs")
+            if (!dir.exists()) dir.mkdirs()
+            val ts = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
+            val outcome = if (isSuccess) "SUCCESS" else "FAIL"
+            val file = File(dir, "ConnectionTrace_${ts}_${outcome}.txt")
+            val content = buildString {
+                appendLine("=== VCDS Connection Trace ===")
+                appendLine("Outcome: $outcome")
+                appendLine("Timestamp: ${Date()}")
+                appendLine("Device: $deviceName")
+                appendLine("ELM Version: $elmVersionString")
+                appendLine("Connect Stage: $stage")
+                appendLine("OBD Protocol: $obdProtocol")
+                appendLine("TP2.0 Active: $isTp20Active")
+                appendLine("Last Error: $lastError")
+                appendLine("\n--- LOG HISTORY ---")
+                appendLine(logHistory.joinToString("\n"))
+            }
+            file.writeText(content)
+            Log.i(TAG, "Saved connection trace to ${file.absolutePath}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save connection trace: ${e.message}")
+        }
+    }
 
     var onLogListener: ((String) -> Unit)? = null
 
@@ -172,10 +209,11 @@ class Elm327DiagnosticEngine(private val context: Context) {
             } else {
                 val err = "RFCOMM підключено, але ELM327 не відповів на ATZ/ATI! Перевірте адаптер або увімкніть/вимкніть запалювання."
                 lastError = err
-                lastConnectTrace = logHistory.takeLast(80).joinToString("\n")
+                lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
                 state = DiagState.ERROR
                 elmState = ElmDiagnosticState.ERROR
                 appendLog("ERR: $err")
+                saveConnectionTrace(false, "ATZ_INIT_FAIL", dev.name ?: dev.address)
                 transport.disconnect()
                 return@withContext false
             }
@@ -221,8 +259,11 @@ class Elm327DiagnosticEngine(private val context: Context) {
                     val channelOk = tp20Transport.setupChannel(0x01)
                     if (channelOk) {
                         isTp20Active = true
+                        lastConnectStage = "VW_TP20"
                         state = DiagState.CONNECTED
                         elmState = ElmDiagnosticState.OBD_READY
+                        lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
+                        saveConnectionTrace(true, "VW_TP20", dev.name ?: dev.address)
                         appendLog("==> VW TP 2.0 ПІДКЛЮЧЕНО! Опитуємо справжній VAG Group 011 (Target Boost, Actual, N75 %)")
                         return@withContext true
                     } else {
@@ -235,160 +276,33 @@ class Elm327DiagnosticEngine(private val context: Context) {
 
             isTp20Active = false
 
-            // Step 4: Generic OBD Mode 01 Handshake (Deterministic 3-Stage per REVIEW_AFTER_26D58E6.md)
+            // Step 4: Generic OBD Mode 01 Handshake (Deterministic 3-Stage per REVIEW_D2CBE72_BEFORE_CAR.md)
             elmState = ElmDiagnosticState.OBD_CONNECTING
-            appendLog("5. Перевірка напруги та конфігурація OBD-II зв'язку...")
-
-            // Read battery voltage & log it
-            val vBat = transport.sendCommand("ATRV", 1000L)
-            appendLog("Напруга бортової мережі: ${vBat.raw.trim()}")
-
-            var obdSuccess = false
-
-            // Stage 1: KNOWN-GOOD AUTO PATH (MUST RUN FIRST IN TURBO_FAST)
-            appendLog("--- Stage 1: Спроба KNOWN-GOOD AUTO PATH (ATD -> ATSP0) ---")
-            configureBasicGenericObd()
-
-            val rpmProbe1 = transport.sendCommand("010C", 5000L)
-            appendLog("AUTO PROBE 010C -> ${formatRx(rpmProbe1)}")
-            val rpmClean1 = cleanHexResponse(rpmProbe1.raw)
-
-            if (rpmClean1.contains("410C")) {
-                markObdConnected("AUTO/010C")
-                obdSuccess = true
-            }
-
-            if (!obdSuccess) {
-                val mapProbe1 = transport.sendCommand("010B", 5000L)
-                appendLog("AUTO PROBE 010B -> ${formatRx(mapProbe1)}")
-                val mapClean1 = cleanHexResponse(mapProbe1.raw)
-                if (mapClean1.contains("410B")) {
-                    markObdConnected("AUTO/010B")
-                    obdSuccess = true
+            val handshake = GenericObdHandshake(
+                sendCmd = { cmd, timeout -> transport.sendCommand(cmd, timeout) },
+                log = { appendLog(it) }
+            )
+            val result = handshake.execute()
+            when (result) {
+                is HandshakeResult.Success -> {
+                    lastConnectStage = result.stage
+                    obdProtocol = "${result.protocolName} (${result.protocolNum})"
+                    markObdConnected(result.stage)
+                    lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
+                    saveConnectionTrace(true, result.stage, dev.name ?: dev.address)
+                    return@withContext true
+                }
+                is HandshakeResult.Failure -> {
+                    lastError = result.reason
+                    lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
+                    state = DiagState.ERROR
+                    elmState = ElmDiagnosticState.ERROR
+                    appendLog("ERR: ${result.reason}")
+                    saveConnectionTrace(false, "HANDSHAKE_FAIL", dev.name ?: dev.address)
+                    transport.disconnect()
+                    return@withContext false
                 }
             }
-
-            if (!obdSuccess) {
-                val pidProbe1 = transport.sendCommand("0100", 7000L)
-                appendLog("AUTO PROBE 0100 -> ${formatRx(pidProbe1)}")
-                if (cleanHexResponse(pidProbe1.raw).contains("4100")) {
-                    markObdConnected("AUTO/0100")
-                    obdSuccess = true
-                }
-            }
-
-            // Stage 2: FIXED CAN 11/500 WITH DEFAULT HEADER
-            if (!obdSuccess) {
-                appendLog("--- Stage 2: Спроба FIXED CAN 11/500 WITH DEFAULT HEADER (ATD -> ATSP6) ---")
-                transport.sendCommand("ATD", 1500L)
-                val stage2Init = listOf(
-                    "ATE0" to 1000L,
-                    "ATL0" to 1000L,
-                    "ATS0" to 1000L,
-                    "ATH0" to 1000L,
-                    "ATCAF1" to 1000L,
-                    "ATCFC1" to 1000L,
-                    "ATR1" to 1000L,
-                    "ATAT1" to 1000L,
-                    "ATSP6" to 1500L
-                )
-                for ((cmd, timeout) in stage2Init) {
-                    val r = transport.sendCommand(cmd, timeout)
-                    appendLog("STAGE2 INIT $cmd -> ${formatRx(r)}")
-                }
-
-                val rpmProbe2 = transport.sendCommand("010C", 5000L)
-                appendLog("SP6 PROBE 010C -> ${formatRx(rpmProbe2)}")
-                val rpmClean2 = cleanHexResponse(rpmProbe2.raw)
-
-                if (rpmClean2.contains("410C")) {
-                    markObdConnected("SP6_DEFAULT_HEADER/010C")
-                    obdSuccess = true
-                }
-
-                if (!obdSuccess) {
-                    val mapProbe2 = transport.sendCommand("010B", 5000L)
-                    appendLog("SP6 PROBE 010B -> ${formatRx(mapProbe2)}")
-                    val mapClean2 = cleanHexResponse(mapProbe2.raw)
-                    if (mapClean2.contains("410B")) {
-                        markObdConnected("SP6_DEFAULT_HEADER/010B")
-                        obdSuccess = true
-                    }
-                }
-
-                if (!obdSuccess) {
-                    val pidProbe2 = transport.sendCommand("0100", 7000L)
-                    appendLog("SP6 PROBE 0100 -> ${formatRx(pidProbe2)}")
-                    if (cleanHexResponse(pidProbe2.raw).contains("4100")) {
-                        markObdConnected("SP6_DEFAULT_HEADER/0100")
-                        obdSuccess = true
-                    }
-                }
-            }
-
-            // Stage 3: PHYSICAL 7E0/7E8 EXPERIMENTAL FALLBACK
-            if (!obdSuccess) {
-                appendLog("--- Stage 3: Спроба PHYSICAL 7E0/7E8 FALLBACK (ATD -> ATSP6 -> ATSH7E0 -> ATCRA7E8) ---")
-                transport.sendCommand("ATD", 1500L)
-                val stage3Init = listOf(
-                    "ATE0" to 1000L,
-                    "ATL0" to 1000L,
-                    "ATS0" to 1000L,
-                    "ATH0" to 1000L,
-                    "ATCAF1" to 1000L,
-                    "ATCFC1" to 1000L,
-                    "ATR1" to 1000L,
-                    "ATAT1" to 1000L,
-                    "ATSP6" to 1500L,
-                    "ATSH7E0" to 1000L,
-                    "ATCRA7E8" to 1000L
-                )
-                for ((cmd, timeout) in stage3Init) {
-                    val r = transport.sendCommand(cmd, timeout)
-                    appendLog("STAGE3 INIT $cmd -> ${formatRx(r)}")
-                }
-
-                val rpmProbe3 = transport.sendCommand("010C", 5000L)
-                appendLog("PHYSICAL PROBE 010C -> ${formatRx(rpmProbe3)}")
-                val rpmClean3 = cleanHexResponse(rpmProbe3.raw)
-
-                if (rpmClean3.contains("410C")) {
-                    markObdConnected("PHYSICAL_7E0/010C")
-                    obdSuccess = true
-                }
-
-                if (!obdSuccess) {
-                    val mapProbe3 = transport.sendCommand("010B", 5000L)
-                    appendLog("PHYSICAL PROBE 010B -> ${formatRx(mapProbe3)}")
-                    val mapClean3 = cleanHexResponse(mapProbe3.raw)
-                    if (mapClean3.contains("410B")) {
-                        markObdConnected("PHYSICAL_7E0/010B")
-                        obdSuccess = true
-                    }
-                }
-
-                if (!obdSuccess) {
-                    // Mandatory ATD reset so manual header does not leak
-                    transport.sendCommand("ATD", 1500L)
-                }
-            }
-
-            if (obdSuccess) {
-                val dpResp = transport.sendCommand("ATDP", 1000L)
-                val dpnResp = transport.sendCommand("ATDPN", 1000L)
-                appendLog("Активний протокол: ${dpResp.raw.trim()} (${dpnResp.raw.trim()})")
-            } else {
-                val err = "ЕБУ двигуна не відповідає на OBD-II Mode 01 (0100/010C).\nПеревірте, щоб запалювання було увімкнене (або заведіть двигун) та адаптер був щільно вставлений у роз'єм OBD!"
-                lastError = err
-                lastConnectTrace = logHistory.takeLast(80).joinToString("\n")
-                state = DiagState.ERROR
-                elmState = ElmDiagnosticState.ERROR
-                appendLog("ERR: $err")
-                transport.disconnect()
-                return@withContext false
-            }
-
-            return@withContext true
         }
     }
 

@@ -29,6 +29,7 @@ sealed class AsyncLogRecord {
         val utcMs: Long,
         val monoNs: Long,
         val pid: String,
+        val requestCommand: String = pid,
         val value: Double?,
         val unit: String,
         val raw: String,
@@ -144,7 +145,7 @@ class AsyncCsvLogger(private val context: Context) {
         val pFile = File(logsDir, "Turbo_Pair_$timestamp.csv")
 
         val rWriter = BufferedWriter(FileWriter(rFile, false), 16384)
-        rWriter.write("event_seq,timestamp_utc_ms,mono_ns,pid,value,unit,raw,latency_ms,status\n")
+        rWriter.write("event_seq,timestamp_utc_ms,mono_ns,pid,request,value,unit,raw,latency_ms,status\n")
         rWriter.flush()
 
         val pWriter = BufferedWriter(FileWriter(pFile, false), 16384)
@@ -190,7 +191,7 @@ class AsyncCsvLogger(private val context: Context) {
                         is AsyncLogRecord.RawEvent -> {
                             val valStr = if (record.value != null) String.format(Locale.US, "%.2f", record.value) else ""
                             val sanitizedRaw = "\"" + record.raw.replace("\r", " ").replace("\n", " ").replace("\"", "\"\"").trim() + "\""
-                            val line = "${record.seq},${record.utcMs},${record.monoNs},${record.pid},$valStr,${record.unit},$sanitizedRaw,${record.latencyMs},${record.status}\n"
+                            val line = "${record.seq},${record.utcMs},${record.monoNs},${record.pid},${record.requestCommand},$valStr,${record.unit},$sanitizedRaw,${record.latencyMs},${record.status}\n"
                             localRawWriter.write(line)
                             rawRowsActuallyWritten.incrementAndGet()
                         }
@@ -276,7 +277,8 @@ class AsyncCsvLogger(private val context: Context) {
         latencyMs: Long,
         status: String,
         txNanos: Long = 0L,
-        rxNanos: Long = 0L
+        rxNanos: Long = 0L,
+        requestCommand: String = pid
     ) {
         if (!isLoggingActive.get()) return
         val chan = channel ?: return
@@ -290,6 +292,7 @@ class AsyncCsvLogger(private val context: Context) {
             utcMs = utcMs,
             monoNs = monoNs,
             pid = pid,
+            requestCommand = requestCommand,
             value = value,
             unit = unit,
             raw = raw,
