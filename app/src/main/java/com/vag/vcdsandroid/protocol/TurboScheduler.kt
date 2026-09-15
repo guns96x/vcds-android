@@ -19,16 +19,16 @@ class TurboScheduler {
      * Called in RECORDING mode:
      * High priority to core RPM+MAP.
      * No slow sensors (0105, 010F, 0142, 0133) polled during WOT recording.
-     * MAF every 6th pair.
-     * Speed every 12th pair.
-     * Load every 12th pair offset by 6.
+     * MAF every 4th pair.
+     * Speed every 8th pair.
+     * Load every 8th pair offset by 4.
      */
     fun nextRecordingAuxPids(): List<String> {
         pairCount++
         val pids = mutableListOf<String>()
-        if (pairCount % 6L == 0L) pids.add("0110")  // MAF
-        if (pairCount % 12L == 0L) pids.add("010D") // Speed
-        if (pairCount % 12L == 6L) pids.add("0104") // Load
+        if (pairCount % 4L == 0L) pids.add("0110")  // MAF
+        if (pairCount % 8L == 0L) pids.add("010D") // Speed
+        if (pairCount % 8L == 4L) pids.add("0104") // Load
         return pids
     }
 

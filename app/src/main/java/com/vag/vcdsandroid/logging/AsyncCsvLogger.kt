@@ -74,6 +74,13 @@ class AsyncCsvLogger(private val context: Context) {
     }
 
     private val isLoggingActive = AtomicBoolean(false)
+    private val writerHealthy = AtomicBoolean(false)
+    @Volatile var lastWriterError: String? = null
+        private set
+
+    val isWriterHealthy: Boolean
+        get() = writerHealthy.get() && writerJob?.isActive == true
+
     private val loggerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var channel: Channel<AsyncLogRecord>? = null
     private var writerJob: Job? = null
@@ -96,6 +103,10 @@ class AsyncCsvLogger(private val context: Context) {
         private set
     var peakRpm: Double = 0.0
         private set
+
+    fun clearWriterError() {
+        lastWriterError = null
+    }
 
     val isLogging: Boolean
         get() = isLoggingActive.get()
@@ -177,6 +188,8 @@ class AsyncCsvLogger(private val context: Context) {
             }
         )
         channel = chan
+        lastWriterError = null
+        writerHealthy.set(true)
         isLoggingActive.set(true)
 
         val localRawWriter = rWriter
@@ -252,7 +265,11 @@ class AsyncCsvLogger(private val context: Context) {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Exception in async CSV writer: ${e.message}", e)
+                lastWriterError = e.message ?: "Writer exception"
+                writerHealthy.set(false)
+                isLoggingActive.set(false)
             } finally {
+                writerHealthy.set(false)
                 try {
                     localRawWriter.flush()
                     localRawWriter.close()
@@ -384,6 +401,7 @@ class AsyncCsvLogger(private val context: Context) {
     }
 
     suspend fun stopLogging(): Pair<File?, File?> = withContext(Dispatchers.IO) {
+        writerHealthy.set(false)
         if (!isLoggingActive.compareAndSet(true, false)) return@withContext Pair(rawFile, pairFile)
 
         try {

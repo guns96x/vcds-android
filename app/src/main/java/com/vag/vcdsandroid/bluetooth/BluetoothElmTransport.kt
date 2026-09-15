@@ -314,9 +314,31 @@ class BluetoothElmTransport(private val context: Context) {
 
             // If the previous command timed out, attempt buffer recovery
             if (lastCommandTimedOut.get()) {
-                Log.w(TAG, "Previous command timed out. Performing input recovery...")
-                recoverInputBuffer(input, 300L)
-                lastCommandTimedOut.set(false)
+                Log.w(TAG, "Previous command timed out. Performing input recovery to '>' prompt...")
+                rxLeftover.setLength(0)
+                val recovered = ElmPromptRecovery.recoverToPrompt(
+                    input,
+                    timeoutMs = 1200L,
+                    timeProvider = { SystemClock.elapsedRealtime() }
+                )
+                if (recovered) {
+                    lastCommandTimedOut.set(false)
+                    rxLeftover.setLength(0)
+                    Log.i(TAG, "ELM prompt boundary recovered successfully.")
+                } else {
+                    rxLeftover.setLength(0)
+                    val now = SystemClock.elapsedRealtimeNanos()
+                    Log.e(TAG, "TRANSPORT_DESYNC: Prompt boundary NOT recovered. Aborting next command [$cmd].")
+                    return@withLock ElmResponse(
+                        command = cmd,
+                        raw = "TRANSPORT_DESYNC",
+                        promptReceived = false,
+                        timedOut = true,
+                        elapsedMs = 1200L,
+                        txNanos = 0L,
+                        rxNanos = now
+                    )
+                }
             }
 
             var txNanos = 0L
@@ -431,8 +453,31 @@ class BluetoothElmTransport(private val context: Context) {
 
             val startTime = System.currentTimeMillis()
             if (lastCommandTimedOut.get()) {
-                recoverInputBuffer(input, 300L)
-                lastCommandTimedOut.set(false)
+                Log.w(TAG, "Previous command timed out. Performing input recovery to '>' prompt before pipelined write...")
+                rxLeftover.setLength(0)
+                val recovered = ElmPromptRecovery.recoverToPrompt(
+                    input,
+                    timeoutMs = 1200L,
+                    timeProvider = { SystemClock.elapsedRealtime() }
+                )
+                if (recovered) {
+                    lastCommandTimedOut.set(false)
+                    rxLeftover.setLength(0)
+                    Log.i(TAG, "ELM prompt boundary recovered successfully before pipelined write.")
+                } else {
+                    rxLeftover.setLength(0)
+                    val now = SystemClock.elapsedRealtimeNanos()
+                    Log.e(TAG, "TRANSPORT_DESYNC: Prompt boundary NOT recovered before pipelined write. Aborting.")
+                    return@withLock ElmResponse(
+                        command = cmds.joinToString(";"),
+                        raw = "TRANSPORT_DESYNC",
+                        promptReceived = false,
+                        timedOut = true,
+                        elapsedMs = 1200L,
+                        txNanos = 0L,
+                        rxNanos = now
+                    )
+                }
             }
 
             val combinedPayload = cmds.joinToString("\r", postfix = "\r") { it.trim() }
@@ -503,18 +548,12 @@ class BluetoothElmTransport(private val context: Context) {
         }
     }
 
-    private fun recoverInputBuffer(input: InputStream, recoveryTimeoutMs: Long) {
-        val start = System.currentTimeMillis()
-        try {
-            while (System.currentTimeMillis() - start < recoveryTimeoutMs) {
-                if (input.available() > 0) {
-                    val c = input.read().toChar()
-                    if (c == '>') break
-                } else {
-                    Thread.sleep(10)
-                }
-            }
-        } catch (_: Exception) {}
+    private fun recoverInputBuffer(input: InputStream, recoveryTimeoutMs: Long): Boolean {
+        return ElmPromptRecovery.recoverToPrompt(
+            input,
+            timeoutMs = recoveryTimeoutMs,
+            timeProvider = { SystemClock.elapsedRealtime() }
+        )
     }
 
     fun disconnect() {

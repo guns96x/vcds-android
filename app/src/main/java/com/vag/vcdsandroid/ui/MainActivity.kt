@@ -26,12 +26,16 @@ import androidx.lifecycle.lifecycleScope
 import com.vag.vcdsandroid.R
 import com.vag.vcdsandroid.databinding.ActivityMainBinding
 import com.vag.vcdsandroid.logging.AsyncCsvLogger
+import com.vag.vcdsandroid.protocol.CoreTelemetryHealth
 import com.vag.vcdsandroid.protocol.DiagState
 import com.vag.vcdsandroid.protocol.Elm327DiagnosticEngine
 import com.vag.vcdsandroid.protocol.ElmDiagnosticState
 import com.vag.vcdsandroid.protocol.Kwp2000DiagnosticEngine
 import com.vag.vcdsandroid.protocol.PidDecoder
 import com.vag.vcdsandroid.protocol.PidStatus
+import com.vag.vcdsandroid.protocol.PreflightEvaluator
+import com.vag.vcdsandroid.protocol.PreflightReport
+import com.vag.vcdsandroid.protocol.PreflightVerdict
 import com.vag.vcdsandroid.protocol.SessionBaroResolver
 import com.vag.vcdsandroid.protocol.TurboScheduler
 import com.vag.vcdsandroid.protocol.TransportMode
@@ -71,7 +75,8 @@ data class DiagnosticSample(
         val ageMs = (nowNanos - monoNanos) / 1_000_000
         val thresholdMs = when (pid) {
             "010C", "010B" -> 800L
-            "0110", "010D", "0104" -> 2000L
+            "0110" -> 2500L
+            "010D", "0104" -> 4500L
             "0105", "010F", "0142", "0133" -> 14000L
             else -> 10000L
         }
@@ -94,6 +99,9 @@ class MainActivity : AppCompatActivity() {
         const val ENGINE_OFF_BARO_MAX_MBAR = 1100.0
         const val SLOW_SLOT_INTERVAL_MS = 2500L
         const val SLOW_VALUE_MAX_AGE_MS = 12000L
+        const val MAF_MAX_AGE_MS = 2500L
+        const val SPEED_MAX_AGE_MS = 4500L
+        const val LOAD_MAX_AGE_MS = 4500L
     }
 
     private data class BaroReading(val valueMbar: Double?, val source: String)
@@ -119,7 +127,10 @@ class MainActivity : AppCompatActivity() {
 
     private val sessionBaroResolver = SessionBaroResolver()
     private val turboScheduler = TurboScheduler()
+    private val coreTelemetryHealth = CoreTelemetryHealth(3)
+    private var preflightReport: PreflightReport? = null
     private var stressJob: Job? = null
+    private var elmConnectJob: Job? = null
     private var sessionGeneration: Long = 0L
 
     // Diagnostic samples storage (thread-safe, shared between UI and CSV)
@@ -373,8 +384,15 @@ class MainActivity : AppCompatActivity() {
 
     private fun connectElmBluetooth() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val missing = mutableListOf<String>()
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.BLUETOOTH_CONNECT, Manifest.permission.BLUETOOTH_SCAN), 101)
+                missing.add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
+                missing.add(Manifest.permission.BLUETOOTH_SCAN)
+            }
+            if (missing.isNotEmpty()) {
+                ActivityCompat.requestPermissions(this, missing.toTypedArray(), 101)
                 return
             }
         }
@@ -401,18 +419,50 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 101) {
+            val allGranted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            if (allGranted) {
+                Toast.makeText(this, "Bluetooth permissions granted", Toast.LENGTH_SHORT).show()
+                connectElmBluetooth()
+            } else {
+                Toast.makeText(this, "Bluetooth permissions are required to connect to ELM327", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
     private fun startElmConnection(device: BluetoothDevice) {
+        elmConnectJob?.cancel()
         resetTurboSessionState()
+        val myGeneration = sessionGeneration
+        val myMode = connectionMode
+
         binding.tvStatus.text = "Connecting..."
         binding.tvSubStatus.text = "Opening RFCOMM to ${device.address}..."
         binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
         binding.btnConnect.isEnabled = false
+        binding.btnModeToggle.isEnabled = false
+        binding.btnCheckData.isEnabled = false
+        binding.btnToggleLog.isEnabled = false
 
-        lifecycleScope.launch {
-            val isTurboFast = (connectionMode == AppConnectionMode.TURBO_FAST_OBD)
+        elmConnectJob = lifecycleScope.launch {
+            val isTurboFast = (myMode == AppConnectionMode.TURBO_FAST_OBD)
             val success = elmEngine.connect(device, forceGeneric = isTurboFast)
+
+            if (!isActive || myGeneration != sessionGeneration || myMode != connectionMode) {
+                if (success) {
+                    try { elmEngine.disconnect() } catch (_: Exception) {}
+                }
+                return@launch
+            }
+
             binding.btnConnect.isEnabled = true
+            binding.btnModeToggle.isEnabled = true
+            binding.btnCheckData.isEnabled = success
             updateStatusUI()
+            renderLoggingState()
+
             if (success) {
                 if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
                     startTurboFastPolling()
@@ -457,6 +507,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopPolling() {
+        elmConnectJob?.cancel()
+        elmConnectJob = null
         pollingJob?.cancel()
         pollingJob = null
         preFlightJob?.cancel()
@@ -474,11 +526,20 @@ class MainActivity : AppCompatActivity() {
                 map.getAgeMs(nowNs) <= 1000L
     }
 
-    private fun isWotLogReady(): Boolean {
+    private fun isWotLogReady(nowNs: Long = SystemClock.elapsedRealtimeNanos()): Boolean {
         val isConnected = elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
-        val hasCore = isCoreTelemetryReady()
+        val hasCore = isCoreTelemetryReady(nowNs)
         val hasBaro = sessionBaroResolver.resolve().valueMbar != null
-        return isConnected && hasCore && hasBaro
+        val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
+
+        val mafSample = latestSamples["0110"]
+        val speedSample = latestSamples["010D"]
+        val loadSample = latestSamples["0104"]
+        val auxOk = (mafSample?.status == PidStatus.VALID && mafSample.getEffectiveStatus(nowNs) != PidStatus.STALE) &&
+                    (speedSample?.status == PidStatus.VALID && speedSample.getEffectiveStatus(nowNs) != PidStatus.STALE) &&
+                    (loadSample?.status == PidStatus.VALID && loadSample.getEffectiveStatus(nowNs) != PidStatus.STALE)
+
+        return isConnected && hasCore && hasBaro && isGreen && auxOk
     }
 
     private fun renderLoggingState() {
@@ -520,7 +581,13 @@ class MainActivity : AppCompatActivity() {
                 if (isConnected && !canStart) {
                     val hasCore = isCoreTelemetryReady()
                     val hasBaro = sessionBaroResolver.resolve().valueMbar != null
-                    if (hasCore && !hasBaro) {
+                    val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
+                    if (!isGreen) {
+                        if (preflightReport == null) {
+                            binding.tvPreFlightStatus.text = "CHECK DATA REQUIRED: Run pre-flight check before logging"
+                            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
+                        }
+                    } else if (hasCore && !hasBaro) {
                         binding.tvPreFlightStatus.text = "RAW TELEMETRY OK — BOOST NOT READY: engine off + ignition on once for BARO baseline"
                         binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
                     }
@@ -531,6 +598,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun resetTurboSessionState() {
         sessionGeneration++
+        preflightReport = null
+        coreTelemetryHealth.reset()
         latestSamples.clear()
         sessionBaroResolver.reset()
         turboScheduler.reset()
@@ -646,6 +715,15 @@ class MainActivity : AppCompatActivity() {
             rxNanos = sample.monoNanos,
             requestCommand = sample.requestCommand
         )
+
+        if (sample.pid in setOf("0110", "010D", "0104") && sample.status != PidStatus.VALID) {
+            if (preflightReport?.verdict == PreflightVerdict.GREEN) {
+                preflightReport = preflightReport?.copy(verdict = PreflightVerdict.AMBER)
+                lifecycleScope.launch(Dispatchers.Main.immediate) {
+                    renderLoggingState()
+                }
+            }
+        }
 
         lifecycleScope.launch(Dispatchers.Main.immediate) {
             updateWidgetForSample(sample)
@@ -866,6 +944,17 @@ class MainActivity : AppCompatActivity() {
             busReqRate, busRpmHz, busMapHz, busAvgLatency
         )
 
+        // Check logger writer health
+        if (asyncLogger.lastWriterError != null) {
+            val err = asyncLogger.lastWriterError ?: "Writer exception"
+            asyncLogger.clearWriterError()
+            stopWotLog()
+            binding.tvLogMetrics.text = "🔴 LOGGER FAILED: $err"
+            binding.tvLogMetrics.setTextColor(Color.parseColor("#F85149"))
+            Toast.makeText(this@MainActivity, "CSV Logger failed: $err", Toast.LENGTH_LONG).show()
+            return
+        }
+
         // Recording / Queue Stats compact line (Pairs and Raw)
         val sizeKb = asyncLogger.fileSizeBytes / 1024
         if (asyncLogger.isLogging) {
@@ -902,6 +991,9 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Connect ELM327 Bluetooth first!", Toast.LENGTH_SHORT).show()
             return
         }
+
+        preflightReport = null
+        renderLoggingState()
 
         val wasPolling = pollingJob?.isActive == true
         stopPolling()
@@ -967,44 +1059,57 @@ class MainActivity : AppCompatActivity() {
                 delay(40)
             }
 
-            // Category evaluation per REVIEW_D2CBE72_BEFORE_CAR.md Item 5
+            // Category evaluation via PreflightEvaluator
             val rpmSample = latestSamples["010C"]
             val mapSample = latestSamples["010B"]
             val baro = sessionBaroResolver.resolve()
-
-            val rpmOk = rpmSample?.status == PidStatus.VALID
-            val mapOk = mapSample?.status == PidStatus.VALID
-            val baroOk = baro.valueMbar != null
-
-            val mafOk = latestSamples["0110"]?.status == PidStatus.VALID
-            val spdOk = latestSamples["010D"]?.status == PidStatus.VALID
-            val lodOk = latestSamples["0104"]?.status == PidStatus.VALID
-
-            val clnOk = latestSamples["0105"]?.status == PidStatus.VALID
-            val iatOk = latestSamples["010F"]?.status == PidStatus.VALID
+            val mafSample = latestSamples["0110"]
+            val spdSample = latestSamples["010D"]
+            val lodSample = latestSamples["0104"]
+            val clnSample = latestSamples["0105"]
+            val iatSample = latestSamples["010F"]
             val voltSample = latestSamples["0142"]
-            val voltOk = voltSample?.status == PidStatus.VALID
 
-            if (rpmOk && mapOk && baroOk) {
-                val voltSrc = if (voltSample?.requestCommand == "ATRV") "ATRV" else "0142"
-                val statusText = buildString {
-                    append("🟢 READY TO LOG\n")
-                    append("RPM OK | MAP OK | BARO ${String.format(Locale.US, "%.0f", baro.valueMbar)} ${baro.source}\n")
-                    append("MAF ${if (mafOk) "OK" else "N/A"} | SPEED ${if (spdOk) "OK" else "N/A"} | LOAD ${if (lodOk) "OK" else "N/A"}\n")
-                    append("COOLANT ${if (clnOk) "OK" else "N/A"} | IAT ${if (iatOk) "OK" else "N/A"} | VOLT ${if (voltOk) voltSrc else "N/A"}")
+            val report = PreflightEvaluator.evaluate(
+                rpmOk = rpmSample?.status == PidStatus.VALID,
+                mapOk = mapSample?.status == PidStatus.VALID,
+                baroReading = baro,
+                mafOk = mafSample?.status == PidStatus.VALID,
+                speedOk = spdSample?.status == PidStatus.VALID,
+                loadOk = lodSample?.status == PidStatus.VALID,
+                coolantOk = clnSample?.status == PidStatus.VALID,
+                iatOk = iatSample?.status == PidStatus.VALID,
+                voltOk = voltSample?.status == PidStatus.VALID,
+                voltSource = if (voltSample?.requestCommand == "ATRV") "ATRV" else "0142"
+            )
+            preflightReport = report
+
+            when (report.verdict) {
+                PreflightVerdict.GREEN -> {
+                    val statusText = buildString {
+                        append("🟢 READY TO LOG\n")
+                        append("RPM OK | MAP OK | BARO ${String.format(Locale.US, "%.0f", report.baroValueMbar)} ${report.baroSource}\n")
+                        append("MAF OK | SPEED OK | LOAD OK\n")
+                        append("COOLANT ${if (report.coolantOk) "OK" else "N/A"} | IAT ${if (report.iatOk) "OK" else "N/A"} | VOLT ${if (report.voltOk) report.voltSource else "N/A"}")
+                    }
+                    binding.tvPreFlightStatus.text = statusText
+                    binding.tvPreFlightStatus.setTextColor(Color.parseColor("#3FB950"))
                 }
-                binding.tvPreFlightStatus.text = statusText
-                binding.tvPreFlightStatus.setTextColor(Color.parseColor("#3FB950"))
-            } else {
-                val failReason = when {
-                    !rpmOk && !mapOk -> "RPM & MAP TIMEOUT/FAIL"
-                    !rpmOk -> "RPM TIMEOUT/FAIL"
-                    !mapOk -> "MAP TIMEOUT/FAIL"
-                    !baroOk -> "NO BARO BASELINE (need engine-off MAP or 0133)"
-                    else -> "CORE TELEMETRY INCOMPLETE"
+                PreflightVerdict.AMBER -> {
+                    val missingStr = report.missingAuxChannels.joinToString(", ")
+                    val statusText = buildString {
+                        append("🟡 CORE READY, AUX MISSING — DO NOT WOT YET\n")
+                        append("RPM OK | MAP OK | BARO ${String.format(Locale.US, "%.0f", report.baroValueMbar)} ${report.baroSource}\n")
+                        append("MISSING: $missingStr\n")
+                        append("COOLANT ${if (report.coolantOk) "OK" else "N/A"} | IAT ${if (report.iatOk) "OK" else "N/A"} | VOLT ${if (report.voltOk) report.voltSource else "N/A"}")
+                    }
+                    binding.tvPreFlightStatus.text = statusText
+                    binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
                 }
-                binding.tvPreFlightStatus.text = "🔴 NOT READY — DO NOT DRIVE\n$failReason"
-                binding.tvPreFlightStatus.setTextColor(Color.parseColor("#F85149"))
+                PreflightVerdict.RED -> {
+                    binding.tvPreFlightStatus.text = "🔴 NOT READY — DO NOT DRIVE\n${report.failureReason}"
+                    binding.tvPreFlightStatus.setTextColor(Color.parseColor("#F85149"))
+                }
             }
 
             binding.btnCheckData.isEnabled = true
@@ -1094,6 +1199,7 @@ class MainActivity : AppCompatActivity() {
             val medianLatency = if (sortedLatencies.isNotEmpty()) sortedLatencies[sortedLatencies.size / 2] else 0L
             val p95Idx = if (sortedLatencies.isNotEmpty()) (sortedLatencies.size * 0.95).toInt().coerceAtMost(sortedLatencies.size - 1) else 0
             val p95Latency = if (sortedLatencies.isNotEmpty()) sortedLatencies[p95Idx] else 0L
+            val maxLatency = sortedLatencies.maxOrNull() ?: 0L
 
             val summary = """
                 Duration: ${String.format(Locale.US, "%.1f", actualElapsedSec)} s
@@ -1101,7 +1207,7 @@ class MainActivity : AppCompatActivity() {
                 Valid Samples: $validCount (${String.format(Locale.US, "%.1f", validHz)} Hz)
                 Timeouts: $timeoutCount | NO DATA: $noDataCount | Other Err: $otherErrorCount
                 RPM Range: ${minRpm?.let { String.format(Locale.US, "%.0f", it) } ?: "---"} - ${maxRpm?.let { String.format(Locale.US, "%.0f", it) } ?: "---"} RPM
-                Latency: Mean: ${String.format(Locale.US, "%.1f", meanLatency)} ms | Median: $medianLatency ms | P95: $p95Latency ms
+                Latency: Mean: ${String.format(Locale.US, "%.1f", meanLatency)} ms | Median: $medianLatency ms | P95: $p95Latency ms | Max: $maxLatency ms
             """.trimIndent()
 
             Log.i("ELM_TURBO_STRESS", "\n=== 10s RPM STRESS TEST RESULT ===\n$summary\n==================================")
@@ -1144,6 +1250,22 @@ class MainActivity : AppCompatActivity() {
     // TURBO FAST POLLING LOOP (Dual Schedule: LIVE vs RECORDING per REVIEW_D2CBE72_BEFORE_CAR.md)
     // =========================================================================
 
+    private fun handleCoreTelemetryLost() {
+        runOnUiThread {
+            if (asyncLogger.isLogging) {
+                stopWotLog()
+            }
+            stopPolling()
+            elmEngine.disconnect()
+            binding.tvPreFlightStatus.text = "🔴 CORE TELEMETRY LOST — LOG STOPPED\nReconnect required (3 consecutive timeouts)"
+            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#F85149"))
+            binding.tvStatus.text = "FAULT: Core Telemetry Lost"
+            binding.tvStatus.setTextColor(Color.parseColor("#F85149"))
+            renderLoggingState()
+            Toast.makeText(this@MainActivity, "Core telemetry lost! 3 consecutive timeouts.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private suspend fun queryRpmMapPair() {
         val rpmResp = elmEngine.transport.sendCommand("010C", TURBO_PID_TIMEOUT_MS)
         windowTotalReqs++
@@ -1171,6 +1293,12 @@ class MainActivity : AppCompatActivity() {
         )
         publishDiagnosticSample(mapSample)
 
+        val linkHealthy = coreTelemetryHealth.onPair(rpmDec.status, mapDec.status)
+        if (!linkHealthy) {
+            handleCoreTelemetryLost()
+            return
+        }
+
         // Synchronized Turbo Pair CSV writing
         if (rpmSample.status == PidStatus.VALID && mapSample.status == PidStatus.VALID) {
             val dtMs = (mapSample.monoNanos - rpmSample.monoNanos) / 1_000_000
@@ -1185,12 +1313,12 @@ class MainActivity : AppCompatActivity() {
                     dtMapRpmMs = dtMs,
                     pairValid = pairValid,
                     invalidReason = if (pairValid) "" else "dt_jitter_${dtMs}ms",
-                    mafGs = freshValue("0110", 1500L),
-                    mafAgeMs = freshAge("0110", 1500L),
-                    speedKmh = freshValue("010D", 2000L),
-                    speedAgeMs = freshAge("010D", 2000L),
-                    loadPct = freshValue("0104", 2000L),
-                    loadAgeMs = freshAge("0104", 2000L),
+                    mafGs = freshValue("0110", MAF_MAX_AGE_MS),
+                    mafAgeMs = freshAge("0110", MAF_MAX_AGE_MS),
+                    speedKmh = freshValue("010D", SPEED_MAX_AGE_MS),
+                    speedAgeMs = freshAge("010D", SPEED_MAX_AGE_MS),
+                    loadPct = freshValue("0104", LOAD_MAX_AGE_MS),
+                    loadAgeMs = freshAge("0104", LOAD_MAX_AGE_MS),
                     coolantC = freshValue("0105", SLOW_VALUE_MAX_AGE_MS),
                     coolantAgeMs = freshAge("0105", SLOW_VALUE_MAX_AGE_MS),
                     iatC = freshValue("010F", SLOW_VALUE_MAX_AGE_MS),

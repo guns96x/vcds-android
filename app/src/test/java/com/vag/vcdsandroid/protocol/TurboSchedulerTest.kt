@@ -18,34 +18,34 @@ class TurboSchedulerTest {
             auxMap[i] = scheduler.nextRecordingAuxPids()
         }
 
-        // Pairs 1..5 must have no aux PIDs
-        for (i in 1..5) {
+        // Pairs 1..3 must have no aux PIDs
+        for (i in 1..3) {
             assertTrue(auxMap[i]!!.isEmpty())
         }
 
-        // Pair 6: MAF (0110) + Load (0104)
-        val p6 = auxMap[6]!!
-        assertTrue(p6.contains("0110"))
-        assertTrue(p6.contains("0104"))
-        assertFalse(p6.contains("010D"))
+        // Pair 4: MAF (0110) + Load (0104)
+        val p4 = auxMap[4]!!
+        assertTrue(p4.contains("0110"))
+        assertTrue(p4.contains("0104"))
+        assertFalse(p4.contains("010D"))
 
-        // Pair 12: MAF (0110) + Speed (010D)
+        // Pair 8: MAF (0110) + Speed (010D)
+        val p8 = auxMap[8]!!
+        assertTrue(p8.contains("0110"))
+        assertTrue(p8.contains("010D"))
+        assertFalse(p8.contains("0104"))
+
+        // Pair 12: MAF (0110) + Load (0104)
         val p12 = auxMap[12]!!
         assertTrue(p12.contains("0110"))
-        assertTrue(p12.contains("010D"))
-        assertFalse(p12.contains("0104"))
+        assertTrue(p12.contains("0104"))
+        assertFalse(p12.contains("010D"))
 
-        // Pair 18: MAF (0110) + Load (0104)
-        val p18 = auxMap[18]!!
-        assertTrue(p18.contains("0110"))
-        assertTrue(p18.contains("0104"))
-        assertFalse(p18.contains("010D"))
-
-        // Pair 24: MAF (0110) + Speed (010D)
-        val p24 = auxMap[24]!!
-        assertTrue(p24.contains("0110"))
-        assertTrue(p24.contains("010D"))
-        assertFalse(p24.contains("0104"))
+        // Pair 16: MAF (0110) + Speed (010D)
+        val p16 = auxMap[16]!!
+        assertTrue(p16.contains("0110"))
+        assertTrue(p16.contains("010D"))
+        assertFalse(p16.contains("0104"))
 
         // None of the slow PIDs (0105, 010F, 0142, 0133) should EVER appear
         val allAuxPids = auxMap.values.flatten()

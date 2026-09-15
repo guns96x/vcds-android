@@ -101,41 +101,11 @@ class Elm327DiagnosticEngine(private val context: Context) {
     val logHistory: List<String>
         get() = _logHistory.toList()
 
-    private fun isElmOk(resp: ElmResponse): Boolean {
-        val s = resp.raw.uppercase(Locale.ROOT)
-        return resp.promptReceived && !resp.timedOut && !s.contains("?") && !s.contains("ERROR")
-    }
-
     private fun markObdConnected(source: String) {
         isTp20Active = false
         elmState = ElmDiagnosticState.OBD_READY
         state = DiagState.CONNECTED
         appendLog("==> OBD_READY via $source")
-    }
-
-    private suspend fun configureBasicGenericObd(): Boolean {
-        val required = listOf(
-            "ATD" to 1500L,      // clear any stale SH/filter/timing experiments
-            "ATE0" to 1000L,
-            "ATL0" to 1000L,
-            "ATS0" to 1000L,
-            "ATH0" to 1000L,
-            "ATCAF1" to 1000L,
-            "ATCFC1" to 1000L,
-            "ATR1" to 1000L,
-            "ATAT1" to 1000L,
-            "ATSP0" to 2000L
-        )
-
-        for ((cmd, timeout) in required) {
-            val r = transport.sendCommand(cmd, timeout)
-            appendLog("GENERIC INIT $cmd -> ${formatRx(r)}")
-            if (r.timedOut || r.raw.contains("?")) {
-                appendLog("WARN: $cmd not cleanly accepted")
-            }
-        }
-
-        return true
     }
 
     private fun appendLog(msg: String) {
@@ -153,16 +123,21 @@ class Elm327DiagnosticEngine(private val context: Context) {
             state = DiagState.CONNECTING
             elmState = ElmDiagnosticState.CONNECTING_RFCOMM
             lastError = null
+            lastConnectStage = ""
+            obdProtocol = ""
+            elmVersionString = ""
+            lastConnectTrace = ""
             _logHistory.clear()
 
             val dev = targetDevice ?: transport.findPairedElmDevice()
             if (dev == null) {
                 val err = "Не знайдено спареного адаптера (V-LINK / ELM327) у списку Bluetooth! Спаруйте його в налаштуваннях Android."
+                appendLog("ERR: $err")
                 lastError = err
-                lastConnectTrace = logHistory.takeLast(80).joinToString("\n")
+                lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
                 state = DiagState.ERROR
                 elmState = ElmDiagnosticState.ERROR
-                appendLog("ERR: $err")
+                saveConnectionTrace(false, "NO_PAIRED_DEVICE", "none")
                 return@withContext false
             }
 
@@ -173,11 +148,12 @@ class Elm327DiagnosticEngine(private val context: Context) {
 
             if (!rfcommOk) {
                 val err = "RFCOMM connect() failed для ${dev.name} [${dev.address}]. Перевірте адаптер!"
+                appendLog("ERR: $err")
                 lastError = err
-                lastConnectTrace = logHistory.takeLast(80).joinToString("\n")
+                lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
                 state = DiagState.ERROR
                 elmState = ElmDiagnosticState.ERROR
-                appendLog("ERR: $err")
+                saveConnectionTrace(false, "RFCOMM_FAIL", dev.name ?: dev.address)
                 return@withContext false
             }
 
@@ -262,9 +238,9 @@ class Elm327DiagnosticEngine(private val context: Context) {
                         lastConnectStage = "VW_TP20"
                         state = DiagState.CONNECTED
                         elmState = ElmDiagnosticState.OBD_READY
+                        appendLog("==> VW TP 2.0 ПІДКЛЮЧЕНО! Опитуємо справжній VAG Group 011 (Target Boost, Actual, N75 %)")
                         lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
                         saveConnectionTrace(true, "VW_TP20", dev.name ?: dev.address)
-                        appendLog("==> VW TP 2.0 ПІДКЛЮЧЕНО! Опитуємо справжній VAG Group 011 (Target Boost, Actual, N75 %)")
                         return@withContext true
                     } else {
                         appendLog("WARN: TP 2.0 канал не відповів на 0x200, перемикаємось на Generic OBD-II Mode 01...")
