@@ -69,6 +69,7 @@ data class DiagnosticSample(
         val thresholdMs = when (pid) {
             "010C", "010B" -> 800L
             "0110", "010D", "0104" -> 2000L
+            "0105", "010F", "0142", "0133" -> 14000L
             else -> 10000L
         }
         return if (ageMs > thresholdMs) PidStatus.STALE else PidStatus.VALID
@@ -84,10 +85,12 @@ class MainActivity : AppCompatActivity() {
     private companion object {
         const val TURBO_PID_TIMEOUT_MS = 450L
         const val PREFLIGHT_PID_TIMEOUT_MS = 500L
-        const val TURBO_PAIR_MAX_DELTA_MS = 400L
+        const val TURBO_PAIR_MAX_DELTA_MS = TURBO_PID_TIMEOUT_MS + 100L // 550 ms
         const val ENGINE_OFF_RPM_MAX = 50.0
         const val ENGINE_OFF_BARO_MIN_MBAR = 800.0
         const val ENGINE_OFF_BARO_MAX_MBAR = 1100.0
+        const val SLOW_SLOT_INTERVAL_MS = 2500L
+        const val SLOW_VALUE_MAX_AGE_MS = 12000L
     }
 
     private data class BaroReading(val valueMbar: Double?, val source: String)
@@ -401,7 +404,18 @@ class MainActivity : AppCompatActivity() {
                 }
             } else {
                 val err = elmEngine.lastError ?: "Failed to connect to ELM327"
-                Toast.makeText(this@MainActivity, err, Toast.LENGTH_LONG).show()
+                val trace = elmEngine.lastConnectTrace
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("CONNECTION DEBUG")
+                    .setMessage("$err\n\n=== RAW TRACE ===\n$trace")
+                    .setPositiveButton("OK", null)
+                    .setNeutralButton("Copy Trace") { _, _ ->
+                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("ELM Connect Trace", "$err\n\n$trace")
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(this@MainActivity, "Trace copied to clipboard", Toast.LENGTH_SHORT).show()
+                    }
+                    .show()
             }
         }
     }
@@ -411,7 +425,9 @@ class MainActivity : AppCompatActivity() {
         calibratedBaroSource = "UNSET"
         stopPolling()
         if (asyncLogger.isLogging) {
-            stopWotLog()
+            lifecycleScope.launch {
+                asyncLogger.stopLogging()
+            }
         }
         try {
             when (connectionMode) {
@@ -433,18 +449,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun startWotLog() {
         logStartUtcMs = System.currentTimeMillis()
-        val (rawFile, pairFile) = asyncLogger.startLogging(lifecycleScope)
+        val (rawFile, pairFile) = asyncLogger.startLogging()
         binding.btnToggleLog.text = "STOP LOG"
         binding.btnToggleLog.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#F85149"))
         Toast.makeText(this, "Log Started: ${pairFile.name}", Toast.LENGTH_SHORT).show()
     }
 
     private fun stopWotLog() {
-        val (rawFile, pairFile) = asyncLogger.stopLogging()
-        binding.btnToggleLog.text = "START 4TH GEAR WOT LOG"
-        binding.btnToggleLog.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#3FB950"))
-        if (pairFile != null) {
-            Toast.makeText(this, "Log Saved: ${pairFile.name} (${pairFile.length() / 1024} KB)", Toast.LENGTH_LONG).show()
+        lifecycleScope.launch {
+            binding.btnToggleLog.isEnabled = false
+            val (rawFile, pairFile) = asyncLogger.stopLogging()
+            binding.btnToggleLog.text = "START 4TH GEAR WOT LOG"
+            binding.btnToggleLog.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#3FB950"))
+            binding.btnToggleLog.isEnabled = true
+            if (pairFile != null) {
+                Toast.makeText(this@MainActivity, "Log Saved: ${pairFile.name} (${pairFile.length() / 1024} KB)", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -596,6 +616,33 @@ class MainActivity : AppCompatActivity() {
                     binding.tvBaroStatusAge.setTextColor(color)
                 }
             }
+            "0105" -> {
+                if (sample.status == PidStatus.VALID && sample.value != null) {
+                    binding.tvCoolantVal.text = String.format(Locale.US, "%.0f °C", sample.value)
+                } else {
+                    binding.tvCoolantVal.text = "--- °C"
+                }
+                binding.tvCoolantStatusAge.text = "${effStatus.name} · ${sample.latencyMs}ms"
+                binding.tvCoolantStatusAge.setTextColor(color)
+            }
+            "010F" -> {
+                if (sample.status == PidStatus.VALID && sample.value != null) {
+                    binding.tvIatVal.text = String.format(Locale.US, "%.0f °C", sample.value)
+                } else {
+                    binding.tvIatVal.text = "--- °C"
+                }
+                binding.tvIatStatusAge.text = "${effStatus.name} · ${sample.latencyMs}ms"
+                binding.tvIatStatusAge.setTextColor(color)
+            }
+            "0142" -> {
+                if (sample.status == PidStatus.VALID && sample.value != null) {
+                    binding.tvVoltageVal.text = String.format(Locale.US, "%.1f V", sample.value)
+                } else {
+                    binding.tvVoltageVal.text = "--- V"
+                }
+                binding.tvVoltageStatusAge.text = "${effStatus.name} · ${sample.latencyMs}ms"
+                binding.tvVoltageStatusAge.setTextColor(color)
+            }
         }
     }
 
@@ -675,6 +722,25 @@ class MainActivity : AppCompatActivity() {
             binding.tvBaroStatusAge.setTextColor(Color.parseColor("#8B949E"))
         }
 
+        latestSamples["0105"]?.let { s ->
+            val eff = s.getEffectiveStatus(now)
+            val age = s.getAgeMs(now)
+            binding.tvCoolantStatusAge.text = "${eff.name} · ${age}ms"
+            binding.tvCoolantStatusAge.setTextColor(getStatusColor(eff))
+        }
+        latestSamples["010F"]?.let { s ->
+            val eff = s.getEffectiveStatus(now)
+            val age = s.getAgeMs(now)
+            binding.tvIatStatusAge.text = "${eff.name} · ${age}ms"
+            binding.tvIatStatusAge.setTextColor(getStatusColor(eff))
+        }
+        latestSamples["0142"]?.let { s ->
+            val eff = s.getEffectiveStatus(now)
+            val age = s.getAgeMs(now)
+            binding.tvVoltageStatusAge.text = "${eff.name} · ${age}ms"
+            binding.tvVoltageStatusAge.setTextColor(getStatusColor(eff))
+        }
+
         // Bus Stats compact line
         binding.tvBusStats.text = String.format(
             Locale.US,
@@ -682,24 +748,23 @@ class MainActivity : AppCompatActivity() {
             busReqRate, busRpmHz, busMapHz, busAvgLatency
         )
 
-        // Recording / Queue Stats compact line
+        // Recording / Queue Stats compact line (Pairs and Raw)
+        val sizeKb = asyncLogger.fileSizeBytes / 1024
         if (asyncLogger.isLogging) {
             val elapsedSec = (System.currentTimeMillis() - logStartUtcMs) / 1000
             val min = elapsedSec / 60
             val sec = elapsedSec % 60
-            val sizeKb = asyncLogger.fileSizeBytes / 1024
             binding.tvLogMetrics.text = String.format(
                 Locale.US,
-                "REC ACTIVE (%02d:%02d) | Rows: %d | Queue: %d | Dropped: %d | %d KB",
-                min, sec, asyncLogger.rowsWritten, asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
+                "REC ACTIVE (%02d:%02d) | Pairs: %d | Raw: %d | Queue: %d | Dropped: %d | %d KB",
+                min, sec, asyncLogger.rowsWritten, asyncLogger.rawRowsWritten, asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
             )
             binding.tvLogMetrics.setTextColor(Color.parseColor("#F85149"))
         } else {
-            val sizeKb = asyncLogger.fileSizeBytes / 1024
             binding.tvLogMetrics.text = String.format(
                 Locale.US,
-                "REC OFF | Rows: %d | Queue: %d | Dropped: %d | %d KB",
-                asyncLogger.rowsWritten, asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
+                "REC OFF | Pairs: %d | Raw: %d | Queue: %d | Dropped: %d | %d KB",
+                asyncLogger.rowsWritten, asyncLogger.rawRowsWritten, asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
             )
             binding.tvLogMetrics.setTextColor(Color.parseColor("#8B949E"))
         }
@@ -965,12 +1030,12 @@ class MainActivity : AppCompatActivity() {
                                     speedAgeMs = freshAge("010D", 2000L),
                                     loadPct = freshValue("0104", 2000L),
                                     loadAgeMs = freshAge("0104", 2000L),
-                                    coolantC = freshValue("0105", 10000L),
-                                    coolantAgeMs = freshAge("0105", 10000L),
-                                    iatC = freshValue("010F", 10000L),
-                                    iatAgeMs = freshAge("010F", 10000L),
-                                    voltageV = freshValue("0142", 10000L),
-                                    voltageAgeMs = freshAge("0142", 10000L),
+                                    coolantC = freshValue("0105", SLOW_VALUE_MAX_AGE_MS),
+                                    coolantAgeMs = freshAge("0105", SLOW_VALUE_MAX_AGE_MS),
+                                    iatC = freshValue("010F", SLOW_VALUE_MAX_AGE_MS),
+                                    iatAgeMs = freshAge("010F", SLOW_VALUE_MAX_AGE_MS),
+                                    voltageV = freshValue("0142", SLOW_VALUE_MAX_AGE_MS),
+                                    voltageAgeMs = freshAge("0142", SLOW_VALUE_MAX_AGE_MS),
                                     latencyMs = rpmSample.latencyMs + mapSample.latencyMs,
                                     monoNs = mapSample.monoNanos
                                 )
@@ -1011,7 +1076,7 @@ class MainActivity : AppCompatActivity() {
 
                 // Sparse slow timed reads: approximately one slow PID every 8 seconds
                 val nowMs = SystemClock.elapsedRealtime()
-                if (nowMs - lastSlowPidCheck >= 8000L) {
+                if (nowMs - lastSlowPidCheck >= SLOW_SLOT_INTERVAL_MS) {
                     lastSlowPidCheck = nowMs
                     val slowPid = slowPids[slowPidIndex % slowPids.size]
                     slowPidIndex++
@@ -1251,5 +1316,16 @@ private fun updateStatusUI() {
                 }
             }
         }
+
+        val ecuConnected = when (connectionMode) {
+            AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
+                elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+            AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
+                engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+        }
+        binding.btnToggleLog.isEnabled = ecuConnected
+        binding.btnCheckData.isEnabled = ecuConnected
+        binding.btnToggleLog.alpha = if (ecuConnected) 1.0f else 0.4f
+        binding.btnCheckData.alpha = if (ecuConnected) 1.0f else 0.4f
     }
 }

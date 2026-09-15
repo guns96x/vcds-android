@@ -132,9 +132,9 @@ class AsyncCsvLogger(private val context: Context) {
     }
 
     @Synchronized
-    fun startLogging(scope: CoroutineScope): Pair<File, File> {
+    fun startLogging(): Pair<File, File> {
         if (isLoggingActive.get()) {
-            stopLogging()
+            runBlocking(Dispatchers.IO) { stopLogging() }
         }
 
         val logsDir = getLogsDirectory()
@@ -380,9 +380,8 @@ class AsyncCsvLogger(private val context: Context) {
         }
     }
 
-    @Synchronized
-    fun stopLogging(): Pair<File?, File?> {
-        if (!isLoggingActive.compareAndSet(true, false)) return Pair(rawFile, pairFile)
+    suspend fun stopLogging(): Pair<File?, File?> = withContext(Dispatchers.IO) {
+        if (!isLoggingActive.compareAndSet(true, false)) return@withContext Pair(rawFile, pairFile)
 
         try {
             channel?.close()
@@ -391,10 +390,8 @@ class AsyncCsvLogger(private val context: Context) {
         }
 
         try {
-            runBlocking(Dispatchers.IO) {
-                withTimeoutOrNull(3000L) {
-                    writerJob?.join()
-                }
+            withTimeoutOrNull(3000L) {
+                writerJob?.join()
             }
         } catch (e: Exception) {
             Log.w(TAG, "Exception waiting for writer job: ${e.message}")
@@ -407,6 +404,6 @@ class AsyncCsvLogger(private val context: Context) {
         rawWriter = null
         pairWriter = null
 
-        return Pair(r, p)
+        Pair(r, p)
     }
 }

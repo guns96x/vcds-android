@@ -451,6 +451,111 @@
                         </LinearLayout>
                     </LinearLayout>
 
+                    <!-- КОМПАКТНІ: Coolant, IAT, Voltage -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <!-- COOLANT -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="COOLANT (0105)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="10sp" />
+
+                            <TextView
+                                android:id="@+id/tvCoolantVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--- °C"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvCoolantStatusAge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IDLE | ---"
+                                android:textColor="@color/text_muted"
+                                android:textSize="9sp" />
+                        </LinearLayout>
+
+                        <!-- IAT -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IAT (010F)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="10sp" />
+
+                            <TextView
+                                android:id="@+id/tvIatVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--- °C"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvIatStatusAge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IDLE | ---"
+                                android:textColor="@color/text_muted"
+                                android:textSize="9sp" />
+                        </LinearLayout>
+
+                        <!-- VOLTAGE -->
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="VOLTAGE (0142)"
+                                android:textColor="@color/text_secondary"
+                                android:textSize="10sp" />
+
+                            <TextView
+                                android:id="@+id/tvVoltageVal"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="--- V"
+                                android:textColor="@color/text_primary"
+                                android:textSize="13sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvVoltageStatusAge"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="IDLE | ---"
+                                android:textColor="@color/text_muted"
+                                android:textSize="9sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
                     <!-- Toggle Log Button -->
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnToggleLog"

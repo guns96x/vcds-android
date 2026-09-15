@@ -55,11 +55,51 @@ class Elm327DiagnosticEngine(private val context: Context) {
     var elmVersionString: String = ""
         private set
 
+    var lastConnectTrace: String = ""
+        private set
+
     var onLogListener: ((String) -> Unit)? = null
 
     private val _logHistory = mutableListOf<String>()
     val logHistory: List<String>
         get() = _logHistory.toList()
+
+    private fun isElmOk(resp: ElmResponse): Boolean {
+        val s = resp.raw.uppercase(Locale.ROOT)
+        return resp.promptReceived && !resp.timedOut && !s.contains("?") && !s.contains("ERROR")
+    }
+
+    private fun markObdConnected(source: String) {
+        isTp20Active = false
+        elmState = ElmDiagnosticState.OBD_READY
+        state = DiagState.CONNECTED
+        appendLog("==> OBD_READY via $source")
+    }
+
+    private suspend fun configureBasicGenericObd(): Boolean {
+        val required = listOf(
+            "ATD" to 1500L,      // clear any stale SH/filter/timing experiments
+            "ATE0" to 1000L,
+            "ATL0" to 1000L,
+            "ATS0" to 1000L,
+            "ATH0" to 1000L,
+            "ATCAF1" to 1000L,
+            "ATCFC1" to 1000L,
+            "ATR1" to 1000L,
+            "ATAT1" to 1000L,
+            "ATSP0" to 2000L
+        )
+
+        for ((cmd, timeout) in required) {
+            val r = transport.sendCommand(cmd, timeout)
+            appendLog("GENERIC INIT $cmd -> ${formatRx(r)}")
+            if (r.timedOut || r.raw.contains("?")) {
+                appendLog("WARN: $cmd not cleanly accepted")
+            }
+        }
+
+        return true
+    }
 
     private fun appendLog(msg: String) {
         _logHistory.add(msg)
@@ -82,6 +122,7 @@ class Elm327DiagnosticEngine(private val context: Context) {
             if (dev == null) {
                 val err = "Не знайдено спареного адаптера (V-LINK / ELM327) у списку Bluetooth! Спаруйте його в налаштуваннях Android."
                 lastError = err
+                lastConnectTrace = logHistory.takeLast(80).joinToString("\n")
                 state = DiagState.ERROR
                 elmState = ElmDiagnosticState.ERROR
                 appendLog("ERR: $err")
@@ -96,6 +137,7 @@ class Elm327DiagnosticEngine(private val context: Context) {
             if (!rfcommOk) {
                 val err = "RFCOMM connect() failed для ${dev.name} [${dev.address}]. Перевірте адаптер!"
                 lastError = err
+                lastConnectTrace = logHistory.takeLast(80).joinToString("\n")
                 state = DiagState.ERROR
                 elmState = ElmDiagnosticState.ERROR
                 appendLog("ERR: $err")
@@ -130,6 +172,7 @@ class Elm327DiagnosticEngine(private val context: Context) {
             } else {
                 val err = "RFCOMM підключено, але ELM327 не відповів на ATZ/ATI! Перевірте адаптер або увімкніть/вимкніть запалювання."
                 lastError = err
+                lastConnectTrace = logHistory.takeLast(80).joinToString("\n")
                 state = DiagState.ERROR
                 elmState = ElmDiagnosticState.ERROR
                 appendLog("ERR: $err")
@@ -192,7 +235,7 @@ class Elm327DiagnosticEngine(private val context: Context) {
 
             isTp20Active = false
 
-            // Step 4: Generic OBD Mode 01 Fallback (0100 & 010C fallback)
+            // Step 4: Generic OBD Mode 01 Handshake (Deterministic 3-Stage per REVIEW_AFTER_26D58E6.md)
             elmState = ElmDiagnosticState.OBD_CONNECTING
             appendLog("5. Перевірка напруги та конфігурація OBD-II зв'язку...")
 
@@ -200,93 +243,144 @@ class Elm327DiagnosticEngine(private val context: Context) {
             val vBat = transport.sendCommand("ATRV", 1000L)
             appendLog("Напруга бортової мережі: ${vBat.raw.trim()}")
 
-            transport.sendCommand("ATCAF1", 1000L)
-            transport.sendCommand("ATCFC1", 1000L)
-            transport.sendCommand("ATV0", 1000L)
-            transport.sendCommand("ATAT1", 1000L) // Adaptive timing ON
-            transport.sendCommand("ATST64", 1000L) // 400ms timeout for reliable initial gateway wakeup
-
             var obdSuccess = false
 
-            // Strategy 1: CAN 11-bit 500k with Functional broadcast (7DF)
-            appendLog("Пробуємо CAN 11-bit 500k Functional (ATSH7DF)...")
-            transport.sendCommand("ATSP6", 1500L)
-            transport.sendCommand("ATSH7DF", 1000L)
-            transport.sendCommand("ATCRA", 1000L)
-            transport.sendCommand("ATAR", 1000L)
+            // Stage 1: KNOWN-GOOD AUTO PATH (MUST RUN FIRST IN TURBO_FAST)
+            appendLog("--- Stage 1: Спроба KNOWN-GOOD AUTO PATH (ATD -> ATSP0) ---")
+            configureBasicGenericObd()
 
-            val csResp1 = transport.sendCommand("ATCS", 1000L)
-            appendLog("CAN Status (7DF): ${csResp1.raw.trim()}")
+            val rpmProbe1 = transport.sendCommand("010C", 5000L)
+            appendLog("AUTO PROBE 010C -> ${formatRx(rpmProbe1)}")
+            val rpmClean1 = cleanHexResponse(rpmProbe1.raw)
 
-            var test0100 = transport.sendCommand("0100", 7000L)
-            appendLog("RX (0100 @ 7DF) << ${formatRx(test0100)}")
-            var clean0100 = cleanHexResponse(test0100.raw)
-
-            var test010C = transport.sendCommand("010C", 3000L)
-            appendLog("RX (010C @ 7DF) << ${formatRx(test010C)}")
-            var clean010C = cleanHexResponse(test010C.raw)
-
-            if (clean0100.contains("4100") || clean010C.contains("410C")) {
+            if (rpmClean1.contains("410C")) {
+                markObdConnected("AUTO/010C")
                 obdSuccess = true
-                elmState = ElmDiagnosticState.OBD_READY
-                state = DiagState.CONNECTED
-                appendLog("==> OBD_READY: ЕБУ двигуна онлайн через CAN 11/500 Functional (7DF)!")
             }
 
-            // Strategy 2: CAN 11-bit 500k with Physical Engine ECU addressing (7E0 -> 7E8)
-            // Essential for Golf 5 / PQ35 when Gateway filters broadcast 7DF
             if (!obdSuccess) {
-                appendLog("WARN: 7DF не відповів, пробуємо Physical Engine addressing (ATSH7E0 -> ATCRA7E8)...")
-                transport.sendCommand("ATSH7E0", 1000L)
-                transport.sendCommand("ATCRA7E8", 1000L)
-
-                val csResp2 = transport.sendCommand("ATCS", 1000L)
-                appendLog("CAN Status (7E0): ${csResp2.raw.trim()}")
-
-                test0100 = transport.sendCommand("0100", 7000L)
-                appendLog("RX (0100 @ 7E0) << ${formatRx(test0100)}")
-                clean0100 = cleanHexResponse(test0100.raw)
-
-                test010C = transport.sendCommand("010C", 3000L)
-                appendLog("RX (010C @ 7E0) << ${formatRx(test010C)}")
-                clean010C = cleanHexResponse(test010C.raw)
-
-                if (clean0100.contains("4100") || clean010C.contains("410C")) {
+                val mapProbe1 = transport.sendCommand("010B", 5000L)
+                appendLog("AUTO PROBE 010B -> ${formatRx(mapProbe1)}")
+                val mapClean1 = cleanHexResponse(mapProbe1.raw)
+                if (mapClean1.contains("410B")) {
+                    markObdConnected("AUTO/010B")
                     obdSuccess = true
-                    elmState = ElmDiagnosticState.OBD_READY
-                    state = DiagState.CONNECTED
-                    appendLog("==> OBD_READY: ЕБУ двигуна онлайн через Physical CAN (7E0/7E8)!")
-                }
-            }
-
-            // Strategy 3: Clean Auto-Protocol (ATSP0) with cleared filters
-            if (!obdSuccess) {
-                appendLog("WARN: CAN 500k не відповів, пробуємо чистий ATSP0 Auto-Protocol...")
-                transport.sendCommand("ATCRA", 1000L)
-                transport.sendCommand("ATAR", 1000L)
-                transport.sendCommand("ATSP0", 2000L)
-
-                test0100 = transport.sendCommand("0100", 8000L)
-                appendLog("RX (0100 @ Auto) << ${formatRx(test0100)}")
-                clean0100 = cleanHexResponse(test0100.raw)
-
-                test010C = transport.sendCommand("010C", 4000L)
-                appendLog("RX (010C @ Auto) << ${formatRx(test010C)}")
-                clean010C = cleanHexResponse(test010C.raw)
-
-                if (clean0100.contains("4100") || clean010C.contains("410C")) {
-                    obdSuccess = true
-                    val dpResp = transport.sendCommand("ATDP", 1000L)
-                    val dpnResp = transport.sendCommand("ATDPN", 1000L)
-                    elmState = ElmDiagnosticState.OBD_READY
-                    state = DiagState.CONNECTED
-                    appendLog("==> OBD_READY: ЕБУ знайдено через авто-протокол: ${dpResp.raw.trim()} (${dpnResp.raw.trim()})!")
                 }
             }
 
             if (!obdSuccess) {
+                val pidProbe1 = transport.sendCommand("0100", 7000L)
+                appendLog("AUTO PROBE 0100 -> ${formatRx(pidProbe1)}")
+                if (cleanHexResponse(pidProbe1.raw).contains("4100")) {
+                    markObdConnected("AUTO/0100")
+                    obdSuccess = true
+                }
+            }
+
+            // Stage 2: FIXED CAN 11/500 WITH DEFAULT HEADER
+            if (!obdSuccess) {
+                appendLog("--- Stage 2: Спроба FIXED CAN 11/500 WITH DEFAULT HEADER (ATD -> ATSP6) ---")
+                transport.sendCommand("ATD", 1500L)
+                val stage2Init = listOf(
+                    "ATE0" to 1000L,
+                    "ATL0" to 1000L,
+                    "ATS0" to 1000L,
+                    "ATH0" to 1000L,
+                    "ATCAF1" to 1000L,
+                    "ATCFC1" to 1000L,
+                    "ATR1" to 1000L,
+                    "ATAT1" to 1000L,
+                    "ATSP6" to 1500L
+                )
+                for ((cmd, timeout) in stage2Init) {
+                    val r = transport.sendCommand(cmd, timeout)
+                    appendLog("STAGE2 INIT $cmd -> ${formatRx(r)}")
+                }
+
+                val rpmProbe2 = transport.sendCommand("010C", 5000L)
+                appendLog("SP6 PROBE 010C -> ${formatRx(rpmProbe2)}")
+                val rpmClean2 = cleanHexResponse(rpmProbe2.raw)
+
+                if (rpmClean2.contains("410C")) {
+                    markObdConnected("SP6_DEFAULT_HEADER/010C")
+                    obdSuccess = true
+                }
+
+                if (!obdSuccess) {
+                    val mapProbe2 = transport.sendCommand("010B", 5000L)
+                    appendLog("SP6 PROBE 010B -> ${formatRx(mapProbe2)}")
+                    val mapClean2 = cleanHexResponse(mapProbe2.raw)
+                    if (mapClean2.contains("410B")) {
+                        markObdConnected("SP6_DEFAULT_HEADER/010B")
+                        obdSuccess = true
+                    }
+                }
+
+                if (!obdSuccess) {
+                    val pidProbe2 = transport.sendCommand("0100", 7000L)
+                    appendLog("SP6 PROBE 0100 -> ${formatRx(pidProbe2)}")
+                    if (cleanHexResponse(pidProbe2.raw).contains("4100")) {
+                        markObdConnected("SP6_DEFAULT_HEADER/0100")
+                        obdSuccess = true
+                    }
+                }
+            }
+
+            // Stage 3: PHYSICAL 7E0/7E8 EXPERIMENTAL FALLBACK
+            if (!obdSuccess) {
+                appendLog("--- Stage 3: Спроба PHYSICAL 7E0/7E8 FALLBACK (ATD -> ATSP6 -> ATSH7E0 -> ATCRA7E8) ---")
+                transport.sendCommand("ATD", 1500L)
+                val stage3Init = listOf(
+                    "ATE0" to 1000L,
+                    "ATL0" to 1000L,
+                    "ATS0" to 1000L,
+                    "ATH0" to 1000L,
+                    "ATCAF1" to 1000L,
+                    "ATCFC1" to 1000L,
+                    "ATR1" to 1000L,
+                    "ATAT1" to 1000L,
+                    "ATSP6" to 1500L,
+                    "ATSH7E0" to 1000L,
+                    "ATCRA7E8" to 1000L
+                )
+                for ((cmd, timeout) in stage3Init) {
+                    val r = transport.sendCommand(cmd, timeout)
+                    appendLog("STAGE3 INIT $cmd -> ${formatRx(r)}")
+                }
+
+                val rpmProbe3 = transport.sendCommand("010C", 5000L)
+                appendLog("PHYSICAL PROBE 010C -> ${formatRx(rpmProbe3)}")
+                val rpmClean3 = cleanHexResponse(rpmProbe3.raw)
+
+                if (rpmClean3.contains("410C")) {
+                    markObdConnected("PHYSICAL_7E0/010C")
+                    obdSuccess = true
+                }
+
+                if (!obdSuccess) {
+                    val mapProbe3 = transport.sendCommand("010B", 5000L)
+                    appendLog("PHYSICAL PROBE 010B -> ${formatRx(mapProbe3)}")
+                    val mapClean3 = cleanHexResponse(mapProbe3.raw)
+                    if (mapClean3.contains("410B")) {
+                        markObdConnected("PHYSICAL_7E0/010B")
+                        obdSuccess = true
+                    }
+                }
+
+                if (!obdSuccess) {
+                    // Mandatory ATD reset so manual header does not leak
+                    transport.sendCommand("ATD", 1500L)
+                }
+            }
+
+            if (obdSuccess) {
+                val dpResp = transport.sendCommand("ATDP", 1000L)
+                val dpnResp = transport.sendCommand("ATDPN", 1000L)
+                appendLog("Активний протокол: ${dpResp.raw.trim()} (${dpnResp.raw.trim()})")
+            } else {
                 val err = "ЕБУ двигуна не відповідає на OBD-II Mode 01 (0100/010C).\nПеревірте, щоб запалювання було увімкнене (або заведіть двигун) та адаптер був щільно вставлений у роз'єм OBD!"
                 lastError = err
+                lastConnectTrace = logHistory.takeLast(80).joinToString("\n")
                 state = DiagState.ERROR
                 elmState = ElmDiagnosticState.ERROR
                 appendLog("ERR: $err")

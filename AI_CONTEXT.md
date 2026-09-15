@@ -58,25 +58,33 @@ Every key feature is isolated in these specific files:
 - **USB Concurrency in `UsbKwpTransport.kt`**:
   - Added `ioLock` synchronized blocks around `read()`, `write()`, and `purge()` to prevent races with `TcpBridgeServer`.
 
-### Commit (Current) — 2026-09-15 (Turbo Fast Reliability Fixes per Issue #1 & GEMINI_FIX_NOW.md)
+### Commit `26d58e6` — 2026-09-15 (Initial Turbo Fast Reliability Fixes per Issue #1)
+- Applied writer counters, separated Peak MAP / Boost, non-blocking sample publisher, zero numeric BARO fallback, and 10s RPM stress test.
+
+### Commit (Current) — 2026-09-15 (Post-26d58e6 Review Fixes per REVIEW_AFTER_26D58E6.md)
+- **Elm327DiagnosticEngine.kt**:
+  1. **Deterministic 3-Stage Mode 01 Handshake**:
+     - **Stage 1 (AUTO FIRST)**: Clean `ATD` reset -> basic init (`ATE0 ATL0 ATS0 ATH0 ATCAF1 ATCFC1 ATR1 ATAT1 ATSP0`) -> primary probe `010C` (5s), then `010B` (5s), then `0100` (7s). No manual `ATSH`/`ATCRA` to corrupt auto-negotiation.
+     - **Stage 2 (FIXED CAN 11/500 DEFAULT HEADER)**: `ATD` -> basic init -> `ATSP6` with default header -> probe `010C`, `010B`, `0100`.
+     - **Stage 3 (PHYSICAL 7E0/7E8)**: `ATD` -> basic init -> `ATSP6` -> `ATSH7E0` -> `ATCRA7E8` -> probe `010C`, `010B`. Mandatory `ATD` cleanup on exit.
+  2. Preserved full failure trace in `lastConnectTrace` across connection stages; never cleared on `disconnect()`.
+- **MainActivity.kt & UI**:
+  1. **Connection UX**: On connection failure, shows `CONNECTION DEBUG` dialog with `lastError` and full RAW `lastConnectTrace` plus a "Copy Trace" button.
+  2. **Safety Gates**: `btnToggleLog` and `btnCheckData` are disabled (dimmed to 40% alpha) when ECU is not connected.
+  3. **Full Channel Parity in UI**: Added compact live row for `COOLANT (0105)`, `IAT (010F)`, and `VOLTAGE (0142)` to match logged channels.
+  4. **Turbo Fast Scheduler**: Set `SLOW_SLOT_INTERVAL_MS = 2500L`, polling one slow PID every 2.5s (~10s per sensor), with `SLOW_VALUE_MAX_AGE_MS = 12000L`.
+  5. **Pair Delta Threshold**: Increased `TURBO_PAIR_MAX_DELTA_MS` to `550L` (`TURBO_PID_TIMEOUT_MS + 100L`).
+  6. **Metrics**: Changed UI label from `Rows:` to `Pairs: %d | Raw: %d`.
 - **AsyncCsvLogger.kt**:
-  1. Real writer counters: `rawRowsActuallyWritten` and `pairRowsActuallyWritten` (AtomicLong), exposed via `rowsWritten` and `rawRowsWritten`.
-  2. Fixed Peak Boost vs Peak MAP: added `peakMapMbarAbs: Double`, `peakBoostMbar` strictly tracks relative boost (`mapMbarAbs - baroMbar`).
-  3. Added nullable age columns to `TurboPair` and CSV header: `mafAgeMs`, `speedAgeMs`, `loadAgeMs`, `coolantAgeMs`, `iatAgeMs`, `voltageAgeMs`.
-- **MainActivity.kt**:
-  1. Fixed timeouts: `TURBO_PID_TIMEOUT_MS = 450L`, `PREFLIGHT_PID_TIMEOUT_MS = 500L`, `TURBO_PAIR_MAX_DELTA_MS = 400L`.
-  2. Non-blocking publisher: `publishDiagnosticSample(sample)` removes `withContext(Dispatchers.Main)` from the acquisition critical path.
-  3. Zero numeric BARO fallbacks: deleted all `?: 1000.0` / `?: 1013.0`. `resolveBaro()` uses PID `0133` or `ENGINE_OFF_MAP` calibrated strictly when `rpm <= 50.0` and MAP is in `800..1100 mbar`.
-  4. Fresh value helpers: `freshValue()` and `freshAge()` prevent logging stale auxiliary values.
-  5. Valid Hz metrics: counters increment strictly on `PidStatus.VALID` samples.
-  6. Deterministic scheduler: high-priority RPM/MAP pairs dominate bandwidth; sparse timed slow sensors (`0105`, `010F`, `0142`, `0133`) sampled every ~8s.
-  7. Deterministic Pre-Flight Check: pauses active polling, tests all 9 PIDs sequentially with 500ms timeout, resumes polling.
-  8. RPM Stress Test: long-press on `CHECK DATA` runs a 10s rapid `010C` burst, calculates mean/median/p95 latency and valid Hz, outputs to `ELM_TURBO_STRESS` and dialog.
+  1. Made `stopLogging()` non-blocking `suspend withContext(Dispatchers.IO)`.
+  2. Removed unused `scope` parameter from `startLogging()`.
+- **Build Optimization (`app/build.gradle.kts`)**:
+  1. Completely removed unused Jetpack Compose dependencies and compiler features (`compose = true`), speeding up build times and reducing APK bloat.
 
 ---
 
 ## 5. Current State & Active Focus
-- **Build Status**: `./gradlew.bat testDebugUnitTest` and `assembleDebug` PASSED cleanly.
+- **Build Status**: `./gradlew.bat clean testDebugUnitTest assembleDebug` PASSED (43/43 tasks).
 - **APK Status**: Latest debug APK installed and launched on Samsung Galaxy S24 FE (`100.105.189.114:5555`).
 - **Active Task**: Real-device verification with V-LINK / ELM327 on Golf 5 1.9 TDI BLS.
 - **Log Storage**: `/sdcard/Android/data/com.vag.vcdsandroid/files/Documents/VCDS_Logs/`
