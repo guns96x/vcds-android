@@ -9,45 +9,41 @@ import org.junit.Test
 class TurboSchedulerTest {
 
     @Test
-    fun testRecordingModeAuxScheduler() {
+    fun testPairFirstAuxCadenceOver36Pairs() {
         val scheduler = TurboScheduler()
 
-        // Loop over 24 pairs
         val auxMap = mutableMapOf<Int, List<String>>()
-        for (i in 1..24) {
-            auxMap[i] = scheduler.nextRecordingAuxPids()
+        for (i in 1..36) {
+            auxMap[i] = scheduler.nextAuxPids()
         }
 
-        // Pairs 1..3 must have no aux PIDs
-        for (i in 1..3) {
-            assertTrue(auxMap[i]!!.isEmpty())
+        // Verify across all 36 pairs:
+        for (i in 1..36) {
+            val pids = auxMap[i]!!
+
+            // MAF (0110): strictly every 4th pair
+            if (i % 4 == 0) {
+                assertTrue("Pair $i must contain MAF (0110)", pids.contains("0110"))
+            } else {
+                assertFalse("Pair $i must NOT contain MAF (0110)", pids.contains("0110"))
+            }
+
+            // Speed (010D): strictly every 8th pair
+            if (i % 8 == 0) {
+                assertTrue("Pair $i must contain Speed (010D)", pids.contains("010D"))
+            } else {
+                assertFalse("Pair $i must NOT contain Speed (010D)", pids.contains("010D"))
+            }
+
+            // Load (0104): strictly every 8th pair offset by 4
+            if (i % 8 == 4) {
+                assertTrue("Pair $i must contain Load (0104)", pids.contains("0104"))
+            } else {
+                assertFalse("Pair $i must NOT contain Load (0104)", pids.contains("0104"))
+            }
         }
 
-        // Pair 4: MAF (0110) + Load (0104)
-        val p4 = auxMap[4]!!
-        assertTrue(p4.contains("0110"))
-        assertTrue(p4.contains("0104"))
-        assertFalse(p4.contains("010D"))
-
-        // Pair 8: MAF (0110) + Speed (010D)
-        val p8 = auxMap[8]!!
-        assertTrue(p8.contains("0110"))
-        assertTrue(p8.contains("010D"))
-        assertFalse(p8.contains("0104"))
-
-        // Pair 12: MAF (0110) + Load (0104)
-        val p12 = auxMap[12]!!
-        assertTrue(p12.contains("0110"))
-        assertTrue(p12.contains("0104"))
-        assertFalse(p12.contains("010D"))
-
-        // Pair 16: MAF (0110) + Speed (010D)
-        val p16 = auxMap[16]!!
-        assertTrue(p16.contains("0110"))
-        assertTrue(p16.contains("010D"))
-        assertFalse(p16.contains("0104"))
-
-        // None of the slow PIDs (0105, 010F, 0142, 0133) should EVER appear
+        // None of the slow PIDs (0105, 010F, 0142, 0133) should EVER appear in aux cadence
         val allAuxPids = auxMap.values.flatten()
         assertFalse(allAuxPids.contains("0105"))
         assertFalse(allAuxPids.contains("010F"))
@@ -56,7 +52,7 @@ class TurboSchedulerTest {
     }
 
     @Test
-    fun testLiveSlowPidsScheduledEveryInterval() {
+    fun testLiveSlowPidsScheduledEveryIntervalIndependently() {
         val scheduler = TurboScheduler()
         var nowMs = 1000L
 
@@ -81,5 +77,10 @@ class TurboSchedulerTest {
         nowMs += 2500L
         val pid4 = scheduler.checkLiveSlowPid(nowMs, 2500L)
         assertEquals("0133", pid4) // Baro
+
+        // Rotates back to 0105
+        nowMs += 2500L
+        val pid5 = scheduler.checkLiveSlowPid(nowMs, 2500L)
+        assertEquals("0105", pid5)
     }
 }

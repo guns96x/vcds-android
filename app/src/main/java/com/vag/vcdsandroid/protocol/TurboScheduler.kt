@@ -2,7 +2,6 @@ package com.vag.vcdsandroid.protocol
 
 class TurboScheduler {
     private var pairCount = 0L
-    private var liveStep = 0
     private var lastSlowPidMs = 0L
     private var slowPidIdx = 0
 
@@ -10,20 +9,17 @@ class TurboScheduler {
 
     fun reset() {
         pairCount = 0L
-        liveStep = 0
         lastSlowPidMs = 0L
         slowPidIdx = 0
     }
 
     /**
-     * Called in RECORDING mode:
-     * High priority to core RPM+MAP.
-     * No slow sensors (0105, 010F, 0142, 0133) polled during WOT recording.
-     * MAF every 4th pair.
-     * Speed every 8th pair.
-     * Load every 8th pair offset by 4.
+     * Deterministic aux cadence used for pair-first polling:
+     * - MAF (0110): every 4th RPM/MAP pair
+     * - Speed (010D): every 8th RPM/MAP pair
+     * - Load (0104): every 8th RPM/MAP pair, offset from Speed by 4 pairs
      */
-    fun nextRecordingAuxPids(): List<String> {
+    fun nextAuxPids(): List<String> {
         pairCount++
         val pids = mutableListOf<String>()
         if (pairCount % 4L == 0L) pids.add("0110")  // MAF
@@ -32,18 +28,11 @@ class TurboScheduler {
         return pids
     }
 
-    /**
-     * Called in LIVE (non-recording) mode:
-     * Full 9-step scheduler.
-     */
-    fun nextLiveStep(): Int {
-        val s = liveStep
-        liveStep = (liveStep + 1) % 9
-        return s
-    }
+    fun nextRecordingAuxPids(): List<String> = nextAuxPids()
 
     /**
-     * Check if a slow PID should be queried in LIVE mode.
+     * Check if a slow PID should be queried in LIVE mode (~every 2500 ms).
+     * Never queried in RECORDING mode.
      */
     fun checkLiveSlowPid(nowMs: Long, intervalMs: Long = 2500L): String? {
         if (lastSlowPidMs == 0L || nowMs - lastSlowPidMs >= intervalMs) {

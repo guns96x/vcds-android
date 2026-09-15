@@ -38,6 +38,10 @@ import com.vag.vcdsandroid.protocol.PreflightReport
 import com.vag.vcdsandroid.protocol.PreflightVerdict
 import com.vag.vcdsandroid.protocol.SessionBaroResolver
 import com.vag.vcdsandroid.protocol.TurboScheduler
+import com.vag.vcdsandroid.protocol.TelemetryFreshnessPolicy
+import com.vag.vcdsandroid.sensors.PhoneBarometerProvider
+import com.vag.vcdsandroid.sensors.PhoneBaroReading
+
 import com.vag.vcdsandroid.protocol.TransportMode
 import com.vag.vcdsandroid.usb.UsbKwpTransport
 import kotlinx.coroutines.Dispatchers
@@ -125,6 +129,7 @@ class MainActivity : AppCompatActivity() {
     private var calibratedBaroSource: String = "UNSET"
     private var isRawDebugExpanded = false
 
+    private lateinit var phoneBarometerProvider: PhoneBarometerProvider
     private val sessionBaroResolver = SessionBaroResolver()
     private val turboScheduler = TurboScheduler()
     private val coreTelemetryHealth = CoreTelemetryHealth(3)
@@ -204,9 +209,32 @@ class MainActivity : AppCompatActivity() {
             registerReceiver(usbDetachedReceiver, detachFilter)
         }
 
+        phoneBarometerProvider = PhoneBarometerProvider(this)
+        phoneBarometerProvider.onReadingChanged = { reading ->
+            val nowNs = SystemClock.elapsedRealtimeNanos()
+            sessionBaroResolver.onPhoneBaro(reading.valueMbar, nowNs, reading.fresh)
+            val baro = sessionBaroResolver.resolve(nowNs)
+            if (baro.source == "PHONE_BAROMETER" || baro.source == "UNAVAILABLE") {
+                runOnUiThread {
+                    updateBaroUi()
+                    renderLoggingState()
+                }
+            }
+        }
+
         setupListeners()
         switchConnectionMode(AppConnectionMode.TURBO_FAST_OBD)
         startUiTicker()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        phoneBarometerProvider.start()
+    }
+
+    override fun onStop() {
+        phoneBarometerProvider.stop()
+        super.onStop()
     }
 
     override fun onDestroy() {
@@ -465,6 +493,34 @@ class MainActivity : AppCompatActivity() {
 
             if (success) {
                 if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+                    // P1: Auto-probe BARO immediately after connect
+                    withContext(Dispatchers.IO) {
+                        try {
+                            val baroResp = elmEngine.transport.sendCommand("0133", 800L)
+                            val baroDec = PidDecoder.decodeBaro(baroResp.raw, baroResp.txNanos, baroResp.rxNanos, baroResp.elapsedMs, baroResp.timedOut)
+                            if (baroDec.status == PidStatus.VALID) {
+                                sessionBaroResolver.onSample("0133", baroDec.status, baroDec.value, baroResp.rxNanos)
+                            }
+                            Unit
+                        } catch (e: Exception) {
+                            Log.w("MainActivity", "Initial BARO probe failed: ${e.message}")
+                        }
+                    }
+                    val phoneRead = phoneBarometerProvider.getReading()
+                    sessionBaroResolver.onPhoneBaro(phoneRead.valueMbar, SystemClock.elapsedRealtimeNanos(), phoneRead.fresh)
+                    val resolvedBaro = sessionBaroResolver.resolve(SystemClock.elapsedRealtimeNanos())
+                    elmEngine.saveConnectionTrace(
+                        isSuccess = true,
+                        stage = elmEngine.lastConnectStage,
+                        deviceName = device.name ?: device.address,
+                        baroSource = resolvedBaro.source,
+                        baroValueMbar = resolvedBaro.valueMbar,
+                        phoneBaroAvailable = phoneBarometerProvider.isSensorAvailable,
+                        phoneBaroValueMbar = phoneRead.valueMbar,
+                        phoneBaroAgeMs = phoneRead.ageMs
+                    )
+                    updateBaroUi()
+                    renderLoggingState()
                     startTurboFastPolling()
                 } else {
                     startOemPolling()
@@ -517,29 +573,34 @@ class MainActivity : AppCompatActivity() {
         stressJob = null
     }
 
+    private fun isFreshValid(pid: String, maxAgeMs: Long, nowNs: Long): Boolean {
+        val s = latestSamples[pid] ?: return false
+        return s.status == PidStatus.VALID &&
+                s.value != null &&
+                s.getAgeMs(nowNs) <= maxAgeMs
+    }
+
     private fun isCoreTelemetryReady(nowNs: Long = SystemClock.elapsedRealtimeNanos()): Boolean {
-        val rpm = latestSamples["010C"] ?: return false
-        val map = latestSamples["010B"] ?: return false
-        return rpm.status == PidStatus.VALID &&
-                map.status == PidStatus.VALID &&
-                rpm.getAgeMs(nowNs) <= 1000L &&
-                map.getAgeMs(nowNs) <= 1000L
+        return isFreshValid("010C", TelemetryFreshnessPolicy.RPM_MAX_AGE_MS, nowNs) &&
+                isFreshValid("010B", TelemetryFreshnessPolicy.MAP_MAX_AGE_MS, nowNs)
     }
 
     private fun isWotLogReady(nowNs: Long = SystemClock.elapsedRealtimeNanos()): Boolean {
-        val isConnected = elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+        val isConnected = when (connectionMode) {
+            AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
+                elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+            AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
+                engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+        }
         val hasCore = isCoreTelemetryReady(nowNs)
-        val hasBaro = sessionBaroResolver.resolve().valueMbar != null
+        val hasBaro = sessionBaroResolver.resolve(nowNs).valueMbar != null
         val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
 
-        val mafSample = latestSamples["0110"]
-        val speedSample = latestSamples["010D"]
-        val loadSample = latestSamples["0104"]
-        val auxOk = (mafSample?.status == PidStatus.VALID && mafSample.getEffectiveStatus(nowNs) != PidStatus.STALE) &&
-                    (speedSample?.status == PidStatus.VALID && speedSample.getEffectiveStatus(nowNs) != PidStatus.STALE) &&
-                    (loadSample?.status == PidStatus.VALID && loadSample.getEffectiveStatus(nowNs) != PidStatus.STALE)
+        val mafOk = isFreshValid("0110", TelemetryFreshnessPolicy.MAF_MAX_AGE_MS, nowNs)
+        val spdOk = isFreshValid("010D", TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS, nowNs)
+        val lodOk = isFreshValid("0104", TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS, nowNs)
 
-        return isConnected && hasCore && hasBaro && isGreen && auxOk
+        return isConnected && hasCore && hasBaro && isGreen && mafOk && spdOk && lodOk
     }
 
     private fun renderLoggingState() {
@@ -580,7 +641,7 @@ class MainActivity : AppCompatActivity() {
 
                 if (isConnected && !canStart) {
                     val hasCore = isCoreTelemetryReady()
-                    val hasBaro = sessionBaroResolver.resolve().valueMbar != null
+                    val hasBaro = sessionBaroResolver.resolve(SystemClock.elapsedRealtimeNanos()).valueMbar != null
                     val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
                     if (!isGreen) {
                         if (preflightReport == null) {
@@ -603,6 +664,13 @@ class MainActivity : AppCompatActivity() {
         latestSamples.clear()
         sessionBaroResolver.reset()
         turboScheduler.reset()
+
+        if (::phoneBarometerProvider.isInitialized) {
+            val phoneRead = phoneBarometerProvider.getReading()
+            if (phoneRead.available && phoneRead.fresh) {
+                sessionBaroResolver.onPhoneBaro(phoneRead.valueMbar, SystemClock.elapsedRealtimeNanos(), phoneRead.fresh)
+            }
+        }
 
         calibratedBaroMbar = null
         calibratedBaroSource = "UNSET"
@@ -643,6 +711,7 @@ class MainActivity : AppCompatActivity() {
             binding.tvIatStatusAge.text = "IDLE"
             binding.tvVoltageStatusAge.text = "IDLE"
 
+            updateBaroUi()
             renderLoggingState()
         }
     }
@@ -675,7 +744,46 @@ class MainActivity : AppCompatActivity() {
     // =========================================================================
 
     private fun resolveBaro(): com.vag.vcdsandroid.protocol.BaroReading {
-        return sessionBaroResolver.resolve()
+        return sessionBaroResolver.resolve(SystemClock.elapsedRealtimeNanos())
+    }
+
+    private fun updateBaroUi() {
+        val nowNs = SystemClock.elapsedRealtimeNanos()
+        val baro = sessionBaroResolver.resolve(nowNs)
+        if (baro.valueMbar != null) {
+            binding.tvBaroVal.text = String.format(Locale.US, "%.0f mbar", baro.valueMbar)
+            val srcLabel = when (baro.source) {
+                "PHONE_BAROMETER" -> "PHONE"
+                "ENGINE_OFF_MAP" -> "CALIB"
+                "PID_0133" -> "0133"
+                else -> baro.source
+            }
+            binding.tvBaroStatusAge.text = "OK · $srcLabel"
+            binding.tvBaroStatusAge.setTextColor(Color.parseColor("#3FB950"))
+        } else {
+            binding.tvBaroVal.text = "--- mbar"
+            binding.tvBaroStatusAge.text = "UNAVAILABLE"
+            binding.tvBaroStatusAge.setTextColor(Color.parseColor("#8B949E"))
+        }
+
+        // Also update Hero Boost
+        val mapSample = latestSamples["010B"]
+        if (mapSample != null && mapSample.status == PidStatus.VALID && mapSample.value != null && baro.valueMbar != null) {
+            val boostMbar = mapSample.value - baro.valueMbar
+            binding.tvHeroBoost.text = String.format(Locale.US, "%.2f bar", boostMbar / 1000.0)
+            val srcLabel = when (baro.source) {
+                "PHONE_BAROMETER" -> "PHONE"
+                "ENGINE_OFF_MAP" -> "CALIB"
+                "PID_0133" -> "0133"
+                else -> baro.source
+            }
+            binding.tvBoostStatusAge.text = "OK | $srcLabel | Rel"
+            binding.tvBoostStatusAge.setTextColor(Color.parseColor("#3FB950"))
+        } else {
+            binding.tvHeroBoost.text = "--- bar"
+            binding.tvBoostStatusAge.text = "N/A | BARO ${baro.source}"
+            binding.tvBoostStatusAge.setTextColor(Color.parseColor("#8B949E"))
+        }
     }
 
     private fun freshValue(pid: String, maxAgeMs: Long): Double? {
@@ -756,18 +864,7 @@ class MainActivity : AppCompatActivity() {
                 binding.tvMapStatusAge.text = "${effStatus.name} | ${sample.latencyMs}ms | ${ageMs}ms"
                 binding.tvMapStatusAge.setTextColor(color)
 
-                // Update Hero Boost (zero fallback)
-                val baro = resolveBaro()
-                if (sample.status == PidStatus.VALID && sample.value != null && baro.valueMbar != null) {
-                    val boostMbar = sample.value - baro.valueMbar
-                    binding.tvHeroBoost.text = String.format(Locale.US, "%.2f bar", boostMbar / 1000.0)
-                    binding.tvBoostStatusAge.text = "OK | ${baro.source} | Rel"
-                    binding.tvBoostStatusAge.setTextColor(Color.parseColor("#3FB950"))
-                } else {
-                    binding.tvHeroBoost.text = "--- bar"
-                    binding.tvBoostStatusAge.text = "N/A | BARO ${baro.source}"
-                    binding.tvBoostStatusAge.setTextColor(Color.parseColor("#8B949E"))
-                }
+                updateBaroUi()
             }
             "0110" -> {
                 if (sample.status == PidStatus.VALID && sample.value != null) {
@@ -797,20 +894,7 @@ class MainActivity : AppCompatActivity() {
                 binding.tvLoadStatusAge.setTextColor(color)
             }
             "0133" -> {
-                val baro = resolveBaro()
-                if (sample.status == PidStatus.VALID && sample.value != null) {
-                    binding.tvBaroVal.text = String.format(Locale.US, "%.0f mbar", sample.value)
-                    binding.tvBaroStatusAge.text = "${effStatus.name} · ${sample.latencyMs}ms"
-                    binding.tvBaroStatusAge.setTextColor(color)
-                } else if (baro.valueMbar != null) {
-                    binding.tvBaroVal.text = String.format(Locale.US, "%.0f mbar", baro.valueMbar)
-                    binding.tvBaroStatusAge.text = "CALIB · ${baro.source}"
-                    binding.tvBaroStatusAge.setTextColor(Color.parseColor("#3FB950"))
-                } else {
-                    binding.tvBaroVal.text = "--- mbar"
-                    binding.tvBaroStatusAge.text = "${effStatus.name} · UNAVAIL"
-                    binding.tvBaroStatusAge.setTextColor(color)
-                }
+                updateBaroUi()
             }
             "0105" -> {
                 if (sample.status == PidStatus.VALID && sample.value != null) {
@@ -1003,7 +1087,7 @@ class MainActivity : AppCompatActivity() {
             binding.tvPreFlightStatus.text = "Pre-flight: Running test sequence..."
             binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
 
-            val pidsToTest = listOf("010C", "010B", "0110", "010D", "0104", "0105", "010F", "0142", "0133")
+            val pidsToTest = listOf("0105", "010F", "0142", "0133", "010D", "0104", "0110", "010B", "010C")
 
             for (pid in pidsToTest) {
                 binding.tvPreFlightStatus.text = "Pre-flight: Testing $pid..."
@@ -1059,27 +1143,29 @@ class MainActivity : AppCompatActivity() {
                 delay(40)
             }
 
-            // Category evaluation via PreflightEvaluator
-            val rpmSample = latestSamples["010C"]
-            val mapSample = latestSamples["010B"]
-            val baro = sessionBaroResolver.resolve()
-            val mafSample = latestSamples["0110"]
-            val spdSample = latestSamples["010D"]
-            val lodSample = latestSamples["0104"]
-            val clnSample = latestSamples["0105"]
-            val iatSample = latestSamples["010F"]
+            // Category evaluation via PreflightEvaluator with strict TelemetryFreshnessPolicy
+            val nowNs = SystemClock.elapsedRealtimeNanos()
+            val rpmOk = isFreshValid("010C", TelemetryFreshnessPolicy.RPM_MAX_AGE_MS, nowNs)
+            val mapOk = isFreshValid("010B", TelemetryFreshnessPolicy.MAP_MAX_AGE_MS, nowNs)
+            val baro = sessionBaroResolver.resolve(nowNs)
+            val mafOk = isFreshValid("0110", TelemetryFreshnessPolicy.MAF_MAX_AGE_MS, nowNs)
+            val spdOk = isFreshValid("010D", TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS, nowNs)
+            val lodOk = isFreshValid("0104", TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS, nowNs)
+            val clnOk = isFreshValid("0105", TelemetryFreshnessPolicy.SLOW_MAX_AGE_MS, nowNs)
+            val iatOk = isFreshValid("010F", TelemetryFreshnessPolicy.SLOW_MAX_AGE_MS, nowNs)
+            val voltOk = isFreshValid("0142", TelemetryFreshnessPolicy.SLOW_MAX_AGE_MS, nowNs)
             val voltSample = latestSamples["0142"]
 
             val report = PreflightEvaluator.evaluate(
-                rpmOk = rpmSample?.status == PidStatus.VALID,
-                mapOk = mapSample?.status == PidStatus.VALID,
+                rpmOk = rpmOk,
+                mapOk = mapOk,
                 baroReading = baro,
-                mafOk = mafSample?.status == PidStatus.VALID,
-                speedOk = spdSample?.status == PidStatus.VALID,
-                loadOk = lodSample?.status == PidStatus.VALID,
-                coolantOk = clnSample?.status == PidStatus.VALID,
-                iatOk = iatSample?.status == PidStatus.VALID,
-                voltOk = voltSample?.status == PidStatus.VALID,
+                mafOk = mafOk,
+                speedOk = spdOk,
+                loadOk = lodOk,
+                coolantOk = clnOk,
+                iatOk = iatOk,
+                voltOk = voltOk,
                 voltSource = if (voltSample?.requestCommand == "ATRV") "ATRV" else "0142"
             )
             preflightReport = report
@@ -1303,7 +1389,7 @@ class MainActivity : AppCompatActivity() {
         if (rpmSample.status == PidStatus.VALID && mapSample.status == PidStatus.VALID) {
             val dtMs = (mapSample.monoNanos - rpmSample.monoNanos) / 1_000_000
             val pairValid = dtMs in 0..TURBO_PAIR_MAX_DELTA_MS
-            val baro = sessionBaroResolver.resolve()
+            val baro = sessionBaroResolver.resolve(mapSample.monoNanos)
             if (asyncLogger.isLogging) {
                 asyncLogger.logTurboPair(
                     rpm = rpmSample.value ?: 0.0,
@@ -1408,28 +1494,15 @@ class MainActivity : AppCompatActivity() {
             windowStart = SystemClock.elapsedRealtime()
 
             while (isActive && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
-                if (asyncLogger.isLogging) {
-                    // =========================================================
-                    // RECORDING MODE: Dedicated to core RPM+MAP WOT sweep
-                    // No slow sensors polled during recording!
-                    // =========================================================
-                    queryRpmMapPair()
-                    val auxPids = turboScheduler.nextRecordingAuxPids()
-                    for (auxPid in auxPids) {
-                        querySinglePid(auxPid)
-                    }
-                } else {
-                    // =========================================================
-                    // LIVE MODE: 9-step schedule + slow sensor rotation
-                    // =========================================================
-                    val step = turboScheduler.nextLiveStep()
-                    when (step) {
-                        0, 1, 2, 3, 5, 7 -> queryRpmMapPair()
-                        4 -> querySinglePid("0110")
-                        6 -> querySinglePid("010D")
-                        8 -> querySinglePid("0104")
-                    }
+                // Pair-first polling: RPM & MAP queried on every loop cycle
+                queryRpmMapPair()
+                val auxPids = turboScheduler.nextAuxPids()
+                for (auxPid in auxPids) {
+                    querySinglePid(auxPid)
+                }
 
+                // Slow sensor rotation only in LIVE mode (never during active WOT recording)
+                if (!asyncLogger.isLogging) {
                     val slowPid = turboScheduler.checkLiveSlowPid(SystemClock.elapsedRealtime(), SLOW_SLOT_INTERVAL_MS)
                     if (slowPid != null) {
                         querySinglePid(slowPid)

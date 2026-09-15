@@ -8,6 +8,7 @@ import org.junit.Test
 class PreflightEvaluatorTest {
 
     private val validBaro = BaroReading(1005.0, "PID_0133")
+    private val phoneBaro = BaroReading(998.0, "PHONE_BAROMETER")
     private val missingBaro = BaroReading(null, "UNAVAILABLE")
 
     @Test
@@ -30,14 +31,33 @@ class PreflightEvaluatorTest {
     }
 
     @Test
+    fun testPhoneBarometerFreshSatisfiesBaroRequirement() {
+        val report = PreflightEvaluator.evaluate(
+            rpmOk = true,
+            mapOk = true,
+            baroReading = phoneBaro,
+            mafOk = true,
+            speedOk = true,
+            loadOk = true,
+            coolantOk = true,
+            iatOk = true,
+            voltOk = true,
+            voltSource = "0142"
+        )
+        assertEquals(PreflightVerdict.GREEN, report.verdict)
+        assertEquals(998.0, report.baroValueMbar!!, 0.01)
+        assertEquals("PHONE_BAROMETER", report.baroSource)
+    }
+
+    @Test
     fun testCoreValidButAuxMissingReturnsAmber() {
         val report = PreflightEvaluator.evaluate(
             rpmOk = true,
             mapOk = true,
             baroReading = validBaro,
-            mafOk = false, // missing
+            mafOk = false, // missing or stale
             speedOk = true,
-            loadOk = false, // missing
+            loadOk = false, // missing or stale
             coolantOk = true,
             iatOk = true,
             voltOk = true
@@ -45,6 +65,24 @@ class PreflightEvaluatorTest {
         assertEquals(PreflightVerdict.AMBER, report.verdict)
         assertEquals(listOf("MAF", "LOAD"), report.missingAuxChannels)
         assertTrue(report.failureReason.contains("AUX MISSING: MAF, LOAD"))
+    }
+
+    @Test
+    fun testStaleMafDoesNotYieldGreen() {
+        // When MAF is evaluated as stale (mafOk = false), preflight MUST NOT be GREEN
+        val report = PreflightEvaluator.evaluate(
+            rpmOk = true,
+            mapOk = true,
+            baroReading = validBaro,
+            mafOk = false,
+            speedOk = true,
+            loadOk = true,
+            coolantOk = true,
+            iatOk = true,
+            voltOk = true
+        )
+        assertEquals(PreflightVerdict.AMBER, report.verdict)
+        assertTrue(report.missingAuxChannels.contains("MAF"))
     }
 
     @Test
@@ -104,10 +142,13 @@ class PreflightEvaluatorTest {
             mafOk = true,
             speedOk = true,
             loadOk = true,
-            coolantOk = false, // optional
-            iatOk = false,     // optional
-            voltOk = false     // optional
+            coolantOk = false, // optional missing
+            iatOk = false,     // optional missing
+            voltOk = false     // optional missing
         )
         assertEquals(PreflightVerdict.GREEN, report.verdict)
+        assertFalse(report.coolantOk)
+        assertFalse(report.iatOk)
+        assertFalse(report.voltOk)
     }
 }

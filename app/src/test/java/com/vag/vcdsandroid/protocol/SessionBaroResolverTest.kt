@@ -112,4 +112,84 @@ class SessionBaroResolverTest {
         assertNull(res.valueMbar)
         assertEquals("UNAVAILABLE", res.source)
     }
+
+    @Test
+    fun testPhoneBarometerPriorityHierarchy() {
+        val resolver = SessionBaroResolver()
+        val t0 = 10_000_000_000L
+
+        // 1. PHONE_BAROMETER alone resolves
+        resolver.onPhoneBaro(995.0, monoNs = t0, fresh = true)
+        var res = resolver.resolve(nowNs = t0)
+        assertEquals(995.0, res.valueMbar!!, 0.01)
+        assertEquals("PHONE_BAROMETER", res.source)
+
+        // 2. ENGINE_OFF_MAP replaces PHONE_BAROMETER
+        resolver.onSample(
+            pid = "010B",
+            status = PidStatus.VALID,
+            value = 992.0,
+            monoNs = t0 + 1_000_000_000L,
+            latestRpmValue = 0.0,
+            latestRpmStatus = PidStatus.VALID,
+            latestRpmMonoNs = t0 + 1_000_000_000L,
+            nowNs = t0 + 1_000_000_000L
+        )
+        res = resolver.resolve(nowNs = t0 + 1_000_000_000L)
+        assertEquals(992.0, res.valueMbar!!, 0.01)
+        assertEquals("ENGINE_OFF_MAP", res.source)
+
+        // 3. PID_0133 replaces both ENGINE_OFF_MAP and PHONE_BAROMETER
+        resolver.onSample(
+            pid = "0133",
+            status = PidStatus.VALID,
+            value = 1001.0,
+            monoNs = t0 + 2_000_000_000L
+        )
+        res = resolver.resolve(nowNs = t0 + 2_000_000_000L)
+        assertEquals(1001.0, res.valueMbar!!, 0.01)
+        assertEquals("PID_0133", res.source)
+
+        // 4. Stale phone reading does not erase PID_0133 or ENGINE_OFF_MAP
+        resolver.onPhoneBaro(null, monoNs = t0 + 3_000_000_000L, fresh = false)
+        res = resolver.resolve(nowNs = t0 + 3_000_000_000L)
+        assertEquals(1001.0, res.valueMbar!!, 0.01)
+        assertEquals("PID_0133", res.source)
+    }
+
+    @Test
+    fun testStalePhoneBarometerBecomesUnavailableWhenOnlySource() {
+        val resolver = SessionBaroResolver()
+        val t0 = 10_000_000_000L
+
+        // Valid phone baro at t0
+        resolver.onPhoneBaro(995.0, monoNs = t0, fresh = true)
+        var res = resolver.resolve(nowNs = t0)
+        assertEquals(995.0, res.valueMbar!!, 0.01)
+        assertEquals("PHONE_BAROMETER", res.source)
+
+        // After 6 seconds (> 5s freshness limit)
+        res = resolver.resolve(nowNs = t0 + 6_000_000_000L)
+        assertNull(res.valueMbar)
+        assertEquals("UNAVAILABLE", res.source)
+    }
+
+    @Test
+    fun testPhoneBaroWithoutTimestampReturnsUnavailable() {
+        val resolver = SessionBaroResolver()
+        val t0 = 10_000_000_000L
+
+        // Valid phone baro added
+        resolver.onPhoneBaro(995.0, monoNs = t0, fresh = true)
+
+        // Resolving with valid timestamp resolves PHONE_BAROMETER
+        val withTime = resolver.resolve(nowNs = t0)
+        assertEquals(995.0, withTime.valueMbar!!, 0.01)
+        assertEquals("PHONE_BAROMETER", withTime.source)
+
+        // Resolving without timestamp (nowNs = 0L) must reject phone baro as unverified freshness
+        val withoutTime = resolver.resolve()
+        assertNull(withoutTime.valueMbar)
+        assertEquals("UNAVAILABLE", withoutTime.source)
+    }
 }

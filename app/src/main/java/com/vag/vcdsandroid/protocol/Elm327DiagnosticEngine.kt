@@ -68,7 +68,16 @@ class Elm327DiagnosticEngine(private val context: Context) {
     var obdProtocol: String = ""
         private set
 
-    private fun saveConnectionTrace(isSuccess: Boolean, stage: String, deviceName: String) {
+    fun saveConnectionTrace(
+        isSuccess: Boolean,
+        stage: String,
+        deviceName: String,
+        baroSource: String? = null,
+        baroValueMbar: Double? = null,
+        phoneBaroAvailable: Boolean? = null,
+        phoneBaroValueMbar: Double? = null,
+        phoneBaroAgeMs: Long? = null
+    ) {
         try {
             val dir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS), "VCDS_Logs")
             if (!dir.exists()) dir.mkdirs()
@@ -85,6 +94,17 @@ class Elm327DiagnosticEngine(private val context: Context) {
                 appendLine("OBD Protocol: $obdProtocol")
                 appendLine("TP2.0 Active: $isTp20Active")
                 appendLine("Last Error: $lastError")
+                if (baroSource != null || baroValueMbar != null) {
+                    appendLine("BARO source: ${baroSource ?: "N/A"}")
+                    appendLine("BARO value: ${baroValueMbar?.let { String.format(Locale.US, "%.1f mbar", it) } ?: "N/A"}")
+                }
+                if (phoneBaroAvailable != null) {
+                    appendLine("Phone pressure sensor available: $phoneBaroAvailable")
+                    if (phoneBaroAvailable) {
+                        appendLine("Phone pressure value: ${phoneBaroValueMbar?.let { String.format(Locale.US, "%.1f mbar", it) } ?: "N/A"}")
+                        appendLine("Phone pressure age: ${phoneBaroAgeMs ?: 0L} ms")
+                    }
+                }
                 appendLine("\n--- LOG HISTORY ---")
                 appendLine(logHistory.joinToString("\n"))
             }
