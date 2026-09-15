@@ -371,7 +371,8 @@ class MainActivity : AppCompatActivity() {
         binding.btnConnect.isEnabled = false
 
         lifecycleScope.launch {
-            val success = elmEngine.connect(device)
+            val isTurboFast = (connectionMode == AppConnectionMode.TURBO_FAST_OBD)
+            val success = elmEngine.connect(device, forceGeneric = isTurboFast)
             binding.btnConnect.isEnabled = true
             updateStatusUI()
             if (success) {

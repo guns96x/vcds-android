@@ -91,8 +91,10 @@ class UsbKwpTransport(private val context: Context) {
     private var serialPort: UsbSerialPort? = null
     private var currentDevice: UsbDevice? = null
     private var isPortOpen = false
+    private var bridgeServer: TcpBridgeServer? = null
 
     fun isConnected(): Boolean = isPortOpen && serialPort != null
+    fun isBridgeActive(): Boolean = bridgeServer?.isBridgeActive == true
 
     fun getActiveAdapterInfo(): AdapterInfo? {
         val dev = currentDevice ?: findAvailableDevice() ?: return null
@@ -135,11 +137,21 @@ class UsbKwpTransport(private val context: Context) {
         usbManager.requestPermission(device, permissionIntent)
     }
 
-    fun connect(targetDevice: UsbDevice? = null, baudRate: Int = KLINE_BAUD_RATE): Boolean {
-        val deviceToOpen = targetDevice ?: findAvailableDevice() ?: return false
+    fun connect(targetDevice: UsbDevice? = null, baudRate: Int? = null): Boolean {
+        var deviceToOpen = targetDevice ?: findAvailableDevice() ?: return false
+
+        // Re-find the device from current deviceList by VID:PID to avoid stale
+        // /dev/bus/usb paths after Samsung USB chooser dialog remounts the device
+        deviceToOpen = refreshDevice(deviceToOpen) ?: deviceToOpen
         currentDevice = deviceToOpen
 
+        val info = identifyDevice(deviceToOpen)
+        val initialBaud = baudRate ?: if (info.isRossTechIntelligent) 500000 else KLINE_BAUD_RATE
+
+        android.util.Log.i("VCDS_USB", "connect(): VID:PID=${info.vidPidHex} name=${info.displayName} devName=${deviceToOpen.deviceName}")
+
         val prober = createProber()
+        // Re-probe with fresh device reference
         val driver: UsbSerialDriver = prober.probeDevice(deviceToOpen) ?: run {
             when (deviceToOpen.vendorId) {
                 0x0403 -> FtdiSerialDriver(deviceToOpen)
@@ -150,30 +162,80 @@ class UsbKwpTransport(private val context: Context) {
             }
         }
 
-        val connection = usbManager.openDevice(driver.device) ?: return false
+        // Check permission before trying to open
+        if (!usbManager.hasPermission(driver.device)) {
+            android.util.Log.w("VCDS_USB", "No USB permission for ${driver.device.deviceName}")
+            return false
+        }
 
-        if (driver.ports.isEmpty()) {
+        val connection = try {
+            usbManager.openDevice(driver.device)
+        } catch (e: Exception) {
+            android.util.Log.e("VCDS_USB", "openDevice() failed: ${e.message}, retrying with fresh scan...")
+            // One more attempt: re-scan and get completely fresh UsbDevice
+            val freshDev = findAvailableDevice() ?: return false
+            currentDevice = freshDev
+            val freshDriver = prober.probeDevice(freshDev) ?: FtdiSerialDriver(freshDev)
+            try {
+                usbManager.openDevice(freshDriver.device)
+            } catch (e2: Exception) {
+                android.util.Log.e("VCDS_USB", "openDevice() retry also failed: ${e2.message}")
+                null
+            }
+        }
+
+        if (connection == null) {
+            android.util.Log.e("VCDS_USB", "openDevice() returned null")
+            return false
+        }
+
+        // Re-check driver ports from the fresh device if we re-scanned
+        val finalDriver = prober.probeDevice(currentDevice!!) ?: run {
+            when (currentDevice!!.vendorId) {
+                0x0403 -> FtdiSerialDriver(currentDevice!!)
+                0x1A86 -> Ch34xSerialDriver(currentDevice!!)
+                0x10C4 -> Cp21xxSerialDriver(currentDevice!!)
+                0x067B -> ProlificSerialDriver(currentDevice!!)
+                else -> {
+                    try { connection.close() } catch (_: Exception) {}
+                    return false
+                }
+            }
+        }
+
+        if (finalDriver.ports.isEmpty()) {
             try {
                 connection.close()
             } catch (_: Exception) {}
             return false
         }
 
-        val port = driver.ports[0]
+        val port = finalDriver.ports[0]
         try {
             port.open(connection)
             port.setParameters(
-                baudRate,
+                initialBaud,
                 8,
                 UsbSerialPort.STOPBITS_1,
                 UsbSerialPort.PARITY_NONE
             )
+            // FT232R: DTR# pin is ACTIVE LOW output.
+            // setDtr(true) → DTR# LOW → ATmega162 RESET LOW → MCU in reset!
+            // setDtr(false) → DTR# HIGH → RESET HIGH → MCU runs!
             port.dtr = false
             port.rts = false
             serialPort = port
             isPortOpen = true
+            android.util.Log.i("VCDS_USB", "Serial port opened OK at $initialBaud baud, DTR=false (MCU reset released)")
+
+            // Start TCP Bridge server on 127.0.0.1:9999
+            if (bridgeServer == null) {
+                bridgeServer = TcpBridgeServer(this).also { it.start() }
+            }
+
             return true
         } catch (e: Exception) {
+            android.util.Log.e("VCDS_USB", "Port open failed: ${e.message}")
             try {
                 port.close()
             } catch (_: Exception) {}
@@ -186,7 +248,50 @@ class UsbKwpTransport(private val context: Context) {
         }
     }
 
+    /**
+     * Re-find a USB device from the current system device list by matching VID:PID.
+     * This is critical on Samsung devices where the /dev/bus/usb path changes
+     * after the USB chooser dialog remounts the device.
+     */
+    private fun refreshDevice(stale: UsbDevice): UsbDevice? {
+        for (dev in usbManager.deviceList.values) {
+            if (dev.vendorId == stale.vendorId && dev.productId == stale.productId) {
+                if (dev.deviceName != stale.deviceName) {
+                    android.util.Log.w("VCDS_USB", "USB device path changed: ${stale.deviceName} -> ${dev.deviceName}")
+                }
+                return dev
+            }
+        }
+        return null
+    }
+
+    fun setBaudRate(newBaudRate: Int): Boolean {
+        val port = serialPort ?: return false
+        return try {
+            port.setParameters(newBaudRate, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    fun setDtr(state: Boolean) {
+        try {
+            serialPort?.dtr = state
+        } catch (_: Exception) {}
+    }
+
+    fun setRts(state: Boolean) {
+        try {
+            serialPort?.rts = state
+        } catch (_: Exception) {}
+    }
+
     fun disconnect() {
+        try {
+            bridgeServer?.stop()
+            bridgeServer = null
+        } catch (_: Exception) {}
         try {
             serialPort?.close()
         } catch (_: Exception) {}
@@ -217,17 +322,27 @@ class UsbKwpTransport(private val context: Context) {
         }
     }
 
-    fun write(data: ByteArray) {
+    private val ioLock = Any()
+
+    fun write(data: ByteArray) = synchronized(ioLock) {
         val port = serialPort ?: throw IOException("USB port is not open")
         port.write(data, DEFAULT_TIMEOUT_MS)
     }
 
-    fun read(buffer: ByteArray, timeoutMs: Int = DEFAULT_TIMEOUT_MS): Int {
-        val port = serialPort ?: throw IOException("USB port is not open")
-        return port.read(buffer, timeoutMs)
+    fun read(buffer: ByteArray, timeoutMs: Int = DEFAULT_TIMEOUT_MS): Int = synchronized(ioLock) {
+        val port = serialPort ?: return 0
+        try {
+            port.read(buffer, timeoutMs)
+        } catch (e: IOException) {
+            // In usb-serial-for-android, a read timeout (no bytes ready) throws IOException.
+            // This is NORMAL in serial communication — return 0 bytes read.
+            0
+        } catch (e: Exception) {
+            0
+        }
     }
 
-    fun purge() {
+    fun purge() = synchronized(ioLock) {
         val port = serialPort ?: return
         try {
             port.purgeHwBuffers(true, true)

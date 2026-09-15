@@ -70,7 +70,8 @@ class Elm327DiagnosticEngine(private val context: Context) {
         onLogListener?.invoke(msg)
     }
 
-    suspend fun connect(targetDevice: BluetoothDevice? = null): Boolean = withContext(Dispatchers.IO) {
+    suspend fun connect(targetDevice: BluetoothDevice? = null, forceGeneric: Boolean = forceGenericObd): Boolean = withContext(Dispatchers.IO) {
+        this@Elm327DiagnosticEngine.forceGenericObd = forceGeneric
         commMutex.withLock {
             state = DiagState.CONNECTING
             elmState = ElmDiagnosticState.CONNECTING_RFCOMM
@@ -193,53 +194,98 @@ class Elm327DiagnosticEngine(private val context: Context) {
 
             // Step 4: Generic OBD Mode 01 Fallback (0100 & 010C fallback)
             elmState = ElmDiagnosticState.OBD_CONNECTING
-            appendLog("5. Відновлення параметрів ISO-TP та перевірка стандартного OBD-II зв'язку...")
+            appendLog("5. Перевірка напруги та конфігурація OBD-II зв'язку...")
+
+            // Read battery voltage & log it
+            val vBat = transport.sendCommand("ATRV", 1000L)
+            appendLog("Напруга бортової мережі: ${vBat.raw.trim()}")
+
             transport.sendCommand("ATCAF1", 1000L)
             transport.sendCommand("ATCFC1", 1000L)
             transport.sendCommand("ATV0", 1000L)
-            transport.sendCommand("ATAR", 1000L)
+            transport.sendCommand("ATAT1", 1000L) // Adaptive timing ON
+            transport.sendCommand("ATST64", 1000L) // 400ms timeout for reliable initial gateway wakeup
 
             var obdSuccess = false
-            val protocolsToTry = listOf(
-                "ATSP6" to "CAN 11-bit 500k (Golf 5)",
-                "ATSP0" to "Auto Protocol"
-            )
 
-            for ((protoCmd, protoName) in protocolsToTry) {
-                appendLog("Пробуємо $protoCmd ($protoName)...")
-                appendLog("TX >> $protoCmd")
-                val pResp = transport.sendCommand(protoCmd, 1500L)
-                appendLog("RX << ${formatRx(pResp)}")
+            // Strategy 1: CAN 11-bit 500k with Functional broadcast (7DF)
+            appendLog("Пробуємо CAN 11-bit 500k Functional (ATSH7DF)...")
+            transport.sendCommand("ATSP6", 1500L)
+            transport.sendCommand("ATSH7DF", 1000L)
+            transport.sendCommand("ATCRA", 1000L)
+            transport.sendCommand("ATAR", 1000L)
 
-                appendLog("TX >> 0100")
-                val obd0100 = transport.sendCommand("0100", 7000L)
-                appendLog("RX << ${formatRx(obd0100)}")
+            val csResp1 = transport.sendCommand("ATCS", 1000L)
+            appendLog("CAN Status (7DF): ${csResp1.raw.trim()}")
 
-                val clean0100 = cleanHexResponse(obd0100.raw)
-                if (clean0100.contains("4100")) {
+            var test0100 = transport.sendCommand("0100", 7000L)
+            appendLog("RX (0100 @ 7DF) << ${formatRx(test0100)}")
+            var clean0100 = cleanHexResponse(test0100.raw)
+
+            var test010C = transport.sendCommand("010C", 3000L)
+            appendLog("RX (010C @ 7DF) << ${formatRx(test010C)}")
+            var clean010C = cleanHexResponse(test010C.raw)
+
+            if (clean0100.contains("4100") || clean010C.contains("410C")) {
+                obdSuccess = true
+                elmState = ElmDiagnosticState.OBD_READY
+                state = DiagState.CONNECTED
+                appendLog("==> OBD_READY: ЕБУ двигуна онлайн через CAN 11/500 Functional (7DF)!")
+            }
+
+            // Strategy 2: CAN 11-bit 500k with Physical Engine ECU addressing (7E0 -> 7E8)
+            // Essential for Golf 5 / PQ35 when Gateway filters broadcast 7DF
+            if (!obdSuccess) {
+                appendLog("WARN: 7DF не відповів, пробуємо Physical Engine addressing (ATSH7E0 -> ATCRA7E8)...")
+                transport.sendCommand("ATSH7E0", 1000L)
+                transport.sendCommand("ATCRA7E8", 1000L)
+
+                val csResp2 = transport.sendCommand("ATCS", 1000L)
+                appendLog("CAN Status (7E0): ${csResp2.raw.trim()}")
+
+                test0100 = transport.sendCommand("0100", 7000L)
+                appendLog("RX (0100 @ 7E0) << ${formatRx(test0100)}")
+                clean0100 = cleanHexResponse(test0100.raw)
+
+                test010C = transport.sendCommand("010C", 3000L)
+                appendLog("RX (010C @ 7E0) << ${formatRx(test010C)}")
+                clean010C = cleanHexResponse(test010C.raw)
+
+                if (clean0100.contains("4100") || clean010C.contains("410C")) {
                     obdSuccess = true
                     elmState = ElmDiagnosticState.OBD_READY
                     state = DiagState.CONNECTED
-                    appendLog("==> OBD_READY: ЕБУ двигуна онлайн через $protoName! Відповідь 0100 валідна.")
-                    break
+                    appendLog("==> OBD_READY: ЕБУ двигуна онлайн через Physical CAN (7E0/7E8)!")
                 }
+            }
 
-                // Fallback: test 010C (RPM query) in case 0100 multi-frame was dropped
-                appendLog("TX >> 010C")
-                val obd010C = transport.sendCommand("010C", 3000L)
-                appendLog("RX << ${formatRx(obd010C)}")
-                val clean010C = cleanHexResponse(obd010C.raw)
-                if (clean010C.contains("410C")) {
+            // Strategy 3: Clean Auto-Protocol (ATSP0) with cleared filters
+            if (!obdSuccess) {
+                appendLog("WARN: CAN 500k не відповів, пробуємо чистий ATSP0 Auto-Protocol...")
+                transport.sendCommand("ATCRA", 1000L)
+                transport.sendCommand("ATAR", 1000L)
+                transport.sendCommand("ATSP0", 2000L)
+
+                test0100 = transport.sendCommand("0100", 8000L)
+                appendLog("RX (0100 @ Auto) << ${formatRx(test0100)}")
+                clean0100 = cleanHexResponse(test0100.raw)
+
+                test010C = transport.sendCommand("010C", 4000L)
+                appendLog("RX (010C @ Auto) << ${formatRx(test010C)}")
+                clean010C = cleanHexResponse(test010C.raw)
+
+                if (clean0100.contains("4100") || clean010C.contains("410C")) {
                     obdSuccess = true
+                    val dpResp = transport.sendCommand("ATDP", 1000L)
+                    val dpnResp = transport.sendCommand("ATDPN", 1000L)
                     elmState = ElmDiagnosticState.OBD_READY
                     state = DiagState.CONNECTED
-                    appendLog("==> OBD_READY: ЕБУ двигуна онлайн через $protoName! Відповідь 010C валідна.")
-                    break
+                    appendLog("==> OBD_READY: ЕБУ знайдено через авто-протокол: ${dpResp.raw.trim()} (${dpnResp.raw.trim()})!")
                 }
             }
 
             if (!obdSuccess) {
-                val err = "ЕБУ двигуна не відповідає на 0100/010C (Gateway спить або немає запалювання).\nЗаведіть авто або увімкніть запалювання (щоб світились прилади)!"
+                val err = "ЕБУ двигуна не відповідає на OBD-II Mode 01 (0100/010C).\nПеревірте, щоб запалювання було увімкнене (або заведіть двигун) та адаптер був щільно вставлений у роз'єм OBD!"
                 lastError = err
                 state = DiagState.ERROR
                 elmState = ElmDiagnosticState.ERROR

@@ -2,20 +2,32 @@ package com.vag.vcdsandroid.usb
 
 import android.util.Log
 import kotlinx.coroutines.*
+import java.io.BufferedReader
+import java.io.InputStreamReader
 import java.io.OutputStream
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Localhost TCP Bridge Server listening on 127.0.0.1:9999.
- * Allows interactive terminal access, debugging, and brute-forcing from PC
+ * Provides interactive terminal access, debugging, and brute-forcing from PC
  * via 'adb forward tcp:9999 tcp:9999'.
+ *
+ * Implements Astra security & concurrency recommendations:
+ * - Tracks and closes all accepted sockets on stop()
+ * - Provides isBridgeActive flag to prevent serial collision with DiagEngine
+ * - Framed command protocol
  */
 class TcpBridgeServer(private val transport: UsbKwpTransport, private val port: Int = 9999) {
     private var serverSocket: ServerSocket? = null
     private var isRunning = false
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val activeSockets = ConcurrentHashMap.newKeySet<Socket>()
+
+    val isBridgeActive: Boolean
+        get() = activeSockets.isNotEmpty()
 
     fun start() {
         if (isRunning) return
@@ -31,7 +43,13 @@ class TcpBridgeServer(private val transport: UsbKwpTransport, private val port: 
                 while (isRunning && isActive) {
                     try {
                         val client = serverSocket?.accept() ?: break
+                        // Enforce single active client to avoid concurrent serial interleaving
+                        for (prev in activeSockets) {
+                            try { prev.close() } catch (_: Exception) {}
+                        }
+                        activeSockets.clear()
                         Log.i("VCDS_TCP", "Client connected: ${client.remoteSocketAddress}")
+                        activeSockets.add(client)
                         handleClient(client)
                     } catch (e: Exception) {
                         if (isRunning) Log.w("VCDS_TCP", "Accept error: ${e.message}")
@@ -61,8 +79,10 @@ class TcpBridgeServer(private val transport: UsbKwpTransport, private val port: 
                             val hexStr = usbBuf.take(n).joinToString(" ") { "%02X".format(it) }
                             Log.d("VCDS_TCP", "USB -> TCP ($n bytes): $hexStr")
                         }
-                    } catch (_: Exception) {
-                        break
+                    } catch (e: Exception) {
+                        if (!transport.isConnected() || client.isClosed) {
+                            break
+                        }
                     }
                     delay(5)
                 }
@@ -88,6 +108,7 @@ class TcpBridgeServer(private val transport: UsbKwpTransport, private val port: 
                 Log.w("VCDS_TCP", "Client loop ended: ${e.message}")
             } finally {
                 rxJob.cancel()
+                activeSockets.remove(client)
                 try { client.close() } catch (_: Exception) {}
                 Log.i("VCDS_TCP", "Client disconnected")
             }
@@ -96,7 +117,7 @@ class TcpBridgeServer(private val transport: UsbKwpTransport, private val port: 
 
     private fun handleCommand(cmd: String, out: OutputStream) {
         Log.i("VCDS_TCP", "Control command: $cmd")
-        val cleanCmd = cmd.removePrefix("@@CMD:")
+        val cleanCmd = cmd.removePrefix("@@CMD:").trim()
         val parts = cleanCmd.split(":")
         when (parts[0].uppercase()) {
             "BAUD" -> {
@@ -141,6 +162,10 @@ class TcpBridgeServer(private val transport: UsbKwpTransport, private val port: 
     fun stop() {
         isRunning = false
         try { serverSocket?.close() } catch (_: Exception) {}
+        for (client in activeSockets) {
+            try { client.close() } catch (_: Exception) {}
+        }
+        activeSockets.clear()
         scope.cancel()
     }
 }

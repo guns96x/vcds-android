@@ -4,3 +4,7 @@ build/
 .gradle/
 local.properties
 app/build/
+/screen_*.png
+/screen_*.jpg
+/window_dump.xml
+/sample_log.csv

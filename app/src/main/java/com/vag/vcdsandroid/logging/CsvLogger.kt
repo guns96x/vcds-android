@@ -37,14 +37,18 @@ class CsvLogger(private val context: Context) {
     }
 
     fun startNewLog(): File {
+        return startTurboFastLog()
+    }
+
+    fun startTurboFastLog(): File {
         stopLog()
 
         val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val fileName = "VCDS_WOT_Log_$timeStamp.csv"
+        val fileName = "Turbo_Fast_Log_$timeStamp.csv"
         val logFile = File(getLogsDirectory(), fileName)
 
         val writer = BufferedWriter(FileWriter(logFile, false), 8192)
-        writer.write("Timestamp_ms,RelativeTime_s,RPM,Boost_Specified_mbar,Boost_Actual_mbar,N75_Duty_pct,Driver_Wish_IQ_mg,Torque_Limit_IQ_mg,Smoke_Limit_IQ_mg,MAF_Actual_mg\n")
+        writer.write("utc_ms,mono_ms,rpm,map_mbar_abs,baro_mbar,baro_source,boost_mbar,boost_bar,pair_skew_ms,maf_g_s,latency_ms\n")
         writer.flush()
 
         currentWriter = writer
@@ -56,6 +60,121 @@ class CsvLogger(private val context: Context) {
         isLogging = true
 
         return logFile
+    }
+
+    fun startVagOemLog(): File {
+        stopLog()
+
+        val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val fileName = "VAG_OEM_Log_$timeStamp.csv"
+        val logFile = File(getLogsDirectory(), fileName)
+
+        val writer = BufferedWriter(FileWriter(logFile, false), 8192)
+        writer.write("timestamp_ms,rel_sec,group_type,rpm,boost_spec_mbar,boost_act_mbar,n75_pct,driver_wish_mg,torque_limit_mg,smoke_limit_mg,maf_act_mg\n")
+        writer.flush()
+
+        currentWriter = writer
+        currentFile = logFile
+        startTimestampMs = System.currentTimeMillis()
+        sampleCount = 0
+        peakBoostMbar = 0.0
+        peakRpm = 0.0
+        isLogging = true
+
+        return logFile
+    }
+
+    fun logTurboFastPair(
+        utcMs: Long,
+        monoMs: Long,
+        rpm: Double,
+        mapMbarAbs: Double,
+        baroMbar: Double?,
+        baroSource: String,
+        pairSkewMs: Long,
+        mafGs: Double?,
+        latencyMs: Long
+    ) {
+        val writer = currentWriter ?: return
+        if (!isLogging) return
+
+        if (mapMbarAbs > peakBoostMbar) peakBoostMbar = mapMbarAbs
+        if (rpm > peakRpm) peakRpm = rpm
+
+        val baroStr = if (baroMbar != null && baroMbar > 0.0) String.format(Locale.US, "%.1f", baroMbar) else ""
+        val boostMbarStr = if (baroMbar != null && baroMbar > 0.0) String.format(Locale.US, "%.1f", mapMbarAbs - baroMbar) else ""
+        val boostBarStr = if (baroMbar != null && baroMbar > 0.0) String.format(Locale.US, "%.3f", (mapMbarAbs - baroMbar) / 1000.0) else ""
+        val mafStr = if (mafGs != null && mafGs > 0.0) String.format(Locale.US, "%.2f", mafGs) else ""
+
+        val line = String.format(
+            Locale.US,
+            "%d,%d,%.0f,%.1f,%s,%s,%s,%s,%d,%s,%d\n",
+            utcMs,
+            monoMs,
+            rpm,
+            mapMbarAbs,
+            baroStr,
+            baroSource,
+            boostMbarStr,
+            boostBarStr,
+            pairSkewMs,
+            mafStr,
+            latencyMs
+        )
+
+        try {
+            writer.write(line)
+            sampleCount++
+            if (sampleCount % 5 == 0) {
+                writer.flush()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun logVagOemSample(
+        timestampMs: Long,
+        groupType: String,
+        rpm: Double,
+        boostSpec: Double?,
+        boostAct: Double?,
+        n75: Double?,
+        driverWish: Double?,
+        torqueLim: Double?,
+        smokeLim: Double?,
+        mafAct: Double?
+    ) {
+        val writer = currentWriter ?: return
+        if (!isLogging) return
+
+        if (boostAct != null && boostAct > peakBoostMbar) peakBoostMbar = boostAct
+        if (rpm > peakRpm) peakRpm = rpm
+
+        val relSec = (timestampMs - startTimestampMs) / 1000.0
+        val bSpecStr = if (boostSpec != null) String.format(Locale.US, "%.0f", boostSpec) else ""
+        val bActStr = if (boostAct != null) String.format(Locale.US, "%.0f", boostAct) else ""
+        val n75Str = if (n75 != null) String.format(Locale.US, "%.1f", n75) else ""
+        val dwStr = if (driverWish != null) String.format(Locale.US, "%.1f", driverWish) else ""
+        val tlStr = if (torqueLim != null) String.format(Locale.US, "%.1f", torqueLim) else ""
+        val slStr = if (smokeLim != null) String.format(Locale.US, "%.1f", smokeLim) else ""
+        val mafStr = if (mafAct != null) String.format(Locale.US, "%.2f", mafAct) else ""
+
+        val line = String.format(
+            Locale.US,
+            "%d,%.3f,%s,%.0f,%s,%s,%s,%s,%s,%s,%s\n",
+            timestampMs, relSec, groupType, rpm, bSpecStr, bActStr, n75Str, dwStr, tlStr, slStr, mafStr
+        )
+
+        try {
+            writer.write(line)
+            sampleCount++
+            if (sampleCount % 5 == 0) {
+                writer.flush()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun logSample(
@@ -77,19 +196,27 @@ class CsvLogger(private val context: Context) {
         if (boostActual > peakBoostMbar) peakBoostMbar = boostActual
         if (rpm > peakRpm) peakRpm = rpm
 
+        val reqStr = if (boostSpecified.isNaN() || boostSpecified < 0.0) "N/A" else String.format(Locale.US, "%.0f", boostSpecified)
+        val actStr = if (boostActual.isNaN() || boostActual < 0.0) "N/A" else String.format(Locale.US, "%.0f", boostActual)
+        val n75Str = if (n75Duty.isNaN() || n75Duty < 0.0) "N/A" else String.format(Locale.US, "%.1f", n75Duty)
+        val dwStr = if (driverWishIq.isNaN() || driverWishIq < 0.0) "N/A" else String.format(Locale.US, "%.1f", driverWishIq)
+        val tlStr = if (torqueLimitIq.isNaN() || torqueLimitIq < 0.0) "N/A" else String.format(Locale.US, "%.1f", torqueLimitIq)
+        val slStr = if (smokeLimitIq.isNaN() || smokeLimitIq < 0.0) "N/A" else String.format(Locale.US, "%.1f", smokeLimitIq)
+        val mafStr = if (mafActual.isNaN() || mafActual < 0.0) "N/A" else String.format(Locale.US, "%.2f", mafActual)
+
         val line = String.format(
             Locale.US,
-            "%d,%.3f,%.0f,%.0f,%.0f,%.1f,%.1f,%.1f,%.1f,%.1f\n",
+            "%d,%.3f,%.0f,%s,%s,%s,%s,%s,%s,%s\n",
             now,
             relSec,
             rpm,
-            boostSpecified,
-            boostActual,
-            n75Duty,
-            driverWishIq,
-            torqueLimitIq,
-            smokeLimitIq,
-            mafActual
+            reqStr,
+            actStr,
+            n75Str,
+            dwStr,
+            tlStr,
+            slStr,
+            mafStr
         )
 
         try {

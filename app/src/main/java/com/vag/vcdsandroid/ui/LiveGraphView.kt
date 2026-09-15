@@ -59,6 +59,24 @@ class LiveGraphView @JvmOverloads constructor(
         style = Paint.Style.STROKE
     }
 
+    private val paintLegendReq = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#39C5CF")
+        textSize = 22f
+        style = Paint.Style.FILL
+    }
+
+    private val paintLegendAct = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#3FB950")
+        textSize = 22f
+        style = Paint.Style.FILL
+    }
+
+    private val paintLegendN75 = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = Color.parseColor("#F0883E")
+        textSize = 22f
+        style = Paint.Style.FILL
+    }
+
     private val pathBoostReq = Path()
     private val pathBoostAct = Path()
     private val pathN75 = Path()
@@ -121,34 +139,59 @@ class LiveGraphView @JvmOverloads constructor(
         val actList = boostActHistory.toList()
         val n75List = n75History.toList()
 
+        val hasValidReq = reqList.any { it > 0f }
+        val hasValidAct = actList.any { it > 0f }
+        val hasValidN75 = n75List.any { it > 0f }
+
+        var firstReq = true
+        var firstAct = true
+        var firstN75 = true
+
         for (i in 0 until count) {
             val x = startOffset + i * stepX
 
-            // Boost Y: 900..2700 mbar mapped to h..0
-            val yReq = (h - ((reqList[i] - minBoost) / boostRange) * h).coerceIn(0f, h)
-            val yAct = (h - ((actList[i] - minBoost) / boostRange) * h).coerceIn(0f, h)
+            if (hasValidAct) {
+                val act = actList[i]
+                val yAct = (h - ((act - minBoost) / boostRange) * h).coerceIn(0f, h)
+                if (firstAct) {
+                    pathBoostAct.moveTo(x, yAct)
+                    firstAct = false
+                } else {
+                    pathBoostAct.lineTo(x, yAct)
+                }
+            }
 
-            // N75 Y: 0..100% mapped to h..0
-            val yN75 = (h - (n75List[i] / 100f) * h).coerceIn(0f, h)
+            if (hasValidReq) {
+                val req = reqList[i]
+                val yReq = (h - ((req - minBoost) / boostRange) * h).coerceIn(0f, h)
+                if (firstReq) {
+                    pathBoostReq.moveTo(x, yReq)
+                    firstReq = false
+                } else {
+                    pathBoostReq.lineTo(x, yReq)
+                }
+            }
 
-            if (i == 0) {
-                pathBoostReq.moveTo(x, yReq)
-                pathBoostAct.moveTo(x, yAct)
-                pathN75.moveTo(x, yN75)
-            } else {
-                pathBoostReq.lineTo(x, yReq)
-                pathBoostAct.lineTo(x, yAct)
-                pathN75.lineTo(x, yN75)
+            if (hasValidN75) {
+                val n75 = n75List[i]
+                val yN75 = (h - (n75 / 100f) * h).coerceIn(0f, h)
+                if (firstN75) {
+                    pathN75.moveTo(x, yN75)
+                    firstN75 = false
+                } else {
+                    pathN75.lineTo(x, yN75)
+                }
             }
         }
 
-        canvas.drawPath(pathBoostReq, paintBoostReq)
-        canvas.drawPath(pathBoostAct, paintBoostAct)
-        canvas.drawPath(pathN75, paintN75)
+        if (hasValidReq) canvas.drawPath(pathBoostReq, paintBoostReq)
+        if (hasValidAct) canvas.drawPath(pathBoostAct, paintBoostAct)
+        if (hasValidN75) canvas.drawPath(pathN75, paintN75)
 
         // Legend
-        canvas.drawText("— Req Boost", w - 380f, 36f, paintBoostReq)
-        canvas.drawText("— Act Boost", w - 240f, 36f, paintBoostAct)
-        canvas.drawText("— N75 %", w - 100f, 36f, paintN75)
+        val legendY = 32f
+        if (hasValidReq) canvas.drawText("● Target", w - 340f, legendY, paintLegendReq)
+        if (hasValidAct) canvas.drawText("● MAP (abs)", w - 220f, legendY, paintLegendAct)
+        if (hasValidN75) canvas.drawText("● N75 %", w - 90f, legendY, paintLegendN75)
     }
 }
