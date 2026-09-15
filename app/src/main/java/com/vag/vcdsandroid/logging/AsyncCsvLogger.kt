@@ -50,11 +50,17 @@ sealed class AsyncLogRecord {
         val pairValid: Boolean,
         val invalidReason: String,
         val mafGs: Double?,
+        val mafAgeMs: Long? = null,
         val speedKmh: Double? = null,
+        val speedAgeMs: Long? = null,
         val loadPct: Double? = null,
+        val loadAgeMs: Long? = null,
         val coolantC: Double? = null,
+        val coolantAgeMs: Long? = null,
         val iatC: Double? = null,
+        val iatAgeMs: Long? = null,
         val voltageV: Double? = null,
+        val voltageAgeMs: Long? = null,
         val latencyMs: Long
     ) : AsyncLogRecord()
 }
@@ -78,9 +84,13 @@ class AsyncCsvLogger(private val context: Context) {
 
     private val rawSeq = AtomicLong(0L)
     private val pairSeq = AtomicLong(0L)
+    private val rawRowsActuallyWritten = AtomicLong(0L)
+    private val pairRowsActuallyWritten = AtomicLong(0L)
     private val droppedCount = AtomicLong(0L)
     private val pendingQueue = java.util.concurrent.atomic.AtomicInteger(0)
 
+    var peakMapMbarAbs: Double = 0.0
+        private set
     var peakBoostMbar: Double = 0.0
         private set
     var peakRpm: Double = 0.0
@@ -96,7 +106,10 @@ class AsyncCsvLogger(private val context: Context) {
         get() = pendingQueue.get().coerceAtLeast(0)
 
     val rowsWritten: Long
-        get() = pairSeq.get()
+        get() = pairRowsActuallyWritten.get()
+
+    val rawRowsWritten: Long
+        get() = rawRowsActuallyWritten.get()
 
     val fileSizeBytes: Long
         get() = (rawFile?.length() ?: 0L) + (pairFile?.length() ?: 0L)
@@ -135,7 +148,7 @@ class AsyncCsvLogger(private val context: Context) {
         rWriter.flush()
 
         val pWriter = BufferedWriter(FileWriter(pFile, false), 16384)
-        pWriter.write("pair_seq,timestamp_utc_ms,mono_ns,rpm,map_mbar_abs,baro_mbar,baro_source,boost_mbar,boost_bar,dt_map_rpm_ms,pair_valid,invalid_reason,maf_g_s,speed_kmh,load_pct,coolant_c,iat_c,voltage_v,latency_ms\n")
+        pWriter.write("pair_seq,timestamp_utc_ms,mono_ns,rpm,map_mbar_abs,baro_mbar,baro_source,boost_mbar,boost_bar,dt_map_rpm_ms,pair_valid,invalid_reason,maf_g_s,maf_age_ms,speed_kmh,speed_age_ms,load_pct,load_age_ms,coolant_c,coolant_age_ms,iat_c,iat_age_ms,voltage_v,voltage_age_ms,latency_ms\n")
         pWriter.flush()
 
         rawFile = rFile
@@ -145,8 +158,11 @@ class AsyncCsvLogger(private val context: Context) {
 
         rawSeq.set(0L)
         pairSeq.set(0L)
+        rawRowsActuallyWritten.set(0L)
+        pairRowsActuallyWritten.set(0L)
         droppedCount.set(0L)
         pendingQueue.set(0)
+        peakMapMbarAbs = 0.0
         peakBoostMbar = 0.0
         peakRpm = 0.0
 
@@ -176,20 +192,27 @@ class AsyncCsvLogger(private val context: Context) {
                             val sanitizedRaw = "\"" + record.raw.replace("\r", " ").replace("\n", " ").replace("\"", "\"\"").trim() + "\""
                             val line = "${record.seq},${record.utcMs},${record.monoNs},${record.pid},$valStr,${record.unit},$sanitizedRaw,${record.latencyMs},${record.status}\n"
                             localRawWriter.write(line)
+                            rawRowsActuallyWritten.incrementAndGet()
                         }
                         is AsyncLogRecord.TurboPair -> {
                             val bMbarStr = if (record.boostMbar != null) String.format(Locale.US, "%.1f", record.boostMbar) else ""
                             val bBarStr = if (record.boostBar != null) String.format(Locale.US, "%.3f", record.boostBar) else ""
                             val baroStr = if (record.baroMbar != null) String.format(Locale.US, "%.1f", record.baroMbar) else ""
                             val mafStr = if (record.mafGs != null) String.format(Locale.US, "%.2f", record.mafGs) else ""
+                            val mafAgeStr = record.mafAgeMs?.toString() ?: ""
                             val speedStr = if (record.speedKmh != null) String.format(Locale.US, "%.0f", record.speedKmh) else ""
+                            val speedAgeStr = record.speedAgeMs?.toString() ?: ""
                             val loadStr = if (record.loadPct != null) String.format(Locale.US, "%.1f", record.loadPct) else ""
+                            val loadAgeStr = record.loadAgeMs?.toString() ?: ""
                             val coolantStr = if (record.coolantC != null) String.format(Locale.US, "%.0f", record.coolantC) else ""
+                            val coolantAgeStr = record.coolantAgeMs?.toString() ?: ""
                             val iatStr = if (record.iatC != null) String.format(Locale.US, "%.0f", record.iatC) else ""
+                            val iatAgeStr = record.iatAgeMs?.toString() ?: ""
                             val voltStr = if (record.voltageV != null) String.format(Locale.US, "%.1f", record.voltageV) else ""
+                            val voltAgeStr = record.voltageAgeMs?.toString() ?: ""
                             val line = String.format(
                                 Locale.US,
-                                "%d,%d,%d,%.0f,%.1f,%s,%s,%s,%s,%d,%b,%s,%s,%s,%s,%s,%s,%s,%d\n",
+                                "%d,%d,%d,%.0f,%.1f,%s,%s,%s,%s,%d,%b,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%d\n",
                                 record.seq,
                                 record.utcMs,
                                 record.monoNs,
@@ -203,14 +226,21 @@ class AsyncCsvLogger(private val context: Context) {
                                 record.pairValid,
                                 record.invalidReason,
                                 mafStr,
+                                mafAgeStr,
                                 speedStr,
+                                speedAgeStr,
                                 loadStr,
+                                loadAgeStr,
                                 coolantStr,
+                                coolantAgeStr,
                                 iatStr,
+                                iatAgeStr,
                                 voltStr,
+                                voltAgeStr,
                                 record.latencyMs
                             )
                             localPairWriter.write(line)
+                            pairRowsActuallyWritten.incrementAndGet()
                         }
                     }
                     itemsWritten++
@@ -285,26 +315,33 @@ class AsyncCsvLogger(private val context: Context) {
         pairValid: Boolean,
         invalidReason: String = "",
         mafGs: Double? = null,
+        mafAgeMs: Long? = null,
         speedKmh: Double? = null,
+        speedAgeMs: Long? = null,
         loadPct: Double? = null,
+        loadAgeMs: Long? = null,
         coolantC: Double? = null,
+        coolantAgeMs: Long? = null,
         iatC: Double? = null,
+        iatAgeMs: Long? = null,
         voltageV: Double? = null,
+        voltageAgeMs: Long? = null,
         latencyMs: Long = 0L,
         monoNs: Long = 0L
     ) {
         if (!isLoggingActive.get()) return
         val chan = channel ?: return
 
-        if (mapMbarAbs > peakBoostMbar) peakBoostMbar = mapMbarAbs
+        val boostMbar = if (baroMbar != null && baroMbar > 0.0) mapMbarAbs - baroMbar else null
+        val boostBar = if (boostMbar != null) boostMbar / 1000.0 else null
+
+        if (mapMbarAbs > peakMapMbarAbs) peakMapMbarAbs = mapMbarAbs
+        if (boostMbar != null && boostMbar > peakBoostMbar) peakBoostMbar = boostMbar
         if (rpm > peakRpm) peakRpm = rpm
 
         val seq = pairSeq.incrementAndGet()
         val utcMs = System.currentTimeMillis()
         val mNs = if (monoNs > 0L) monoNs else SystemClock.elapsedRealtimeNanos()
-
-        val boostMbar = if (baroMbar != null && baroMbar > 0.0) mapMbarAbs - baroMbar else null
-        val boostBar = if (boostMbar != null) boostMbar / 1000.0 else null
 
         val record = AsyncLogRecord.TurboPair(
             seq = seq,
@@ -320,11 +357,17 @@ class AsyncCsvLogger(private val context: Context) {
             pairValid = pairValid,
             invalidReason = invalidReason,
             mafGs = mafGs,
+            mafAgeMs = mafAgeMs,
             speedKmh = speedKmh,
+            speedAgeMs = speedAgeMs,
             loadPct = loadPct,
+            loadAgeMs = loadAgeMs,
             coolantC = coolantC,
+            coolantAgeMs = coolantAgeMs,
             iatC = iatC,
+            iatAgeMs = iatAgeMs,
             voltageV = voltageV,
+            voltageAgeMs = voltageAgeMs,
             latencyMs = latencyMs
         )
 

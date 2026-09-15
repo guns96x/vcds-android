@@ -81,6 +81,18 @@ data class DiagnosticSample(
 
 class MainActivity : AppCompatActivity() {
 
+    private companion object {
+        const val TURBO_PID_TIMEOUT_MS = 450L
+        const val PREFLIGHT_PID_TIMEOUT_MS = 500L
+        const val TURBO_PAIR_MAX_DELTA_MS = 400L
+        const val ENGINE_OFF_RPM_MAX = 50.0
+        const val ENGINE_OFF_BARO_MIN_MBAR = 800.0
+        const val ENGINE_OFF_BARO_MAX_MBAR = 1100.0
+    }
+
+    private data class BaroReading(val valueMbar: Double?, val source: String)
+
+
     private lateinit var binding: ActivityMainBinding
     private lateinit var transport: UsbKwpTransport
     private lateinit var engine: Kwp2000DiagnosticEngine
@@ -229,6 +241,10 @@ class MainActivity : AppCompatActivity() {
         binding.btnCheckData.setOnClickListener {
             runPreFlightCheck()
         }
+        binding.btnCheckData.setOnLongClickListener {
+            runRpmStressTest()
+            true
+        }
 
         // Log toggle button
         binding.btnToggleLog.setOnClickListener {
@@ -368,6 +384,8 @@ class MainActivity : AppCompatActivity() {
         binding.tvStatus.text = "Connecting..."
         binding.tvSubStatus.text = "Opening RFCOMM to ${device.address}..."
         binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+        calibratedBaroMbar = null
+        calibratedBaroSource = "UNSET"
         binding.btnConnect.isEnabled = false
 
         lifecycleScope.launch {
@@ -389,6 +407,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performDisconnect() {
+        calibratedBaroMbar = null
+        calibratedBaroSource = "UNSET"
         stopPolling()
         if (asyncLogger.isLogging) {
             stopWotLog()
@@ -432,10 +452,53 @@ class MainActivity : AppCompatActivity() {
     // UNIFIED DATA WIRING: ELM RAW -> parser -> DiagnosticSample -> UI & CSV
     // =========================================================================
 
-    private fun onDiagnosticSampleReceived(sample: DiagnosticSample) {
+    private fun resolveBaro(): BaroReading {
+        val pidBaro = latestSamples["0133"]
+        if (pidBaro?.status == PidStatus.VALID && pidBaro.value != null) {
+            return BaroReading(pidBaro.value, "PID_0133")
+        }
+
+        if (calibratedBaroSource == "ENGINE_OFF_MAP" && calibratedBaroMbar != null) {
+            return BaroReading(calibratedBaroMbar, "ENGINE_OFF_MAP")
+        }
+
+        return BaroReading(null, "UNAVAILABLE")
+    }
+
+    private fun freshValue(pid: String, maxAgeMs: Long): Double? {
+        val s = latestSamples[pid] ?: return null
+        if (s.status != PidStatus.VALID || s.value == null) return null
+        return if (s.getAgeMs() <= maxAgeMs) s.value else null
+    }
+
+    private fun freshAge(pid: String, maxAgeMs: Long): Long? {
+        val s = latestSamples[pid] ?: return null
+        if (s.status != PidStatus.VALID || s.value == null) return null
+        val age = s.getAgeMs()
+        return if (age <= maxAgeMs) age else null
+    }
+
+    private fun publishDiagnosticSample(sample: DiagnosticSample) {
         latestSamples[sample.pid] = sample
 
-        // 1. Log to Raw Event CSV immediately with exact same fields
+        // Capture engine-off MAP baseline automatically strictly when RPM <= 50
+        if (sample.pid == "010B" && sample.status == PidStatus.VALID && sample.value != null) {
+            val pidBaro = latestSamples["0133"]
+            val isBaroPidValid = pidBaro?.status == PidStatus.VALID && pidBaro.value != null
+            if (!isBaroPidValid) {
+                val rpmSample = latestSamples["010C"]
+                val rpmVal = rpmSample?.value
+                val isEngineOff = (rpmSample?.status == PidStatus.VALID) && (rpmVal != null) && (rpmVal <= ENGINE_OFF_RPM_MAX)
+                if (isEngineOff && sample.value in ENGINE_OFF_BARO_MIN_MBAR..ENGINE_OFF_BARO_MAX_MBAR) {
+                    calibratedBaroMbar = sample.value
+                    calibratedBaroSource = "ENGINE_OFF_MAP"
+                }
+            }
+        } else if (sample.pid == "0133" && sample.status == PidStatus.VALID && sample.value != null) {
+            calibratedBaroMbar = sample.value
+            calibratedBaroSource = "PID_0133"
+        }
+
         asyncLogger.logRawEvent(
             pid = sample.pid,
             value = sample.value,
@@ -446,11 +509,10 @@ class MainActivity : AppCompatActivity() {
             rxNanos = sample.monoNanos
         )
 
-        // 2. Direct UI widget update
-        updateWidgetForSample(sample)
-
-        // 3. RAW DEBUG collapsible update
-        updateRawDebug(sample)
+        lifecycleScope.launch(Dispatchers.Main.immediate) {
+            updateWidgetForSample(sample)
+            updateRawDebug(sample)
+        }
     }
 
     private fun updateWidgetForSample(sample: DiagnosticSample) {
@@ -478,19 +540,16 @@ class MainActivity : AppCompatActivity() {
                 binding.tvMapStatusAge.text = "${effStatus.name} | ${sample.latencyMs}ms | ${ageMs}ms"
                 binding.tvMapStatusAge.setTextColor(color)
 
-                // Update Hero Boost
-                val baroSample = latestSamples["0133"]
-                val baroVal = baroSample?.value ?: calibratedBaroMbar ?: 1000.0
-                if (sample.status == PidStatus.VALID && sample.value != null) {
-                    val boostMbar = sample.value - baroVal
-                    val boostBar = boostMbar / 1000.0
-                    binding.tvHeroBoost.text = String.format(Locale.US, "%.2f bar", boostBar)
-                    val baroLabel = if (baroSample?.status == PidStatus.VALID) "0133" else "CALIB"
-                    binding.tvBoostStatusAge.text = "OK | $baroLabel | Rel"
+                // Update Hero Boost (zero fallback)
+                val baro = resolveBaro()
+                if (sample.status == PidStatus.VALID && sample.value != null && baro.valueMbar != null) {
+                    val boostMbar = sample.value - baro.valueMbar
+                    binding.tvHeroBoost.text = String.format(Locale.US, "%.2f bar", boostMbar / 1000.0)
+                    binding.tvBoostStatusAge.text = "OK | ${baro.source} | Rel"
                     binding.tvBoostStatusAge.setTextColor(Color.parseColor("#3FB950"))
                 } else {
                     binding.tvHeroBoost.text = "--- bar"
-                    binding.tvBoostStatusAge.text = "IDLE | Rel Gauge"
+                    binding.tvBoostStatusAge.text = "N/A | BARO ${baro.source}"
                     binding.tvBoostStatusAge.setTextColor(Color.parseColor("#8B949E"))
                 }
             }
@@ -522,13 +581,20 @@ class MainActivity : AppCompatActivity() {
                 binding.tvLoadStatusAge.setTextColor(color)
             }
             "0133" -> {
+                val baro = resolveBaro()
                 if (sample.status == PidStatus.VALID && sample.value != null) {
                     binding.tvBaroVal.text = String.format(Locale.US, "%.0f mbar", sample.value)
+                    binding.tvBaroStatusAge.text = "${effStatus.name} · ${sample.latencyMs}ms"
+                    binding.tvBaroStatusAge.setTextColor(color)
+                } else if (baro.valueMbar != null) {
+                    binding.tvBaroVal.text = String.format(Locale.US, "%.0f mbar", baro.valueMbar)
+                    binding.tvBaroStatusAge.text = "CALIB · ${baro.source}"
+                    binding.tvBaroStatusAge.setTextColor(Color.parseColor("#3FB950"))
                 } else {
                     binding.tvBaroVal.text = "--- mbar"
+                    binding.tvBaroStatusAge.text = "${effStatus.name} · UNAVAIL"
+                    binding.tvBaroStatusAge.setTextColor(color)
                 }
-                binding.tvBaroStatusAge.text = "${effStatus.name} · ${sample.latencyMs}ms"
-                binding.tvBaroStatusAge.setTextColor(color)
             }
         }
     }
@@ -592,11 +658,21 @@ class MainActivity : AppCompatActivity() {
             binding.tvLoadStatusAge.text = "${eff.name} · ${age}ms"
             binding.tvLoadStatusAge.setTextColor(getStatusColor(eff))
         }
-        latestSamples["0133"]?.let { s ->
-            val eff = s.getEffectiveStatus(now)
-            val age = s.getAgeMs(now)
+        val baro = resolveBaro()
+        val baroSample = latestSamples["0133"]
+        if (baroSample?.status == PidStatus.VALID && baroSample.value != null) {
+            val eff = baroSample.getEffectiveStatus(now)
+            val age = baroSample.getAgeMs(now)
             binding.tvBaroStatusAge.text = "${eff.name} · ${age}ms"
             binding.tvBaroStatusAge.setTextColor(getStatusColor(eff))
+        } else if (baro.valueMbar != null) {
+            binding.tvBaroVal.text = String.format(Locale.US, "%.0f mbar", baro.valueMbar)
+            binding.tvBaroStatusAge.text = "CALIB · ${baro.source}"
+            binding.tvBaroStatusAge.setTextColor(Color.parseColor("#3FB950"))
+        } else {
+            binding.tvBaroVal.text = "--- mbar"
+            binding.tvBaroStatusAge.text = "UNAVAILABLE"
+            binding.tvBaroStatusAge.setTextColor(Color.parseColor("#8B949E"))
         }
 
         // Bus Stats compact line
@@ -630,7 +706,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================================================================
-    // PRE-FLIGHT SELF CHECK (1.5 - 2s Probe across all 9 PIDs)
+    // PRE-FLIGHT SELF CHECK (Deterministic Probe across all 9 PIDs)
     // =========================================================================
 
     private fun runPreFlightCheck() {
@@ -639,7 +715,9 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        preFlightJob?.cancel()
+        val wasPolling = pollingJob?.isActive == true
+        stopPolling()
+
         preFlightJob = lifecycleScope.launch {
             binding.btnCheckData.isEnabled = false
             binding.tvPreFlightStatus.text = "Pre-flight: Running test sequence..."
@@ -650,7 +728,9 @@ class MainActivity : AppCompatActivity() {
 
             for (pid in pidsToTest) {
                 binding.tvPreFlightStatus.text = "Pre-flight: Testing $pid..."
-                val resp = elmEngine.transport.sendCommand(pid, 300L)
+                val resp = withContext(Dispatchers.IO) {
+                    elmEngine.transport.sendCommand(pid, PREFLIGHT_PID_TIMEOUT_MS)
+                }
                 val dec = when (pid) {
                     "010C" -> PidDecoder.decodeRpm(resp.raw, resp.txNanos, resp.rxNanos, resp.elapsedMs, resp.timedOut)
                     "010B" -> PidDecoder.decodeMap(resp.raw, resp.txNanos, resp.rxNanos, resp.elapsedMs, resp.timedOut)
@@ -676,7 +756,7 @@ class MainActivity : AppCompatActivity() {
                         monoNanos = if (dec.rxNanos > 0L) dec.rxNanos else SystemClock.elapsedRealtimeNanos(),
                         rawResponse = dec.rawString
                     )
-                    onDiagnosticSampleReceived(sample)
+                    publishDiagnosticSample(sample)
                     if (dec.status == PidStatus.VALID) validCount++
                 }
                 delay(40)
@@ -699,6 +779,111 @@ class MainActivity : AppCompatActivity() {
             }
 
             binding.btnCheckData.isEnabled = true
+
+            if (wasPolling && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
+                startTurboFastPolling()
+            }
+        }
+    }
+
+    private fun runRpmStressTest() {
+        if (elmEngine.state != DiagState.CONNECTED && elmEngine.state != DiagState.POLLING) {
+            Toast.makeText(this, "Connect ELM327 Bluetooth first!", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val wasPolling = pollingJob?.isActive == true
+        stopPolling()
+
+        lifecycleScope.launch {
+            binding.btnCheckData.isEnabled = false
+            binding.tvPreFlightStatus.text = "RPM STRESS TEST: Running 10-second burst..."
+            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
+
+            val latencies = mutableListOf<Long>()
+            var totalReqs = 0
+            var validCount = 0
+            var timeoutCount = 0
+            var noDataCount = 0
+            var otherErrorCount = 0
+            var minRpm: Double? = null
+            var maxRpm: Double? = null
+
+            val startTime = SystemClock.elapsedRealtime()
+            val durationMs = 10_000L
+
+            withContext(Dispatchers.IO) {
+                while (SystemClock.elapsedRealtime() - startTime < durationMs) {
+                    val resp = elmEngine.transport.sendCommand("010C", TURBO_PID_TIMEOUT_MS)
+                    totalReqs++
+                    latencies.add(resp.elapsedMs)
+                    if (resp.timedOut) {
+                        timeoutCount++
+                    }
+
+                    val dec = PidDecoder.decodeRpm(resp.raw, resp.txNanos, resp.rxNanos, resp.elapsedMs, resp.timedOut)
+                    val sample = DiagnosticSample(
+                        pid = "010C",
+                        name = "RPM",
+                        value = dec.value,
+                        formattedValue = dec.formatted,
+                        unit = "RPM",
+                        status = dec.status,
+                        latencyMs = resp.elapsedMs,
+                        timestampUtcMs = System.currentTimeMillis(),
+                        monoNanos = if (resp.rxNanos > 0L) resp.rxNanos else SystemClock.elapsedRealtimeNanos(),
+                        rawResponse = resp.raw
+                    )
+                    publishDiagnosticSample(sample)
+
+                    when (dec.status) {
+                        PidStatus.VALID -> {
+                            validCount++
+                            val r = dec.value ?: 0.0
+                            minRpm = if (minRpm == null) r else minOf(minRpm!!, r)
+                            maxRpm = if (maxRpm == null) r else maxOf(maxRpm!!, r)
+                        }
+                        PidStatus.NO_DATA -> noDataCount++
+                        PidStatus.TIMEOUT -> { /* counted in timeoutCount */ }
+                        else -> otherErrorCount++
+                    }
+                }
+            }
+
+            val actualElapsedSec = (SystemClock.elapsedRealtime() - startTime) / 1000.0
+            val reqPerSec = if (actualElapsedSec > 0) totalReqs / actualElapsedSec else 0.0
+            val validHz = if (actualElapsedSec > 0) validCount / actualElapsedSec else 0.0
+
+            val sortedLatencies = latencies.sorted()
+            val meanLatency = if (latencies.isNotEmpty()) latencies.average() else 0.0
+            val medianLatency = if (sortedLatencies.isNotEmpty()) sortedLatencies[sortedLatencies.size / 2] else 0L
+            val p95Idx = if (sortedLatencies.isNotEmpty()) (sortedLatencies.size * 0.95).toInt().coerceAtMost(sortedLatencies.size - 1) else 0
+            val p95Latency = if (sortedLatencies.isNotEmpty()) sortedLatencies[p95Idx] else 0L
+
+            val summary = """
+                Duration: ${String.format(Locale.US, "%.1f", actualElapsedSec)} s
+                Total Reqs: $totalReqs (${String.format(Locale.US, "%.1f", reqPerSec)} req/s)
+                Valid Samples: $validCount (${String.format(Locale.US, "%.1f", validHz)} Hz)
+                Timeouts: $timeoutCount | NO DATA: $noDataCount | Other Err: $otherErrorCount
+                RPM Range: ${minRpm?.let { String.format(Locale.US, "%.0f", it) } ?: "---"} - ${maxRpm?.let { String.format(Locale.US, "%.0f", it) } ?: "---"} RPM
+                Latency: Mean: ${String.format(Locale.US, "%.1f", meanLatency)} ms | Median: $medianLatency ms | P95: $p95Latency ms
+            """.trimIndent()
+
+            Log.i("ELM_TURBO_STRESS", "\n=== 10s RPM STRESS TEST RESULT ===\n$summary\n==================================")
+
+            binding.tvPreFlightStatus.text = "Stress Test: ${String.format(Locale.US, "%.1f", validHz)} Hz | Lat: ${medianLatency}ms"
+            binding.tvPreFlightStatus.setTextColor(if (validCount > 0) Color.parseColor("#3FB950") else Color.parseColor("#F85149"))
+            binding.btnCheckData.isEnabled = true
+
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("10s RPM Stress Test Results")
+                .setMessage(summary)
+                .setPositiveButton("OK", null)
+                .show()
+
+            if (wasPolling && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
+                startTurboFastPolling()
+            }
         }
     }
 
@@ -718,150 +903,160 @@ class MainActivity : AppCompatActivity() {
     }
 
     // =========================================================================
-    // TURBO FAST POLLING LOOP (Weighted Round-Robin with Exact Parity)
+    // TURBO FAST POLLING LOOP (Deterministic Schedule with Exact Parity)
     // =========================================================================
 
     private fun startTurboFastPolling() {
         stopPolling()
         pollingJob = lifecycleScope.launch(Dispatchers.IO) {
             var step = 0
-            var auxStep = 0
+            val slowPids = listOf("0105", "010F", "0142", "0133")
+            var slowPidIndex = 0
+            var lastSlowPidCheck = SystemClock.elapsedRealtime()
             windowStart = SystemClock.elapsedRealtime()
 
             while (isActive && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
                 when (step) {
-                    0, 1, 3, 5, 7 -> {
+                    0, 1, 2, 3, 5, 7 -> {
                         // High-Priority RPM (010C) then MAP (010B) pair
-                        val rpmResp = elmEngine.transport.sendCommand("010C", 200L)
+                        val rpmResp = elmEngine.transport.sendCommand("010C", TURBO_PID_TIMEOUT_MS)
                         windowTotalReqs++
-                        windowRpmCount++
                         windowLatencySum += rpmResp.elapsedMs
                         val rpmDec = PidDecoder.decodeRpm(rpmResp.raw, rpmResp.txNanos, rpmResp.rxNanos, rpmResp.elapsedMs, rpmResp.timedOut)
-                        val rpmSample = DiagnosticSample("010C", "RPM", rpmDec.value, rpmDec.formatted, "RPM", rpmDec.status, rpmResp.elapsedMs, System.currentTimeMillis(), if (rpmResp.rxNanos > 0L) rpmResp.rxNanos else SystemClock.elapsedRealtimeNanos(), rpmResp.raw)
-                        withContext(Dispatchers.Main) {
-                            onDiagnosticSampleReceived(rpmSample)
-                        }
+                        if (rpmDec.status == PidStatus.VALID) windowRpmCount++
+                        val rpmSample = DiagnosticSample(
+                            "010C", "RPM", rpmDec.value, rpmDec.formatted, "RPM",
+                            rpmDec.status, rpmResp.elapsedMs, System.currentTimeMillis(),
+                            if (rpmResp.rxNanos > 0L) rpmResp.rxNanos else SystemClock.elapsedRealtimeNanos(),
+                            rpmResp.raw
+                        )
+                        publishDiagnosticSample(rpmSample)
 
-                        val mapResp = elmEngine.transport.sendCommand("010B", 200L)
+                        val mapResp = elmEngine.transport.sendCommand("010B", TURBO_PID_TIMEOUT_MS)
                         windowTotalReqs++
-                        windowMapCount++
                         windowLatencySum += mapResp.elapsedMs
                         val mapDec = PidDecoder.decodeMap(mapResp.raw, mapResp.txNanos, mapResp.rxNanos, mapResp.elapsedMs, mapResp.timedOut)
-                        val mapSample = DiagnosticSample("010B", "MAP", mapDec.value, mapDec.formatted, "mbar", mapDec.status, mapResp.elapsedMs, System.currentTimeMillis(), if (mapResp.rxNanos > 0L) mapResp.rxNanos else SystemClock.elapsedRealtimeNanos(), mapResp.raw)
-                        withContext(Dispatchers.Main) {
-                            onDiagnosticSampleReceived(mapSample)
+                        if (mapDec.status == PidStatus.VALID) windowMapCount++
+                        val mapSample = DiagnosticSample(
+                            "010B", "MAP", mapDec.value, mapDec.formatted, "mbar",
+                            mapDec.status, mapResp.elapsedMs, System.currentTimeMillis(),
+                            if (mapResp.rxNanos > 0L) mapResp.rxNanos else SystemClock.elapsedRealtimeNanos(),
+                            mapResp.raw
+                        )
+                        publishDiagnosticSample(mapSample)
 
-                            // Synchronized Turbo Pair CSV writing
-                            if (rpmSample.status == PidStatus.VALID && mapSample.status == PidStatus.VALID) {
-                                val dtMs = (mapSample.monoNanos - rpmSample.monoNanos) / 1_000_000
-                                val pairValid = dtMs in 0..150
-                                val baroSample = latestSamples["0133"]
-                                val baroVal = baroSample?.value ?: calibratedBaroMbar ?: 1000.0
-                                if (asyncLogger.isLogging) {
-                                    asyncLogger.logTurboPair(
-                                        rpm = rpmSample.value ?: 0.0,
-                                        mapMbarAbs = mapSample.value ?: 0.0,
-                                        baroMbar = baroVal,
-                                        baroSource = if (baroSample?.status == PidStatus.VALID) "0133" else "CALIB",
-                                        dtMapRpmMs = dtMs,
-                                        pairValid = pairValid,
-                                        invalidReason = if (pairValid) "" else "dt_jitter_${dtMs}ms",
-                                        mafGs = latestSamples["0110"]?.value,
-                                        speedKmh = latestSamples["010D"]?.value,
-                                        loadPct = latestSamples["0104"]?.value,
-                                        coolantC = latestSamples["0105"]?.value,
-                                        iatC = latestSamples["010F"]?.value,
-                                        voltageV = latestSamples["0142"]?.value,
-                                        latencyMs = rpmSample.latencyMs + mapSample.latencyMs,
-                                        monoNs = mapSample.monoNanos
-                                    )
-                                }
+                        // Synchronized Turbo Pair CSV writing
+                        if (rpmSample.status == PidStatus.VALID && mapSample.status == PidStatus.VALID) {
+                            val dtMs = (mapSample.monoNanos - rpmSample.monoNanos) / 1_000_000
+                            val pairValid = dtMs in 0..TURBO_PAIR_MAX_DELTA_MS
+                            val baro = resolveBaro()
+                            if (asyncLogger.isLogging) {
+                                asyncLogger.logTurboPair(
+                                    rpm = rpmSample.value ?: 0.0,
+                                    mapMbarAbs = mapSample.value ?: 0.0,
+                                    baroMbar = baro.valueMbar,
+                                    baroSource = baro.source,
+                                    dtMapRpmMs = dtMs,
+                                    pairValid = pairValid,
+                                    invalidReason = if (pairValid) "" else "dt_jitter_${dtMs}ms",
+                                    mafGs = freshValue("0110", 1500L),
+                                    mafAgeMs = freshAge("0110", 1500L),
+                                    speedKmh = freshValue("010D", 2000L),
+                                    speedAgeMs = freshAge("010D", 2000L),
+                                    loadPct = freshValue("0104", 2000L),
+                                    loadAgeMs = freshAge("0104", 2000L),
+                                    coolantC = freshValue("0105", 10000L),
+                                    coolantAgeMs = freshAge("0105", 10000L),
+                                    iatC = freshValue("010F", 10000L),
+                                    iatAgeMs = freshAge("010F", 10000L),
+                                    voltageV = freshValue("0142", 10000L),
+                                    voltageAgeMs = freshAge("0142", 10000L),
+                                    latencyMs = rpmSample.latencyMs + mapSample.latencyMs,
+                                    monoNs = mapSample.monoNanos
+                                )
                             }
                         }
                     }
-                    2 -> {
+                    4 -> {
                         // MAF (0110)
-                        val mafResp = elmEngine.transport.sendCommand("0110", 200L)
+                        val mafResp = elmEngine.transport.sendCommand("0110", TURBO_PID_TIMEOUT_MS)
                         windowTotalReqs++
-                        windowMafCount++
                         windowLatencySum += mafResp.elapsedMs
                         val mafDec = PidDecoder.decodeMaf(mafResp.raw, mafResp.txNanos, mafResp.rxNanos, mafResp.elapsedMs, mafResp.timedOut)
+                        if (mafDec.status == PidStatus.VALID) windowMafCount++
                         val mafSample = DiagnosticSample("0110", "MAF", mafDec.value, mafDec.formatted, "g/s", mafDec.status, mafResp.elapsedMs, System.currentTimeMillis(), if (mafResp.rxNanos > 0L) mafResp.rxNanos else SystemClock.elapsedRealtimeNanos(), mafResp.raw)
-                        withContext(Dispatchers.Main) {
-                            onDiagnosticSampleReceived(mafSample)
-                        }
+                        publishDiagnosticSample(mafSample)
                     }
-                    4 -> {
+                    6 -> {
                         // Speed (010D)
-                        val spdResp = elmEngine.transport.sendCommand("010D", 200L)
+                        val spdResp = elmEngine.transport.sendCommand("010D", TURBO_PID_TIMEOUT_MS)
                         windowTotalReqs++
                         windowLatencySum += spdResp.elapsedMs
                         val spdDec = PidDecoder.decodeSpeed(spdResp.raw, spdResp.txNanos, spdResp.rxNanos, spdResp.elapsedMs, spdResp.timedOut)
                         val spdSample = DiagnosticSample("010D", "Speed", spdDec.value, spdDec.formatted, "km/h", spdDec.status, spdResp.elapsedMs, System.currentTimeMillis(), if (spdResp.rxNanos > 0L) spdResp.rxNanos else SystemClock.elapsedRealtimeNanos(), spdResp.raw)
-                        withContext(Dispatchers.Main) {
-                            onDiagnosticSampleReceived(spdSample)
-                        }
+                        publishDiagnosticSample(spdSample)
                     }
-                    6 -> {
+                    8 -> {
                         // Load (0104)
-                        val lodResp = elmEngine.transport.sendCommand("0104", 200L)
+                        val lodResp = elmEngine.transport.sendCommand("0104", TURBO_PID_TIMEOUT_MS)
                         windowTotalReqs++
                         windowLatencySum += lodResp.elapsedMs
                         val lodDec = PidDecoder.decodeLoad(lodResp.raw, lodResp.txNanos, lodResp.rxNanos, lodResp.elapsedMs, lodResp.timedOut)
                         val lodSample = DiagnosticSample("0104", "Load", lodDec.value, lodDec.formatted, "%", lodDec.status, lodResp.elapsedMs, System.currentTimeMillis(), if (lodResp.rxNanos > 0L) lodResp.rxNanos else SystemClock.elapsedRealtimeNanos(), lodResp.raw)
-                        withContext(Dispatchers.Main) {
-                            onDiagnosticSampleReceived(lodSample)
-                        }
-                    }
-                    8 -> {
-                        // Aux Sensors
-                        when (auxStep % 4) {
-                            0 -> {
-                                val clnResp = elmEngine.transport.sendCommand("0105", 200L)
-                                windowTotalReqs++
-                                windowLatencySum += clnResp.elapsedMs
-                                val clnDec = PidDecoder.decodeCoolant(clnResp.raw, clnResp.txNanos, clnResp.rxNanos, clnResp.elapsedMs, clnResp.timedOut)
-                                val clnSample = DiagnosticSample("0105", "Coolant", clnDec.value, clnDec.formatted, "°C", clnDec.status, clnResp.elapsedMs, System.currentTimeMillis(), if (clnResp.rxNanos > 0L) clnResp.rxNanos else SystemClock.elapsedRealtimeNanos(), clnResp.raw)
-                                withContext(Dispatchers.Main) { onDiagnosticSampleReceived(clnSample) }
-                            }
-                            1 -> {
-                                val iatResp = elmEngine.transport.sendCommand("010F", 200L)
-                                windowTotalReqs++
-                                windowLatencySum += iatResp.elapsedMs
-                                val iatDec = PidDecoder.decodeIat(iatResp.raw, iatResp.txNanos, iatResp.rxNanos, iatResp.elapsedMs, iatResp.timedOut)
-                                val iatSample = DiagnosticSample("010F", "IAT", iatDec.value, iatDec.formatted, "°C", iatDec.status, iatResp.elapsedMs, System.currentTimeMillis(), if (iatResp.rxNanos > 0L) iatResp.rxNanos else SystemClock.elapsedRealtimeNanos(), iatResp.raw)
-                                withContext(Dispatchers.Main) { onDiagnosticSampleReceived(iatSample) }
-                            }
-                            2 -> {
-                                var vResp = elmEngine.transport.sendCommand("0142", 200L)
-                                windowTotalReqs++
-                                windowLatencySum += vResp.elapsedMs
-                                var vDec = PidDecoder.decodeVoltage(vResp.raw, vResp.txNanos, vResp.rxNanos, vResp.elapsedMs, vResp.timedOut)
-                                if (vDec.status != PidStatus.VALID) {
-                                    vResp = elmEngine.transport.sendCommand("ATRV", 200L)
-                                    vDec = PidDecoder.decodeVoltage(vResp.raw, vResp.txNanos, vResp.rxNanos, vResp.elapsedMs, vResp.timedOut)
-                                }
-                                val vSample = DiagnosticSample("0142", "Voltage", vDec.value, vDec.formatted, "V", vDec.status, vResp.elapsedMs, System.currentTimeMillis(), if (vResp.rxNanos > 0L) vResp.rxNanos else SystemClock.elapsedRealtimeNanos(), vResp.raw)
-                                withContext(Dispatchers.Main) { onDiagnosticSampleReceived(vSample) }
-                            }
-                            3 -> {
-                                val baroResp = elmEngine.transport.sendCommand("0133", 200L)
-                                windowTotalReqs++
-                                windowLatencySum += baroResp.elapsedMs
-                                val baroDec = PidDecoder.decodeBaro(baroResp.raw, baroResp.txNanos, baroResp.rxNanos, baroResp.elapsedMs, baroResp.timedOut)
-                                val baroSample = DiagnosticSample("0133", "BARO", baroDec.value, baroDec.formatted, "mbar", baroDec.status, baroResp.elapsedMs, System.currentTimeMillis(), if (baroResp.rxNanos > 0L) baroResp.rxNanos else SystemClock.elapsedRealtimeNanos(), baroResp.raw)
-                                if (baroDec.status == PidStatus.VALID && baroDec.value != null) {
-                                    calibratedBaroMbar = baroDec.value
-                                    calibratedBaroSource = "PID_0133"
-                                }
-                                withContext(Dispatchers.Main) { onDiagnosticSampleReceived(baroSample) }
-                            }
-                        }
-                        auxStep++
+                        publishDiagnosticSample(lodSample)
                     }
                 }
 
                 step = (step + 1) % 9
+
+                // Sparse slow timed reads: approximately one slow PID every 8 seconds
+                val nowMs = SystemClock.elapsedRealtime()
+                if (nowMs - lastSlowPidCheck >= 8000L) {
+                    lastSlowPidCheck = nowMs
+                    val slowPid = slowPids[slowPidIndex % slowPids.size]
+                    slowPidIndex++
+
+                    when (slowPid) {
+                        "0105" -> {
+                            val clnResp = elmEngine.transport.sendCommand("0105", TURBO_PID_TIMEOUT_MS)
+                            windowTotalReqs++
+                            windowLatencySum += clnResp.elapsedMs
+                            val clnDec = PidDecoder.decodeCoolant(clnResp.raw, clnResp.txNanos, clnResp.rxNanos, clnResp.elapsedMs, clnResp.timedOut)
+                            val clnSample = DiagnosticSample("0105", "Coolant", clnDec.value, clnDec.formatted, "°C", clnDec.status, clnResp.elapsedMs, System.currentTimeMillis(), if (clnResp.rxNanos > 0L) clnResp.rxNanos else SystemClock.elapsedRealtimeNanos(), clnResp.raw)
+                            publishDiagnosticSample(clnSample)
+                        }
+                        "010F" -> {
+                            val iatResp = elmEngine.transport.sendCommand("010F", TURBO_PID_TIMEOUT_MS)
+                            windowTotalReqs++
+                            windowLatencySum += iatResp.elapsedMs
+                            val iatDec = PidDecoder.decodeIat(iatResp.raw, iatResp.txNanos, iatResp.rxNanos, iatResp.elapsedMs, iatResp.timedOut)
+                            val iatSample = DiagnosticSample("010F", "IAT", iatDec.value, iatDec.formatted, "°C", iatDec.status, iatResp.elapsedMs, System.currentTimeMillis(), if (iatResp.rxNanos > 0L) iatResp.rxNanos else SystemClock.elapsedRealtimeNanos(), iatResp.raw)
+                            publishDiagnosticSample(iatSample)
+                        }
+                        "0142" -> {
+                            var vResp = elmEngine.transport.sendCommand("0142", TURBO_PID_TIMEOUT_MS)
+                            windowTotalReqs++
+                            windowLatencySum += vResp.elapsedMs
+                            var vDec = PidDecoder.decodeVoltage(vResp.raw, vResp.txNanos, vResp.rxNanos, vResp.elapsedMs, vResp.timedOut)
+                            if (vDec.status != PidStatus.VALID) {
+                                vResp = elmEngine.transport.sendCommand("ATRV", TURBO_PID_TIMEOUT_MS)
+                                windowTotalReqs++
+                                windowLatencySum += vResp.elapsedMs
+                                vDec = PidDecoder.decodeVoltage(vResp.raw, vResp.txNanos, vResp.rxNanos, vResp.elapsedMs, vResp.timedOut)
+                            }
+                            val vSample = DiagnosticSample("0142", "Voltage", vDec.value, vDec.formatted, "V", vDec.status, vResp.elapsedMs, System.currentTimeMillis(), if (vResp.rxNanos > 0L) vResp.rxNanos else SystemClock.elapsedRealtimeNanos(), vResp.raw)
+                            publishDiagnosticSample(vSample)
+                        }
+                        "0133" -> {
+                            val baroResp = elmEngine.transport.sendCommand("0133", TURBO_PID_TIMEOUT_MS)
+                            windowTotalReqs++
+                            windowLatencySum += baroResp.elapsedMs
+                            val baroDec = PidDecoder.decodeBaro(baroResp.raw, baroResp.txNanos, baroResp.rxNanos, baroResp.elapsedMs, baroResp.timedOut)
+                            val baroSample = DiagnosticSample("0133", "BARO", baroDec.value, baroDec.formatted, "mbar", baroDec.status, baroResp.elapsedMs, System.currentTimeMillis(), if (baroResp.rxNanos > 0L) baroResp.rxNanos else SystemClock.elapsedRealtimeNanos(), baroResp.raw)
+                            publishDiagnosticSample(baroSample)
+                        }
+                    }
+                }
 
                 val now = SystemClock.elapsedRealtime()
                 val dt = (now - windowStart) / 1000.0

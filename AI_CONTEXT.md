@@ -1,4 +1,4 @@
-﻿# AI_CONTEXT: VCDS Mobile for Android
+# AI_CONTEXT: VCDS Mobile for Android
 > **Target Audience**: AI coding assistants (ChatGPT, Claude, etc.) inspecting this codebase.
 > **Purpose**: Read THIS SINGLE FILE first. It contains the complete architectural map, current ground truth, and recent changes so you do NOT need to re-read the entire codebase.
 
@@ -58,13 +58,25 @@ Every key feature is isolated in these specific files:
 - **USB Concurrency in `UsbKwpTransport.kt`**:
   - Added `ioLock` synchronized blocks around `read()`, `write()`, and `purge()` to prevent races with `TcpBridgeServer`.
 
-### Commit `26825e9` — 2026-09-15
-- Reverted cluttered multi-card UI into a clean, original single-card layout inside `activity_main.xml`.
-- Unified data pipeline: `ELM RAW -> PidDecoder -> DiagnosticSample -> UI & AsyncCsvLogger`.
+### Commit (Current) — 2026-09-15 (Turbo Fast Reliability Fixes per Issue #1 & GEMINI_FIX_NOW.md)
+- **AsyncCsvLogger.kt**:
+  1. Real writer counters: `rawRowsActuallyWritten` and `pairRowsActuallyWritten` (AtomicLong), exposed via `rowsWritten` and `rawRowsWritten`.
+  2. Fixed Peak Boost vs Peak MAP: added `peakMapMbarAbs: Double`, `peakBoostMbar` strictly tracks relative boost (`mapMbarAbs - baroMbar`).
+  3. Added nullable age columns to `TurboPair` and CSV header: `mafAgeMs`, `speedAgeMs`, `loadAgeMs`, `coolantAgeMs`, `iatAgeMs`, `voltageAgeMs`.
+- **MainActivity.kt**:
+  1. Fixed timeouts: `TURBO_PID_TIMEOUT_MS = 450L`, `PREFLIGHT_PID_TIMEOUT_MS = 500L`, `TURBO_PAIR_MAX_DELTA_MS = 400L`.
+  2. Non-blocking publisher: `publishDiagnosticSample(sample)` removes `withContext(Dispatchers.Main)` from the acquisition critical path.
+  3. Zero numeric BARO fallbacks: deleted all `?: 1000.0` / `?: 1013.0`. `resolveBaro()` uses PID `0133` or `ENGINE_OFF_MAP` calibrated strictly when `rpm <= 50.0` and MAP is in `800..1100 mbar`.
+  4. Fresh value helpers: `freshValue()` and `freshAge()` prevent logging stale auxiliary values.
+  5. Valid Hz metrics: counters increment strictly on `PidStatus.VALID` samples.
+  6. Deterministic scheduler: high-priority RPM/MAP pairs dominate bandwidth; sparse timed slow sensors (`0105`, `010F`, `0142`, `0133`) sampled every ~8s.
+  7. Deterministic Pre-Flight Check: pauses active polling, tests all 9 PIDs sequentially with 500ms timeout, resumes polling.
+  8. RPM Stress Test: long-press on `CHECK DATA` runs a 10s rapid `010C` burst, calculates mean/median/p95 latency and valid Hz, outputs to `ELM_TURBO_STRESS` and dialog.
 
 ---
 
 ## 5. Current State & Active Focus
-- **APK Status**: Latest debug APK built and installed on Samsung Galaxy S24 FE.
-- **Active Task**: Verification of in-car connection with ignition ON / engine running.
+- **Build Status**: `./gradlew.bat testDebugUnitTest` and `assembleDebug` PASSED cleanly.
+- **APK Status**: Latest debug APK installed and launched on Samsung Galaxy S24 FE (`100.105.189.114:5555`).
+- **Active Task**: Real-device verification with V-LINK / ELM327 on Golf 5 1.9 TDI BLS.
 - **Log Storage**: `/sdcard/Android/data/com.vag.vcdsandroid/files/Documents/VCDS_Logs/`
