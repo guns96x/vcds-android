@@ -1,6 +1,9 @@
 # Review findings — commit fb85849 vs parent 5f2b6b1
 
 ## P0 — 4/8/8 cadence still cannot reliably satisfy the declared freshness windows on the real V-LINK
+> **NOTE (2026-09-16 Real Log Evidence Update)**:
+> In the actual car run (`Turbo_Pair_20260916_091808.csv`), the 4/8/8 cadence maintained MAF <= 2.07s (limit 2.50s), Speed <= 4.20s (limit 4.50s), and Load <= 4.16s (limit 4.50s).
+> Per ChatGPT's clarification on Issue #1: Keep 4/8/8 cadence to avoid stealing bandwidth from the core RPM/MAP pair rate (~1.85 Hz). In LIVE mode, slow PIDs are now scheduled only on clean pairs (`auxPids.isEmpty()`) to prevent cycle bursts.
 
 **Files / lines**
 - `app/src/main/java/com/vag/vcdsandroid/protocol/TurboScheduler.kt:22-27`

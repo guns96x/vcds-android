@@ -727,8 +727,44 @@ class MainActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         logStartUtcMs = System.currentTimeMillis()
         val (rawFile, pairFile) = asyncLogger.startLogging()
+        snapshotPreLogTelemetry()
         renderLoggingState()
         Toast.makeText(this, "Log Started: ${pairFile.name}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun snapshotPreLogTelemetry() {
+        val nowNs = SystemClock.elapsedRealtimeNanos()
+        val pidsToSnapshot = listOf("0110", "010D", "0104", "0105", "010F", "0142", "0133")
+        for (pid in pidsToSnapshot) {
+            val sample = latestSamples[pid] ?: continue
+            if (sample.status == PidStatus.VALID) {
+                asyncLogger.logRawEvent(
+                    pid = sample.pid,
+                    value = sample.value,
+                    unit = sample.unit,
+                    raw = "${sample.rawResponse} [SESSION_SNAPSHOT]",
+                    latencyMs = sample.latencyMs,
+                    status = "SESSION_SNAPSHOT",
+                    rxNanos = sample.monoNanos,
+                    requestCommand = sample.requestCommand,
+                    utcTimestampMs = sample.timestampUtcMs
+                )
+            }
+        }
+        val baro = sessionBaroResolver.resolve(nowNs)
+        if (baro.valueMbar != null) {
+            asyncLogger.logRawEvent(
+                pid = "BARO",
+                value = baro.valueMbar,
+                unit = "mbar",
+                raw = "[SESSION_SNAPSHOT source=${baro.source}]",
+                latencyMs = 0L,
+                status = "SESSION_SNAPSHOT",
+                rxNanos = nowNs,
+                requestCommand = "BARO",
+                utcTimestampMs = System.currentTimeMillis()
+            )
+        }
     }
 
     private fun stopWotLog() {
@@ -1534,7 +1570,8 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 // Slow sensor rotation only in LIVE mode (never during active WOT recording)
-                if (!asyncLogger.isLogging) {
+                // Only poll on clean cycles (auxPids.isEmpty()) so slow PIDs never stack onto aux pairs
+                if (!asyncLogger.isLogging && auxPids.isEmpty()) {
                     val slowPid = turboScheduler.checkLiveSlowPid(SystemClock.elapsedRealtime(), SLOW_SLOT_INTERVAL_MS)
                     if (slowPid != null) {
                         querySinglePid(slowPid)

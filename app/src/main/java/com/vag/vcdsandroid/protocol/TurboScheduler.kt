@@ -14,17 +14,17 @@ class TurboScheduler {
     }
 
     /**
-     * Deterministic aux cadence used for pair-first polling (3/6/6 per REVIEW_FB85849.md):
-     * - MAF (0110): every 3rd RPM/MAP pair
-     * - Speed (010D): every 6th RPM/MAP pair
-     * - Load (0104): every 6th RPM/MAP pair, offset from Speed by 3 pairs
+     * Deterministic aux cadence used for pair-first polling (4/8/8 per real-car evidence):
+     * - MAF (0110): every 4th RPM/MAP pair
+     * - Speed (010D): every 8th RPM/MAP pair
+     * - Load (0104): every 8th RPM/MAP pair, offset from Speed by 4 pairs
      */
     fun nextAuxPids(): List<String> {
         pairCount++
         val pids = mutableListOf<String>()
-        if (pairCount % 3L == 0L) pids.add("0110")  // MAF
-        if (pairCount % 6L == 0L) pids.add("010D") // Speed
-        if (pairCount % 6L == 3L) pids.add("0104") // Load
+        if (pairCount % 4L == 0L) pids.add("0110")  // MAF
+        if (pairCount % 8L == 0L) pids.add("010D") // Speed
+        if (pairCount % 8L == 4L) pids.add("0104") // Load
         return pids
     }
 

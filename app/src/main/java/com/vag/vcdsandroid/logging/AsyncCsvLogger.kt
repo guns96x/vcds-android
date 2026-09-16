@@ -295,13 +295,14 @@ class AsyncCsvLogger(private val context: Context) {
         status: String,
         txNanos: Long = 0L,
         rxNanos: Long = 0L,
-        requestCommand: String = pid
+        requestCommand: String = pid,
+        utcTimestampMs: Long = 0L
     ) {
         if (!isLoggingActive.get()) return
         val chan = channel ?: return
 
         val seq = rawSeq.incrementAndGet()
-        val utcMs = System.currentTimeMillis()
+        val utcMs = if (utcTimestampMs > 0L) utcTimestampMs else System.currentTimeMillis()
         val monoNs = if (rxNanos > 0L) rxNanos else SystemClock.elapsedRealtimeNanos()
 
         val record = AsyncLogRecord.RawEvent(
