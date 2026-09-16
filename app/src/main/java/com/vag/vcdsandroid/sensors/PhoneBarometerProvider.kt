@@ -68,7 +68,7 @@ class PhoneBarometerProvider(
 
     fun getReading(nowNs: Long = SystemClock.elapsedRealtimeNanos()): PhoneBaroReading {
         if (!isSensorAvailable) {
-            return PhoneBaroReading(valueMbar = null, available = false, fresh = false, ageMs = 0L)
+            return PhoneBaroReading(valueMbar = null, available = false, fresh = false, ageMs = 0L, monoNs = 0L)
         }
         return filter.getMedianReading(nowNs)
     }

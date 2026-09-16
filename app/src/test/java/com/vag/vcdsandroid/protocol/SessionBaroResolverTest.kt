@@ -192,4 +192,24 @@ class SessionBaroResolverTest {
         assertNull(withoutTime.valueMbar)
         assertEquals("UNAVAILABLE", withoutTime.source)
     }
+    @Test
+    fun testOldSampleIsNotArtificiallyExtendedAcrossReconnect() {
+        val resolver = SessionBaroResolver()
+        val t0 = 10_000_000_000L // 10s
+
+        // Sample taken at t0
+        resolver.onPhoneBaro(1004.0, monoNs = t0, fresh = true)
+
+        // At t0 + 4.9s, it is still valid
+        val r1 = resolver.resolve(nowNs = t0 + 4_900_000_000L)
+        assertEquals(1004.0, r1.valueMbar!!, 0.01)
+
+        // Re-read at t0 + 4.9s carrying the original monoNs = t0
+        resolver.onPhoneBaro(1004.0, monoNs = t0, fresh = true)
+
+        // At t0 + 5.1s, it MUST expire to UNAVAILABLE (not extended by 5 more seconds)
+        val r2 = resolver.resolve(nowNs = t0 + 5_100_000_000L)
+        assertNull(r2.valueMbar)
+        assertEquals("UNAVAILABLE", r2.source)
+    }
 }

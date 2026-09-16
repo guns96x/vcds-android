@@ -17,6 +17,7 @@ import android.os.Bundle
 import android.os.SystemClock
 import android.util.Log
 import android.view.View
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -76,14 +77,8 @@ data class DiagnosticSample(
 ) {
     fun getEffectiveStatus(nowNanos: Long = SystemClock.elapsedRealtimeNanos()): PidStatus {
         if (status != PidStatus.VALID) return status
-        val ageMs = (nowNanos - monoNanos) / 1_000_000
-        val thresholdMs = when (pid) {
-            "010C", "010B" -> 800L
-            "0110" -> 2500L
-            "010D", "0104" -> 4500L
-            "0105", "010F", "0142", "0133" -> 14000L
-            else -> 10000L
-        }
+        val ageMs = getAgeMs(nowNanos)
+        val thresholdMs = TelemetryFreshnessPolicy.getMaxAgeMs(pid)
         return if (ageMs > thresholdMs) PidStatus.STALE else PidStatus.VALID
     }
 
@@ -102,10 +97,10 @@ class MainActivity : AppCompatActivity() {
         const val ENGINE_OFF_BARO_MIN_MBAR = 800.0
         const val ENGINE_OFF_BARO_MAX_MBAR = 1100.0
         const val SLOW_SLOT_INTERVAL_MS = 2500L
-        const val SLOW_VALUE_MAX_AGE_MS = 12000L
-        const val MAF_MAX_AGE_MS = 2500L
-        const val SPEED_MAX_AGE_MS = 4500L
-        const val LOAD_MAX_AGE_MS = 4500L
+        const val SLOW_VALUE_MAX_AGE_MS = TelemetryFreshnessPolicy.SLOW_MAX_AGE_MS
+        const val MAF_MAX_AGE_MS = TelemetryFreshnessPolicy.MAF_MAX_AGE_MS
+        const val SPEED_MAX_AGE_MS = TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS
+        const val LOAD_MAX_AGE_MS = TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS
     }
 
     private data class BaroReading(val valueMbar: Double?, val source: String)
@@ -137,6 +132,7 @@ class MainActivity : AppCompatActivity() {
     private var stressJob: Job? = null
     private var elmConnectJob: Job? = null
     private var sessionGeneration: Long = 0L
+    private var consecutiveNoBaroCount = 0
 
     // Diagnostic samples storage (thread-safe, shared between UI and CSV)
     private val latestSamples = ConcurrentHashMap<String, DiagnosticSample>()
@@ -212,7 +208,7 @@ class MainActivity : AppCompatActivity() {
         phoneBarometerProvider = PhoneBarometerProvider(this)
         phoneBarometerProvider.onReadingChanged = { reading ->
             val nowNs = SystemClock.elapsedRealtimeNanos()
-            sessionBaroResolver.onPhoneBaro(reading.valueMbar, nowNs, reading.fresh)
+            sessionBaroResolver.onPhoneBaro(reading.valueMbar, reading.monoNs, reading.fresh)
             val baro = sessionBaroResolver.resolve(nowNs)
             if (baro.source == "PHONE_BAROMETER" || baro.source == "UNAVAILABLE") {
                 runOnUiThread {
@@ -233,6 +229,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStop() {
+        if (asyncLogger.isLogging) {
+            stopWotLog()
+            Toast.makeText(this, "Log stopped: App entered background", Toast.LENGTH_SHORT).show()
+        }
         phoneBarometerProvider.stop()
         super.onStop()
     }
@@ -507,7 +507,7 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                     val phoneRead = phoneBarometerProvider.getReading()
-                    sessionBaroResolver.onPhoneBaro(phoneRead.valueMbar, SystemClock.elapsedRealtimeNanos(), phoneRead.fresh)
+                    sessionBaroResolver.onPhoneBaro(phoneRead.valueMbar, phoneRead.monoNs, phoneRead.fresh)
                     val resolvedBaro = sessionBaroResolver.resolve(SystemClock.elapsedRealtimeNanos())
                     elmEngine.saveConnectionTrace(
                         isSuccess = true,
@@ -544,6 +544,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performDisconnect(targetMode: AppConnectionMode = connectionMode) {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         lifecycleScope.launch {
             stopPolling()
             if (asyncLogger.isLogging) {
@@ -668,7 +669,7 @@ class MainActivity : AppCompatActivity() {
         if (::phoneBarometerProvider.isInitialized) {
             val phoneRead = phoneBarometerProvider.getReading()
             if (phoneRead.available && phoneRead.fresh) {
-                sessionBaroResolver.onPhoneBaro(phoneRead.valueMbar, SystemClock.elapsedRealtimeNanos(), phoneRead.fresh)
+                sessionBaroResolver.onPhoneBaro(phoneRead.valueMbar, phoneRead.monoNs, phoneRead.fresh)
             }
         }
 
@@ -722,6 +723,8 @@ class MainActivity : AppCompatActivity() {
             renderLoggingState()
             return
         }
+        consecutiveNoBaroCount = 0
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         logStartUtcMs = System.currentTimeMillis()
         val (rawFile, pairFile) = asyncLogger.startLogging()
         renderLoggingState()
@@ -729,6 +732,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun stopWotLog() {
+        runOnUiThread {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
         lifecycleScope.launch {
             binding.btnToggleLog.isEnabled = false
             val (rawFile, pairFile) = asyncLogger.stopLogging()
@@ -766,9 +772,10 @@ class MainActivity : AppCompatActivity() {
             binding.tvBaroStatusAge.setTextColor(Color.parseColor("#8B949E"))
         }
 
-        // Also update Hero Boost
+        // Also update Hero Boost: strictly requires FRESH MAP and VALID BARO
+        val mapFresh = isFreshValid("010B", TelemetryFreshnessPolicy.MAP_MAX_AGE_MS, nowNs)
         val mapSample = latestSamples["010B"]
-        if (mapSample != null && mapSample.status == PidStatus.VALID && mapSample.value != null && baro.valueMbar != null) {
+        if (mapFresh && mapSample?.value != null && baro.valueMbar != null) {
             val boostMbar = mapSample.value - baro.valueMbar
             binding.tvHeroBoost.text = String.format(Locale.US, "%.2f bar", boostMbar / 1000.0)
             val srcLabel = when (baro.source) {
@@ -781,7 +788,12 @@ class MainActivity : AppCompatActivity() {
             binding.tvBoostStatusAge.setTextColor(Color.parseColor("#3FB950"))
         } else {
             binding.tvHeroBoost.text = "--- bar"
-            binding.tvBoostStatusAge.text = "N/A | BARO ${baro.source}"
+            val reason = when {
+                baro.valueMbar == null -> "BARO ${baro.source}"
+                !mapFresh -> "MAP STALE"
+                else -> "N/A"
+            }
+            binding.tvBoostStatusAge.text = "N/A | $reason"
             binding.tvBoostStatusAge.setTextColor(Color.parseColor("#8B949E"))
         }
     }
@@ -954,6 +966,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun refreshAgesAndStatuses() {
         val now = SystemClock.elapsedRealtimeNanos()
+        updateBaroUi()
 
         latestSamples["010C"]?.let { s ->
             val eff = s.getEffectiveStatus(now)
@@ -1338,6 +1351,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleCoreTelemetryLost() {
         runOnUiThread {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             if (asyncLogger.isLogging) {
                 stopWotLog()
             }
@@ -1390,6 +1404,24 @@ class MainActivity : AppCompatActivity() {
             val dtMs = (mapSample.monoNanos - rpmSample.monoNanos) / 1_000_000
             val pairValid = dtMs in 0..TURBO_PAIR_MAX_DELTA_MS
             val baro = sessionBaroResolver.resolve(mapSample.monoNanos)
+
+            if (asyncLogger.isLogging) {
+                if (baro.valueMbar == null) {
+                    consecutiveNoBaroCount++
+                    if (consecutiveNoBaroCount >= 2) {
+                        stopWotLog()
+                        runOnUiThread {
+                            binding.tvPreFlightStatus.text = "🔴 BARO LOST — LOG STOPPED\nBarometer expired during recording"
+                            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#F85149"))
+                            Toast.makeText(this@MainActivity, "BARO LOST — LOG STOPPED", Toast.LENGTH_LONG).show()
+                        }
+                        return
+                    }
+                } else {
+                    consecutiveNoBaroCount = 0
+                }
+            }
+
             if (asyncLogger.isLogging) {
                 asyncLogger.logTurboPair(
                     rpm = rpmSample.value ?: 0.0,

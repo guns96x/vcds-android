@@ -151,4 +151,16 @@ class PreflightEvaluatorTest {
         assertFalse(report.iatOk)
         assertFalse(report.voltOk)
     }
+    @Test
+    fun testTelemetryFreshnessPolicyThresholds() {
+        assertEquals(1000L, TelemetryFreshnessPolicy.getMaxAgeMs("010C"))
+        assertEquals(1000L, TelemetryFreshnessPolicy.getMaxAgeMs("010B"))
+        assertEquals(2500L, TelemetryFreshnessPolicy.getMaxAgeMs("0110"))
+        assertEquals(4500L, TelemetryFreshnessPolicy.getMaxAgeMs("010D"))
+        assertEquals(4500L, TelemetryFreshnessPolicy.getMaxAgeMs("0104"))
+        assertEquals(12000L, TelemetryFreshnessPolicy.getMaxAgeMs("0105"))
+        assertEquals(12000L, TelemetryFreshnessPolicy.getMaxAgeMs("010F"))
+        assertEquals(12000L, TelemetryFreshnessPolicy.getMaxAgeMs("0142"))
+        assertEquals(12000L, TelemetryFreshnessPolicy.getMaxAgeMs("0133"))
+    }
 }

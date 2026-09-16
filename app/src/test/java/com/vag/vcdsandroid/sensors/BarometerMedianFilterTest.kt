@@ -99,4 +99,16 @@ class BarometerMedianFilterTest {
         assertTrue(reading.fresh)
         assertEquals(1013.0, reading.valueMbar!!, 0.01)
     }
+    @Test
+    fun testReadingPreservesOriginalSampleTimestamp() {
+        val filter = BarometerMedianFilter()
+        val t0 = 10_000_000_000L // 10s
+
+        filter.addSample(1005.0, monoNs = t0)
+
+        // Read 1 second later
+        val reading = filter.getMedianReading(nowNs = t0 + 1_000_000_000L)
+        assertTrue(reading.fresh)
+        assertEquals(t0, reading.monoNs)
+    }
 }

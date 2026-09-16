@@ -4,7 +4,8 @@ data class PhoneBaroReading(
     val valueMbar: Double?,
     val available: Boolean,
     val fresh: Boolean,
-    val ageMs: Long
+    val ageMs: Long,
+    val monoNs: Long = 0L
 )
 
 class BarometerMedianFilter(
@@ -54,7 +55,8 @@ class BarometerMedianFilter(
                 valueMbar = null,
                 available = true,
                 fresh = false,
-                ageMs = ageMs
+                ageMs = ageMs,
+                monoNs = lastSampleMonoNs
             )
         }
 
@@ -70,7 +72,8 @@ class BarometerMedianFilter(
             valueMbar = median,
             available = true,
             fresh = true,
-            ageMs = ageMs
+            ageMs = ageMs,
+            monoNs = lastSampleMonoNs
         )
     }
 

@@ -285,7 +285,10 @@ class Elm327DiagnosticEngine(private val context: Context) {
                     obdProtocol = "${result.protocolName} (${result.protocolNum})"
                     markObdConnected(result.stage)
                     lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
-                    saveConnectionTrace(true, result.stage, dev.name ?: dev.address)
+                    // In Mode A (forceGeneric == true), trace is saved once in MainActivity after BARO enrichment
+                    if (!forceGeneric) {
+                        saveConnectionTrace(true, result.stage, dev.name ?: dev.address)
+                    }
                     return@withContext true
                 }
                 is HandshakeResult.Failure -> {
