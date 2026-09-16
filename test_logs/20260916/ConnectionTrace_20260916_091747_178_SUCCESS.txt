@@ -1,0 +1,74 @@
+=== VCDS Connection Trace ===
+Outcome: SUCCESS
+Timestamp: Wed Sep 16 09:17:47 GMT+03:00 2026
+Device: V-LINK
+ELM Version: ATI ELM327 v2.3
+Connect Stage: AUTO
+OBD Protocol: AUTO, ISO 14230-4 (KWP 5BAUD) (A4)
+TP2.0 Active: false
+Last Error: null
+BARO source: PHONE_BAROMETER
+BARO value: 1004.5 mbar
+Phone pressure sensor available: true
+Phone pressure value: 1004.5 mbar
+Phone pressure age: 51 ms
+
+--- LOG HISTORY ---
+1. Початок RFCOMM зв'язку з V-LINK [10:21:3E:4D:2A:93]...
+Initiating RFCOMM connection: Name='V-LINK', MAC='10:21:3E:4D:2A:93', BondState=BOND_BONDED (12)
+Attempt 1: Secure SPP RFCOMM (UUID: 00001101-0000-1000-8000-00805f9b34fb)...
+Attempt 1 SUCCESS: Connected via Secure SPP!
+I/O Streams cached. RFCOMM socket connected to V-LINK [10:21:3E:4D:2A:93]
+==> RFCOMM_CONNECTED: Bluetooth сокет відкрито успішно.
+2. Скидання та ініціалізація ELM327 (ATZ)...
+TX >> ATZ
+RX << ATZ
+
+
+ELM327 v2.3 > (940ms)
+TX >> ATI
+RX << ATI
+ELM327 v2.3 > (29ms)
+==> ELM_RESPONDING: Адаптер на зв'язку (ATI ELM327 v2.3)
+3. Ініціалізація ELM327 параметрів...
+TX >> ATZ
+RX << ATZ
+
+
+ELM327 v2.3 > (941ms)
+TX >> ATI
+RX << ATI
+ELM327 v2.3 > (57ms)
+TX >> ATE0
+RX << ATE0
+OK > (95ms)
+TX >> ATL0
+RX << OK > (20ms)
+TX >> ATS0
+RX << OK > (26ms)
+TX >> ATH0
+RX << OK > (36ms)
+TX >> ATCAF1
+RX << OK > (30ms)
+TX >> ATR1
+RX << OK > (61ms)
+==> ELM_READY: Конфігурація адаптера завершена.
+5. Перевірка напруги та конфігурація OBD-II зв'язку...
+Напруга бортової мережі: 13.1V
+--- Stage 1: Спроба KNOWN-GOOD AUTO PATH (ATD -> ATSP0) ---
+GENERIC INIT ATD -> OK (50ms)
+GENERIC INIT ATE0 -> ATE0
+OK (90ms)
+GENERIC INIT ATL0 -> OK (46ms)
+GENERIC INIT ATS0 -> OK (46ms)
+GENERIC INIT ATH0 -> OK (57ms)
+GENERIC INIT ATCAF1 -> OK (117ms)
+GENERIC INIT ATCFC1 -> OK (50ms)
+GENERIC INIT ATR1 -> OK (64ms)
+GENERIC INIT ATAT1 -> OK (65ms)
+GENERIC INIT ATSP0 -> OK (52ms)
+AUTO PROBE 010C -> SEARCHING...
+410C0D38 (4183ms)
+AUTO PROBE 010B -> 410B63 (368ms)
+==> OBD_READY via AUTO (RPM+MAP OK): AUTO, ISO 14230-4 (KWP 5BAUD) (A4)
+==> OBD_READY via AUTO
