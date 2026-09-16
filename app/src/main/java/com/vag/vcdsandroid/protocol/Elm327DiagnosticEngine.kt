@@ -68,6 +68,12 @@ class Elm327DiagnosticEngine(private val context: Context) {
     var obdProtocol: String = ""
         private set
 
+    private val macAddressRegex = Regex("([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})")
+
+    private fun redactMac(text: String): String {
+        return text.replace(macAddressRegex, "XX:XX:XX:XX:XX:XX")
+    }
+
     fun saveConnectionTrace(
         isSuccess: Boolean,
         stage: String,
@@ -84,11 +90,12 @@ class Elm327DiagnosticEngine(private val context: Context) {
             val ts = SimpleDateFormat("yyyyMMdd_HHmmss_SSS", Locale.US).format(Date())
             val outcome = if (isSuccess) "SUCCESS" else "FAIL"
             val file = File(dir, "ConnectionTrace_${ts}_${outcome}.txt")
+            val safeDeviceName = redactMac(deviceName)
             val content = buildString {
                 appendLine("=== VCDS Connection Trace ===")
                 appendLine("Outcome: $outcome")
                 appendLine("Timestamp: ${Date()}")
-                appendLine("Device: $deviceName")
+                appendLine("Device: $safeDeviceName")
                 appendLine("ELM Version: $elmVersionString")
                 appendLine("Connect Stage: $stage")
                 appendLine("OBD Protocol: $obdProtocol")
@@ -106,7 +113,7 @@ class Elm327DiagnosticEngine(private val context: Context) {
                     }
                 }
                 appendLine("\n--- LOG HISTORY ---")
-                appendLine(logHistory.joinToString("\n"))
+                appendLine(logHistory.joinToString("\n") { redactMac(it) })
             }
             file.writeText(content)
             Log.i(TAG, "Saved connection trace to ${file.absolutePath}")
@@ -129,12 +136,13 @@ class Elm327DiagnosticEngine(private val context: Context) {
     }
 
     private fun appendLog(msg: String) {
-        _logHistory.add(msg)
+        val sanitized = redactMac(msg)
+        _logHistory.add(sanitized)
         if (_logHistory.size > 200) {
             _logHistory.removeAt(0)
         }
-        Log.i(TAG, msg)
-        onLogListener?.invoke(msg)
+        Log.i(TAG, sanitized)
+        onLogListener?.invoke(sanitized)
     }
 
     suspend fun connect(targetDevice: BluetoothDevice? = null, forceGeneric: Boolean = forceGenericObd): Boolean = withContext(Dispatchers.IO) {
@@ -153,7 +161,7 @@ class Elm327DiagnosticEngine(private val context: Context) {
             if (dev == null) {
                 val err = "Не знайдено спареного адаптера (V-LINK / ELM327) у списку Bluetooth! Спаруйте його в налаштуваннях Android."
                 appendLog("ERR: $err")
-                lastError = err
+                lastError = redactMac(err)
                 lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
                 state = DiagState.ERROR
                 elmState = ElmDiagnosticState.ERROR
@@ -169,7 +177,7 @@ class Elm327DiagnosticEngine(private val context: Context) {
             if (!rfcommOk) {
                 val err = "RFCOMM connect() failed для ${dev.name} [${dev.address}]. Перевірте адаптер!"
                 appendLog("ERR: $err")
-                lastError = err
+                lastError = redactMac(err)
                 lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
                 state = DiagState.ERROR
                 elmState = ElmDiagnosticState.ERROR
@@ -292,7 +300,7 @@ class Elm327DiagnosticEngine(private val context: Context) {
                     return@withContext true
                 }
                 is HandshakeResult.Failure -> {
-                    lastError = result.reason
+                    lastError = redactMac(result.reason)
                     lastConnectTrace = logHistory.takeLast(120).joinToString("\n")
                     state = DiagState.ERROR
                     elmState = ElmDiagnosticState.ERROR

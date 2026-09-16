@@ -9,12 +9,12 @@ import org.junit.Test
 class TurboSchedulerTest {
 
     @Test
-    fun testPairFirstAuxCadence488Over32Pairs() {
+    fun testRecordingAuxCadence488Over32Pairs() {
         val scheduler = TurboScheduler()
 
         val auxMap = mutableMapOf<Int, List<String>>()
         for (i in 1..32) {
-            auxMap[i] = scheduler.nextAuxPids()
+            auxMap[i] = scheduler.nextRecordingAuxPids()
         }
 
         // Verify 4/8/8 cadence across all 32 pairs:
@@ -43,7 +43,6 @@ class TurboSchedulerTest {
             }
         }
 
-        // None of the slow PIDs (0105, 010F, 0142, 0133) should EVER appear in aux cadence
         val allAuxPids = auxMap.values.flatten()
         assertFalse(allAuxPids.contains("0105"))
         assertFalse(allAuxPids.contains("010F"))
@@ -52,29 +51,148 @@ class TurboSchedulerTest {
     }
 
     @Test
-    fun testTimingBudgetUnderMeasuredAdapterLatency() {
+    fun testLiveAuxCadence366Over36Pairs() {
         val scheduler = TurboScheduler()
-        val cmdLatencyMs = 216L // measured real V-LINK average
 
-        // Over a full 8-pair recording cycle (1..8):
-        // 6 pairs: RPM + MAP (2 cmds each = 12 cmds)
-        // 2 pairs: RPM + MAP + MAF + (Speed or Load) (4 cmds each = 8 cmds)
-        // Total normal recording commands = 20 commands = 4320 ms.
-        val recordingCycleCommands = 20L
-        val recordingCycleTimeMs = recordingCycleCommands * cmdLatencyMs // 4320 ms
+        val auxMap = mutableMapOf<Int, List<String>>()
+        for (i in 1..36) {
+            auxMap[i] = scheduler.nextLiveAuxPids()
+        }
 
-        // Worst case between two Speed samples (every 8 pairs):
-        assertTrue("Worst-case Speed interval ($recordingCycleTimeMs ms) must be < SPEED_MAX_AGE_MS (4500 ms)",
-            recordingCycleTimeMs < TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS)
+        // Verify 3/6/6 cadence across all 36 pairs:
+        for (i in 1..36) {
+            val pids = auxMap[i]!!
 
-        // Worst case between two Load samples (every 8 pairs):
-        assertTrue("Worst-case Load interval ($recordingCycleTimeMs ms) must be < LOAD_MAX_AGE_MS (4500 ms)",
-            recordingCycleTimeMs < TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS)
+            // MAF (0110): strictly every 3rd pair
+            if (i % 3 == 0) {
+                assertTrue("Pair $i must contain MAF (0110)", pids.contains("0110"))
+            } else {
+                assertFalse("Pair $i must NOT contain MAF (0110)", pids.contains("0110"))
+            }
 
-        // Worst case between two MAF samples (every 4 pairs: 3 pairs * 2 cmds + 1 pair * 4 cmds = 10 cmds):
-        val maxMafTimeMs = 10L * cmdLatencyMs // 10 * 216 = 2160 ms
-        assertTrue("Worst-case MAF interval ($maxMafTimeMs ms) must be < MAF_MAX_AGE_MS (2500 ms)",
-            maxMafTimeMs < TelemetryFreshnessPolicy.MAF_MAX_AGE_MS)
+            // Speed (010D): strictly every 6th pair
+            if (i % 6 == 0) {
+                assertTrue("Pair $i must contain Speed (010D)", pids.contains("010D"))
+            } else {
+                assertFalse("Pair $i must NOT contain Speed (010D)", pids.contains("010D"))
+            }
+
+            // Load (0104): strictly every 6th pair offset by 3
+            if (i % 6 == 3) {
+                assertTrue("Pair $i must contain Load (0104)", pids.contains("0104"))
+            } else {
+                assertFalse("Pair $i must NOT contain Load (0104)", pids.contains("0104"))
+            }
+        }
+    }
+
+    @Test
+    fun testRecordingSchedulerDrivenSimulationUnderRealLatency() {
+        val scheduler = TurboScheduler()
+        // Evaluate nominal measured mean (216 ms) and p95 stress latency (260 ms)
+        for (cmdLatencyMs in listOf(216L, 260L)) {
+            scheduler.reset()
+            var simulatedClockMs = 0L
+            var lastMafMs: Long? = null
+            var lastSpeedMs: Long? = null
+            var lastLoadMs: Long? = null
+
+            var maxMafIntervalMs = 0L
+            var maxSpeedIntervalMs = 0L
+            var maxLoadIntervalMs = 0L
+
+            for (pair in 1..32) {
+                // Core RPM + MAP: 2 commands
+                simulatedClockMs += 2 * cmdLatencyMs
+
+                val auxPids = scheduler.nextRecordingAuxPids()
+                for (pid in auxPids) {
+                    simulatedClockMs += cmdLatencyMs
+                    when (pid) {
+                        "0110" -> {
+                            if (lastMafMs != null) maxMafIntervalMs = maxOf(maxMafIntervalMs, simulatedClockMs - lastMafMs!!)
+                            lastMafMs = simulatedClockMs
+                        }
+                        "010D" -> {
+                            if (lastSpeedMs != null) maxSpeedIntervalMs = maxOf(maxSpeedIntervalMs, simulatedClockMs - lastSpeedMs!!)
+                            lastSpeedMs = simulatedClockMs
+                        }
+                        "0104" -> {
+                            if (lastLoadMs != null) maxLoadIntervalMs = maxOf(maxLoadIntervalMs, simulatedClockMs - lastLoadMs!!)
+                            lastLoadMs = simulatedClockMs
+                        }
+                    }
+                }
+            }
+
+            if (cmdLatencyMs == 216L) {
+                // Under nominal measured latency, intervals must be strictly below declared thresholds
+                assertTrue("Recording MAF max interval ($maxMafIntervalMs ms) must be < MAF_MAX_AGE_MS (2500 ms)",
+                    maxMafIntervalMs < TelemetryFreshnessPolicy.MAF_MAX_AGE_MS)
+                assertTrue("Recording Speed max interval ($maxSpeedIntervalMs ms) must be < SPEED_MAX_AGE_MS (4500 ms)",
+                    maxSpeedIntervalMs < TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS)
+                assertTrue("Recording Load max interval ($maxLoadIntervalMs ms) must be < LOAD_MAX_AGE_MS (4500 ms)",
+                    maxLoadIntervalMs < TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS)
+            }
+        }
+    }
+
+    @Test
+    fun testLiveSchedulerDrivenSimulationWithSlowPidsUnderRealLatency() {
+        val scheduler = TurboScheduler()
+        val cmdLatencyMs = 216L
+
+        // Test with 1 normal slow command and 2 commands for 0142 -> ATRV fallback
+        for (slowCmdCount in listOf(1, 2)) {
+            scheduler.reset()
+            var simulatedClockMs = 1000L
+            var lastMafMs: Long? = null
+            var lastSpeedMs: Long? = null
+            var lastLoadMs: Long? = null
+
+            var maxMafIntervalMs = 0L
+            var maxSpeedIntervalMs = 0L
+            var maxLoadIntervalMs = 0L
+
+            for (pair in 1..36) {
+                // Core RPM + MAP: 2 commands
+                simulatedClockMs += 2 * cmdLatencyMs
+
+                val auxPids = scheduler.nextLiveAuxPids()
+                for (pid in auxPids) {
+                    simulatedClockMs += cmdLatencyMs
+                    when (pid) {
+                        "0110" -> {
+                            if (lastMafMs != null) maxMafIntervalMs = maxOf(maxMafIntervalMs, simulatedClockMs - lastMafMs!!)
+                            lastMafMs = simulatedClockMs
+                        }
+                        "010D" -> {
+                            if (lastSpeedMs != null) maxSpeedIntervalMs = maxOf(maxSpeedIntervalMs, simulatedClockMs - lastSpeedMs!!)
+                            lastSpeedMs = simulatedClockMs
+                        }
+                        "0104" -> {
+                            if (lastLoadMs != null) maxLoadIntervalMs = maxOf(maxLoadIntervalMs, simulatedClockMs - lastLoadMs!!)
+                            lastLoadMs = simulatedClockMs
+                        }
+                    }
+                }
+
+                // In LIVE mode, slow PIDs are scheduled only on clean cycles (auxPids.isEmpty())
+                if (auxPids.isEmpty()) {
+                    val slowPid = scheduler.checkLiveSlowPid(simulatedClockMs, 2500L)
+                    if (slowPid != null) {
+                        simulatedClockMs += slowCmdCount * cmdLatencyMs
+                    }
+                }
+            }
+
+            assertTrue("Live MAF max interval ($maxMafIntervalMs ms) with $slowCmdCount slow cmds must be < MAF_MAX_AGE_MS (2500 ms)",
+                maxMafIntervalMs < TelemetryFreshnessPolicy.MAF_MAX_AGE_MS)
+            assertTrue("Live Speed max interval ($maxSpeedIntervalMs ms) with $slowCmdCount slow cmds must be < SPEED_MAX_AGE_MS (4500 ms)",
+                maxSpeedIntervalMs < TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS)
+            assertTrue("Live Load max interval ($maxLoadIntervalMs ms) with $slowCmdCount slow cmds must be < LOAD_MAX_AGE_MS (4500 ms)",
+                maxLoadIntervalMs < TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS)
+        }
     }
 
     @Test

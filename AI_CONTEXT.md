@@ -10,7 +10,7 @@
 - **Target Car**: VW Golf 5 1.9 TDI BLS (PQ35 Platform, Bosch EDC16U34 ECU, Gateway J533)
 - **Target Device**: Samsung Galaxy S24 FE (Android 16) with hardware Bosch BMP580 Barometer
 - **Hardware Interfaces**:
-  1. **Bluetooth RFCOMM (Primary)**: V-LINK adapter (ELM327 v2.3 clone, MAC `10:21:3E:4D:2A:93`). Measured performance: ~216 ms average per command, ~4.0-4.5 req/s.
+  1. **Bluetooth RFCOMM (Primary)**: V-LINK adapter (ELM327 v2.3 clone, MAC `XX:XX:XX:XX:XX:XX`). Measured performance: ~216 ms average per command, ~4.0-4.5 req/s.
   2. **USB-OTG KKL Cable**: FTDI FT232R / CH340 via `usb-serial-for-android` at 10400 bps.
 
 ---
@@ -23,7 +23,7 @@ Every key feature is isolated in these specific files:
 | `MainActivity.kt` (`app/src/main/java/com/vag/vcdsandroid/ui/MainActivity.kt`) | Core UI controller. Mode A (Turbo Fast) & Mode B (OEM TP 2.0). Screen wake lock during recording, BARO watchdog, pre-flight check, and 100ms ticker. |
 | `Elm327DiagnosticEngine.kt` (`app/src/main/java/com/vag/vcdsandroid/protocol/Elm327DiagnosticEngine.kt`) | ELM327 Bluetooth state machine. Deterministic 3-stage handshake (AUTO FIRST -> FIXED SP6 DEFAULT -> PHYSICAL 7E0/7E8). |
 | `GenericObdHandshake.kt` (`app/src/main/java/com/vag/vcdsandroid/protocol/GenericObdHandshake.kt`) | Pure handshake executor implementing clean ATD resets and strict prompt detection. |
-| `TurboScheduler.kt` (`app/src/main/java/com/vag/vcdsandroid/protocol/TurboScheduler.kt`) | Pair-first 4/8/8 aux cadence poller (real-car validated): RPM+MAP every cycle, MAF every 4th pair, Speed every 8th, Load every 8th offset 4. Slow rotation (~2.5s) in LIVE mode only. |
+| `TurboScheduler.kt` (`app/src/main/java/com/vag/vcdsandroid/protocol/TurboScheduler.kt`) | Pair-first aux cadence poller: RECORDING 4/8/8 (real-car validated ~1.85 Hz core pair rate), LIVE 3/6/6 (safe timing margin for slow PIDs on clean cycles). |
 | `TelemetryFreshnessPolicy.kt` (`app/src/main/java/com/vag/vcdsandroid/protocol/TelemetryFreshnessPolicy.kt`) | Centralized single source of truth for channel freshness (RPM/MAP: 1000ms, MAF: 2500ms, Speed/Load: 4500ms, Slow: 12000ms, Phone Baro: 5000ms). |
 | `SessionBaroResolver.kt` (`app/src/main/java/com/vag/vcdsandroid/protocol/SessionBaroResolver.kt`) | Multi-candidate BARO resolver. Priority: `PID_0133 > ENGINE_OFF_MAP > PHONE_BAROMETER > UNAVAILABLE`. No fixed 1000/1013 fallbacks. |
 | `PhoneBarometerProvider.kt` & `BarometerMedianFilter.kt` (`app/src/main/java/com/vag/vcdsandroid/sensors/`) | Android `Sensor.TYPE_PRESSURE` provider with rolling 10-sample median filter, 800..1100 mbar bounds check, and monotonic timestamp preservation. |

@@ -136,7 +136,7 @@ class BluetoothElmTransport(private val context: Context) {
             else -> "BOND_NONE (${dev.bondState})"
         }
 
-        val headerMsg = "Initiating RFCOMM connection: Name='$devName', MAC='$devMac', BondState=$bondState"
+        val headerMsg = "Initiating RFCOMM connection: Name='$devName', MAC='XX:XX:XX:XX:XX:XX', BondState=$bondState"
         Log.i(TAG, headerMsg)
         logCallback?.invoke(headerMsg)
 

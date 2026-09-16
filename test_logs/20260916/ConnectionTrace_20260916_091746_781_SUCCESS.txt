@@ -9,11 +9,11 @@ TP2.0 Active: false
 Last Error: null
 
 --- LOG HISTORY ---
-1. Початок RFCOMM зв'язку з V-LINK [10:21:3E:4D:2A:93]...
-Initiating RFCOMM connection: Name='V-LINK', MAC='10:21:3E:4D:2A:93', BondState=BOND_BONDED (12)
+1. Початок RFCOMM зв'язку з V-LINK [XX:XX:XX:XX:XX:XX]...
+Initiating RFCOMM connection: Name='V-LINK', MAC='XX:XX:XX:XX:XX:XX', BondState=BOND_BONDED (12)
 Attempt 1: Secure SPP RFCOMM (UUID: 00001101-0000-1000-8000-00805f9b34fb)...
 Attempt 1 SUCCESS: Connected via Secure SPP!
-I/O Streams cached. RFCOMM socket connected to V-LINK [10:21:3E:4D:2A:93]
+I/O Streams cached. RFCOMM socket connected to V-LINK [XX:XX:XX:XX:XX:XX]
 ==> RFCOMM_CONNECTED: Bluetooth сокет відкрито успішно.
 2. Скидання та ініціалізація ELM327 (ATZ)...
 TX >> ATZ

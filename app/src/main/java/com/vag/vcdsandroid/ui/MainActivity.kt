@@ -467,7 +467,7 @@ class MainActivity : AppCompatActivity() {
         val myMode = connectionMode
 
         binding.tvStatus.text = "Connecting..."
-        binding.tvSubStatus.text = "Opening RFCOMM to ${device.address}..."
+        binding.tvSubStatus.text = "Opening RFCOMM to ${device.name ?: "ELM327"}..."
         binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
         binding.btnConnect.isEnabled = false
         binding.btnModeToggle.isEnabled = false
@@ -726,6 +726,7 @@ class MainActivity : AppCompatActivity() {
         consecutiveNoBaroCount = 0
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         logStartUtcMs = System.currentTimeMillis()
+        turboScheduler.reset()
         val (rawFile, pairFile) = asyncLogger.startLogging()
         snapshotPreLogTelemetry()
         renderLoggingState()
@@ -734,20 +735,26 @@ class MainActivity : AppCompatActivity() {
 
     private fun snapshotPreLogTelemetry() {
         val nowNs = SystemClock.elapsedRealtimeNanos()
+        val nowUtcMs = System.currentTimeMillis()
         val pidsToSnapshot = listOf("0110", "010D", "0104", "0105", "010F", "0142", "0133")
         for (pid in pidsToSnapshot) {
             val sample = latestSamples[pid] ?: continue
-            if (sample.status == PidStatus.VALID) {
+            val maxAge = TelemetryFreshnessPolicy.getMaxAgeMs(sample.pid)
+            val ageMs = sample.getAgeMs(nowNs)
+            // Require effective freshness at snapshot time (never snapshot stale samples)
+            if (sample.status == PidStatus.VALID && sample.value != null && ageMs <= maxAge) {
+                // Event timestamp is NOW to maintain chronological order in Event_RAW;
+                // original source capture timestamp & age are preserved in raw metadata.
                 asyncLogger.logRawEvent(
                     pid = sample.pid,
                     value = sample.value,
                     unit = sample.unit,
-                    raw = "${sample.rawResponse} [SESSION_SNAPSHOT]",
+                    raw = "${sample.rawResponse} [SESSION_SNAPSHOT source_mono_ns=${sample.monoNanos} source_utc_ms=${sample.timestampUtcMs} source_age_ms=$ageMs]",
                     latencyMs = sample.latencyMs,
                     status = "SESSION_SNAPSHOT",
-                    rxNanos = sample.monoNanos,
+                    rxNanos = nowNs,
                     requestCommand = sample.requestCommand,
-                    utcTimestampMs = sample.timestampUtcMs
+                    utcTimestampMs = nowUtcMs
                 )
             }
         }
@@ -762,7 +769,7 @@ class MainActivity : AppCompatActivity() {
                 status = "SESSION_SNAPSHOT",
                 rxNanos = nowNs,
                 requestCommand = "BARO",
-                utcTimestampMs = System.currentTimeMillis()
+                utcTimestampMs = nowUtcMs
             )
         }
     }
@@ -773,6 +780,7 @@ class MainActivity : AppCompatActivity() {
         }
         lifecycleScope.launch {
             binding.btnToggleLog.isEnabled = false
+            turboScheduler.reset()
             val (rawFile, pairFile) = asyncLogger.stopLogging()
             renderLoggingState()
             if (pairFile != null) {
@@ -1564,7 +1572,11 @@ class MainActivity : AppCompatActivity() {
             while (isActive && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
                 // Pair-first polling: RPM & MAP queried on every loop cycle
                 queryRpmMapPair()
-                val auxPids = turboScheduler.nextAuxPids()
+                val auxPids = if (asyncLogger.isLogging) {
+                    turboScheduler.nextRecordingAuxPids()
+                } else {
+                    turboScheduler.nextLiveAuxPids()
+                }
                 for (auxPid in auxPids) {
                     querySinglePid(auxPid)
                 }
