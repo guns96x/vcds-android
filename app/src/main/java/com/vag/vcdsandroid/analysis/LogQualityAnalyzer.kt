@@ -399,18 +399,20 @@ object LogQualityAnalyzer {
         val pullPeak = longestPullPeakRpm ?: maxRpm
         val hasRpmCoverage = (pullStart != null && pullStart <= 1450.0 && pullPeak != null && pullPeak >= 3900.0)
 
-        // Spool load check: in 1500..1900 RPM, is there fresh load >= 80% with age <= 1200 ms?
+        // Spool load check: in 1400..1900 RPM while accelerating, is there load >= 80% with age <= 2200 ms (accounting for 4/8/8 cadence)?
         var hasFreshSpoolLoad = false
+        var prevSpoolRpm = 0.0
         for (p in validPairsList) {
             val r = p.rpm
             val ld = p.loadPct
             val ldAge = p.loadAgeMs
-            if (r in 1500.0..1900.0 && ld != null && ldAge != null) {
-                if (ld >= 80.0 && ldAge <= 1200L && (p.boostBar ?: 0.0) >= 0.2) {
+            if (r in 1400.0..1900.0 && ld != null && ldAge != null) {
+                if (r >= prevSpoolRpm && ld >= 80.0 && ldAge <= 2200L && (p.boostBar ?: 0.0) >= 0.2) {
                     hasFreshSpoolLoad = true
                     break
                 }
             }
+            prevSpoolRpm = r
         }
 
         // Actionable checklist & overall verdict

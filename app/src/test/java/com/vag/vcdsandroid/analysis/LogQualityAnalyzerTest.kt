@@ -113,6 +113,54 @@ class LogQualityAnalyzerTest {
     }
 
     @Test
+    fun testRealCarRoadPull4thGearFrom20260916_111930() {
+        val candidates = listOf(
+            File("test_logs/20260916/Turbo_Pair_20260916_111930.csv"),
+            File("../test_logs/20260916/Turbo_Pair_20260916_111930.csv")
+        )
+        val realLogFile = candidates.firstOrNull { it.exists() }
+        assertNotNull("Real car 4th gear log file must exist for fixture test", realLogFile)
+
+        val report = LogQualityAnalyzer.analyze(realLogFile!!)
+
+        // 1. Data volume & pair validity
+        assertEquals("Total pairs must be 48", 48, report.totalPairs)
+        assertEquals("Valid pairs must be 48", 48, report.validPairs)
+        assertEquals(100.0, report.validPairPct, 0.01)
+
+        // 2. Dynamics
+        assertEquals(1198.0, report.minRpm ?: 0.0, 1.0)
+        assertEquals(4084.0, report.maxRpm ?: 0.0, 1.0)
+        assertEquals(2330.0, report.peakMapMbar ?: 0.0, 1.0)
+        assertEquals(1.325, report.peakBoostBar ?: 0.0, 0.005)
+
+        // 3. BARO
+        assertTrue("Barometer should be stable across pull", report.baroStable)
+        assertEquals("PHONE_BAROMETER", report.baroSource)
+
+        // 4. Gear Ratio Verification: 4th gear (~35.2 km/h / 1000 RPM)
+        assertEquals("Real car was verified in 4th gear", GearVerdict.VERIFIED_4TH_GEAR, report.gearVerdict)
+        assertNotNull("Observed ratio must be present", report.observedRatioKmhPer1000Rpm)
+        assertTrue(
+            "Observed ratio should be around 33.0..37.5 km/h per 1000 RPM, got ${report.observedRatioKmhPer1000Rpm}",
+            report.observedRatioKmhPer1000Rpm!! in 33.0..37.5
+        )
+
+        // 5. RPM coverage & spool load
+        assertTrue("Log reached 4084 RPM from 1198 RPM", report.hasRpmCoverage1300To4000)
+        assertTrue("Spool zone has fresh WOT load", report.hasFreshSpoolLoad)
+
+        // 6. Overall verdict
+        assertEquals(PullVerdict.PASS_ACCEPTANCE_PULL, report.overallVerdict)
+        assertTrue("Actionable checklist should be empty on pass", report.actionableChecklist.isEmpty())
+
+        val readable = report.formatHumanReadable()
+        assertTrue(readable.contains("ACCEPTANCE PASS"))
+        assertTrue(readable.contains("4-а передача підтверджена"))
+        assertTrue(readable.contains("1.325 бар"))
+    }
+
+    @Test
     fun testEmptyLogHandling() {
         val report = LogQualityAnalyzer.analyzePairs(emptyList())
         assertEquals(PullVerdict.POOR_DATA_QUALITY_ERROR, report.overallVerdict)
