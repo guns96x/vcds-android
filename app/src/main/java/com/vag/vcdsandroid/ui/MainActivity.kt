@@ -133,6 +133,8 @@ class MainActivity : AppCompatActivity() {
     private var elmConnectJob: Job? = null
     private var sessionGeneration: Long = 0L
     private var consecutiveNoBaroCount = 0
+    private val recordingStartRequested = java.util.concurrent.atomic.AtomicBoolean(false)
+    private val recordingStopRequested = java.util.concurrent.atomic.AtomicBoolean(false)
 
     // Diagnostic samples storage (thread-safe, shared between UI and CSV)
     private val latestSamples = ConcurrentHashMap<String, DiagnosticSample>()
@@ -298,6 +300,9 @@ class MainActivity : AppCompatActivity() {
 
         // Log toggle button
         binding.btnToggleLog.setOnClickListener {
+            if (recordingStartRequested.get() || recordingStopRequested.get()) {
+                return@setOnClickListener
+            }
             if (!asyncLogger.isLogging) {
                 startWotLog()
             } else {
@@ -607,6 +612,32 @@ class MainActivity : AppCompatActivity() {
     private fun renderLoggingState() {
         runOnUiThread {
             val isLogging = asyncLogger.isLogging
+            val isStartPending = recordingStartRequested.get()
+            val isStopPending = recordingStopRequested.get()
+
+            if (isStartPending) {
+                binding.btnToggleLog.isEnabled = false
+                binding.btnToggleLog.text = "STARTING (WAITING CYCLE)..."
+                binding.btnToggleLog.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D29922"))
+                binding.btnToggleLog.setTextColor(Color.WHITE)
+                binding.btnToggleLog.alpha = 0.85f
+                binding.btnCheckData.isEnabled = false
+                binding.btnModeToggle.isEnabled = false
+                binding.btnConnect.isEnabled = false
+                return@runOnUiThread
+            }
+            if (isStopPending) {
+                binding.btnToggleLog.isEnabled = false
+                binding.btnToggleLog.text = "STOPPING (FINISHING PAIR)..."
+                binding.btnToggleLog.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#DA3633"))
+                binding.btnToggleLog.setTextColor(Color.WHITE)
+                binding.btnToggleLog.alpha = 0.85f
+                binding.btnCheckData.isEnabled = false
+                binding.btnModeToggle.isEnabled = false
+                binding.btnConnect.isEnabled = false
+                return@runOnUiThread
+            }
+
             val isConnected = when (connectionMode) {
                 AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
                     elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
@@ -659,6 +690,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun resetTurboSessionState() {
+        recordingStartRequested.set(false)
+        recordingStopRequested.set(false)
         sessionGeneration++
         preflightReport = null
         coreTelemetryHealth.reset()
@@ -725,12 +758,9 @@ class MainActivity : AppCompatActivity() {
         }
         consecutiveNoBaroCount = 0
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        logStartUtcMs = System.currentTimeMillis()
-        turboScheduler.reset()
-        val (rawFile, pairFile) = asyncLogger.startLogging()
-        snapshotPreLogTelemetry()
+        recordingStartRequested.set(true)
+        recordingStopRequested.set(false)
         renderLoggingState()
-        Toast.makeText(this, "Log Started: ${pairFile.name}", Toast.LENGTH_SHORT).show()
     }
 
     private fun snapshotPreLogTelemetry() {
@@ -774,17 +804,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun stopWotLog() {
+    private fun stopWotLog(immediate: Boolean = false) {
         runOnUiThread {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
-        lifecycleScope.launch {
-            binding.btnToggleLog.isEnabled = false
-            turboScheduler.reset()
-            val (rawFile, pairFile) = asyncLogger.stopLogging()
+        if (!immediate && pollingJob?.isActive == true && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
+            recordingStopRequested.set(true)
+            recordingStartRequested.set(false)
             renderLoggingState()
-            if (pairFile != null) {
-                Toast.makeText(this@MainActivity, "Log Saved: ${pairFile.name} (${pairFile.length() / 1024} KB)", Toast.LENGTH_LONG).show()
+        } else {
+            recordingStartRequested.set(false)
+            recordingStopRequested.set(false)
+            lifecycleScope.launch {
+                binding.btnToggleLog.isEnabled = false
+                turboScheduler.reset()
+                val (_, pairFile) = asyncLogger.stopLogging()
+                renderLoggingState()
+                if (pairFile != null && pairFile.exists()) {
+                    showLogQualityReportDialog(pairFile)
+                }
+            }
+        }
+    }
+
+    private fun showLogQualityReportDialog(pairFile: File) {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val report = com.vag.vcdsandroid.analysis.LogQualityAnalyzer.analyze(pairFile)
+                val formatted = report.formatHumanReadable()
+                withContext(Dispatchers.Main) {
+                    val title = when (report.overallVerdict) {
+                        com.vag.vcdsandroid.analysis.PullVerdict.PASS_ACCEPTANCE_PULL -> "✅ ЗВІТ ЗАЇЗДУ: ІДЕАЛЬНО"
+                        com.vag.vcdsandroid.analysis.PullVerdict.INCOMPLETE_PULL_WARNING -> "⚠️ ЗВІТ ЗАЇЗДУ: УВАГА"
+                        com.vag.vcdsandroid.analysis.PullVerdict.POOR_DATA_QUALITY_ERROR -> "🔴 ЗВІТ ЗАЇЗДУ: ПОМИЛКА"
+                    }
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle(title)
+                        .setMessage(formatted)
+                        .setPositiveButton("OK", null)
+                        .setNeutralButton("Копіювати звіт") { _, _ ->
+                            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val clip = android.content.ClipData.newPlainText("Log Quality Report", formatted)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(this@MainActivity, "Звіт скопійовано в буфер", Toast.LENGTH_SHORT).show()
+                        }
+                        .show()
+                }
+            } catch (e: Exception) {
+                Log.w("MainActivity", "Failed to analyze post-log quality: ${e.message}")
             }
         }
     }
@@ -1089,7 +1156,7 @@ class MainActivity : AppCompatActivity() {
         if (asyncLogger.lastWriterError != null) {
             val err = asyncLogger.lastWriterError ?: "Writer exception"
             asyncLogger.clearWriterError()
-            stopWotLog()
+            stopWotLog(immediate = true)
             binding.tvLogMetrics.text = "🔴 LOGGER FAILED: $err"
             binding.tvLogMetrics.setTextColor(Color.parseColor("#F85149"))
             Toast.makeText(this@MainActivity, "CSV Logger failed: $err", Toast.LENGTH_LONG).show()
@@ -1397,7 +1464,7 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             if (asyncLogger.isLogging) {
-                stopWotLog()
+                stopWotLog(immediate = true)
             }
             stopPolling()
             elmEngine.disconnect()
@@ -1570,6 +1637,71 @@ class MainActivity : AppCompatActivity() {
             windowStart = SystemClock.elapsedRealtime()
 
             while (isActive && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
+                // 1. CYCLE BOUNDARY: Check pending STOP request
+                if (recordingStopRequested.compareAndSet(true, false)) {
+                    if (asyncLogger.isLogging) {
+                        val stopNs = SystemClock.elapsedRealtimeNanos()
+                        val stopUtc = System.currentTimeMillis()
+                        asyncLogger.logRawEvent(
+                            pid = "SESSION",
+                            value = null,
+                            unit = "",
+                            raw = "[SESSION_STOP]",
+                            latencyMs = 0L,
+                            status = "SESSION_STOP",
+                            rxNanos = stopNs,
+                            requestCommand = "STOP",
+                            utcTimestampMs = stopUtc
+                        )
+                        turboScheduler.reset()
+                        val (_, pairFile) = asyncLogger.stopLogging()
+                        withContext(Dispatchers.Main) {
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            renderLoggingState()
+                            if (pairFile != null && pairFile.exists()) {
+                                showLogQualityReportDialog(pairFile)
+                            }
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            renderLoggingState()
+                        }
+                    }
+                }
+
+                // 2. CYCLE BOUNDARY: Check pending START request
+                if (recordingStartRequested.compareAndSet(true, false)) {
+                    if (!asyncLogger.isLogging) {
+                        consecutiveNoBaroCount = 0
+                        logStartUtcMs = System.currentTimeMillis()
+                        turboScheduler.reset()
+                        val (_, pairFile) = asyncLogger.startLogging()
+                        val startNs = SystemClock.elapsedRealtimeNanos()
+                        val startUtc = System.currentTimeMillis()
+                        asyncLogger.logRawEvent(
+                            pid = "SESSION",
+                            value = null,
+                            unit = "",
+                            raw = "[SESSION_START]",
+                            latencyMs = 0L,
+                            status = "SESSION_START",
+                            rxNanos = startNs,
+                            requestCommand = "START",
+                            utcTimestampMs = startUtc
+                        )
+                        snapshotPreLogTelemetry()
+                        withContext(Dispatchers.Main) {
+                            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                            renderLoggingState()
+                            Toast.makeText(this@MainActivity, "Log Started: ${pairFile.name}", Toast.LENGTH_SHORT).show()
+                        }
+                    } else {
+                        withContext(Dispatchers.Main) {
+                            renderLoggingState()
+                        }
+                    }
+                }
+
                 // Pair-first polling: RPM & MAP queried on every loop cycle
                 queryRpmMapPair()
                 val auxPids = if (asyncLogger.isLogging) {

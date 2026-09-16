@@ -2,9 +2,11 @@ package com.vag.vcdsandroid.protocol
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class TurboSchedulerTest {
 
@@ -110,15 +112,15 @@ class TurboSchedulerTest {
                     simulatedClockMs += cmdLatencyMs
                     when (pid) {
                         "0110" -> {
-                            if (lastMafMs != null) maxMafIntervalMs = maxOf(maxMafIntervalMs, simulatedClockMs - lastMafMs!!)
+                            if (lastMafMs != null) maxMafIntervalMs = maxOf(maxMafIntervalMs, simulatedClockMs - lastMafMs)
                             lastMafMs = simulatedClockMs
                         }
                         "010D" -> {
-                            if (lastSpeedMs != null) maxSpeedIntervalMs = maxOf(maxSpeedIntervalMs, simulatedClockMs - lastSpeedMs!!)
+                            if (lastSpeedMs != null) maxSpeedIntervalMs = maxOf(maxSpeedIntervalMs, simulatedClockMs - lastSpeedMs)
                             lastSpeedMs = simulatedClockMs
                         }
                         "0104" -> {
-                            if (lastLoadMs != null) maxLoadIntervalMs = maxOf(maxLoadIntervalMs, simulatedClockMs - lastLoadMs!!)
+                            if (lastLoadMs != null) maxLoadIntervalMs = maxOf(maxLoadIntervalMs, simulatedClockMs - lastLoadMs)
                             lastLoadMs = simulatedClockMs
                         }
                     }
@@ -133,6 +135,12 @@ class TurboSchedulerTest {
                     maxSpeedIntervalMs < TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS)
                 assertTrue("Recording Load max interval ($maxLoadIntervalMs ms) must be < LOAD_MAX_AGE_MS (4500 ms)",
                     maxLoadIntervalMs < TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS)
+            } else if (cmdLatencyMs == 260L) {
+                // Under sustained p95 stress latency (260 ms/command), 8 pairs equals 20 bus commands = 5200 ms.
+                // This explicitly confirms the mathematical budget and why nominal <=216 ms is required.
+                assertEquals(2600L, maxMafIntervalMs)
+                assertEquals(5200L, maxSpeedIntervalMs)
+                assertEquals(5200L, maxLoadIntervalMs)
             }
         }
     }
@@ -163,15 +171,15 @@ class TurboSchedulerTest {
                     simulatedClockMs += cmdLatencyMs
                     when (pid) {
                         "0110" -> {
-                            if (lastMafMs != null) maxMafIntervalMs = maxOf(maxMafIntervalMs, simulatedClockMs - lastMafMs!!)
+                            if (lastMafMs != null) maxMafIntervalMs = maxOf(maxMafIntervalMs, simulatedClockMs - lastMafMs)
                             lastMafMs = simulatedClockMs
                         }
                         "010D" -> {
-                            if (lastSpeedMs != null) maxSpeedIntervalMs = maxOf(maxSpeedIntervalMs, simulatedClockMs - lastSpeedMs!!)
+                            if (lastSpeedMs != null) maxSpeedIntervalMs = maxOf(maxSpeedIntervalMs, simulatedClockMs - lastSpeedMs)
                             lastSpeedMs = simulatedClockMs
                         }
                         "0104" -> {
-                            if (lastLoadMs != null) maxLoadIntervalMs = maxOf(maxLoadIntervalMs, simulatedClockMs - lastLoadMs!!)
+                            if (lastLoadMs != null) maxLoadIntervalMs = maxOf(maxLoadIntervalMs, simulatedClockMs - lastLoadMs)
                             lastLoadMs = simulatedClockMs
                         }
                     }
@@ -218,5 +226,38 @@ class TurboSchedulerTest {
         nowMs += 2500L
         val pid4 = scheduler.checkLiveSlowPid(nowMs, 2500L)
         assertEquals("0133", pid4) // Baro
+    }
+
+    @Test
+    fun testRealCarLogCadenceAndFreshnessReplay() {
+        val candidates = listOf(
+            File("test_logs/20260916/Turbo_Pair_20260916_102349.csv"),
+            File("../test_logs/20260916/Turbo_Pair_20260916_102349.csv")
+        )
+        val file = candidates.firstOrNull { it.exists() }
+        assertNotNull("Real car log file must exist for replay verification", file)
+
+        val pairs = com.vag.vcdsandroid.analysis.LogQualityAnalyzer.parseCsv(file!!)
+        assertEquals(58, pairs.size)
+        assertTrue("All 58 pairs must be valid in real car log", pairs.all { it.pairValid })
+
+        for (p in pairs) {
+            assertTrue("Pair dt ${p.dtMapRpmMs} ms must be in [195..260] ms", p.dtMapRpmMs in 195L..260L)
+            val mafAge = p.mafAgeMs
+            if (mafAge != null) {
+                assertTrue("MAF age $mafAge ms must be <= MAF_MAX_AGE_MS (2500 ms)",
+                    mafAge <= TelemetryFreshnessPolicy.MAF_MAX_AGE_MS)
+            }
+            val speedAge = p.speedAgeMs
+            if (speedAge != null) {
+                assertTrue("Speed age $speedAge ms must be <= SPEED_MAX_AGE_MS (4500 ms)",
+                    speedAge <= TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS)
+            }
+            val loadAge = p.loadAgeMs
+            if (loadAge != null) {
+                assertTrue("Load age $loadAge ms must be <= LOAD_MAX_AGE_MS (4500 ms)",
+                    loadAge <= TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS)
+            }
+        }
     }
 }
