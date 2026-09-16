@@ -230,7 +230,7 @@ class BluetoothElmTransport(private val context: Context) {
         }
 
         if (!connected || activeSocket == null) {
-            val finalErr = "All RFCOMM connection attempts failed for $devName [$devMac]"
+            val finalErr = "All RFCOMM connection attempts failed for $devName [XX:XX:XX:XX:XX:XX]"
             Log.e(TAG, finalErr)
             logCallback?.invoke("ERR: $finalErr")
             disconnect()
@@ -245,7 +245,7 @@ class BluetoothElmTransport(private val context: Context) {
             connectedDeviceAddress = devMac
             lastCommandTimedOut.set(false)
 
-            val openMsg = "I/O Streams cached. RFCOMM socket connected to $devName [$devMac]"
+            val openMsg = "I/O Streams cached. RFCOMM socket connected to $devName [XX:XX:XX:XX:XX:XX]"
             Log.i(TAG, openMsg)
             logCallback?.invoke(openMsg)
             true
