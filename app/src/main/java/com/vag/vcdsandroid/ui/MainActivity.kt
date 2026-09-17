@@ -27,6 +27,7 @@ import androidx.lifecycle.lifecycleScope
 import com.vag.vcdsandroid.R
 import com.vag.vcdsandroid.databinding.ActivityMainBinding
 import com.vag.vcdsandroid.logging.AsyncCsvLogger
+import com.vag.vcdsandroid.logging.RecordingKeepAliveService
 import com.vag.vcdsandroid.protocol.CoreTelemetryHealth
 import com.vag.vcdsandroid.protocol.DiagState
 import com.vag.vcdsandroid.protocol.Elm327DiagnosticEngine
@@ -98,6 +99,7 @@ class MainActivity : AppCompatActivity() {
         const val ENGINE_OFF_BARO_MAX_MBAR = 1100.0
         const val SLOW_SLOT_INTERVAL_MS = 2500L
         const val SLOW_VALUE_MAX_AGE_MS = TelemetryFreshnessPolicy.SLOW_MAX_AGE_MS
+        const val RECONNECT_INTERVAL_MS = 4000L
         const val MAF_MAX_AGE_MS = TelemetryFreshnessPolicy.MAF_MAX_AGE_MS
         const val SPEED_MAX_AGE_MS = TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS
         const val LOAD_MAX_AGE_MS = TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS
@@ -133,6 +135,9 @@ class MainActivity : AppCompatActivity() {
     private var elmConnectJob: Job? = null
     private var sessionGeneration: Long = 0L
     private var consecutiveNoBaroCount = 0
+    private var baroUnavailableLogged = false
+    private var lastElmDevice: BluetoothDevice? = null
+    private var reconnectJob: Job? = null
     private val recordingStartRequested = java.util.concurrent.atomic.AtomicBoolean(false)
     private val recordingStopRequested = java.util.concurrent.atomic.AtomicBoolean(false)
 
@@ -228,15 +233,34 @@ class MainActivity : AppCompatActivity() {
     override fun onStart() {
         super.onStart()
         phoneBarometerProvider.start()
+        if (asyncLogger.isLogging) logSessionEvent("APP_FOREGROUND", "")
     }
 
     override fun onStop() {
+        // Long drive logs keep recording in the background (RecordingKeepAliveService holds the process/CPU).
+        // The phone barometer keeps running too, otherwise BARO would expire mid-log.
         if (asyncLogger.isLogging) {
-            stopWotLog()
-            Toast.makeText(this, "Log stopped: App entered background", Toast.LENGTH_SHORT).show()
+            logSessionEvent("APP_BACKGROUND", "recording continues")
+        } else {
+            phoneBarometerProvider.stop()
         }
-        phoneBarometerProvider.stop()
         super.onStop()
+    }
+
+    private fun logSessionEvent(status: String, detail: String) {
+        if (!asyncLogger.isLogging) return
+        val ns = SystemClock.elapsedRealtimeNanos()
+        asyncLogger.logRawEvent(
+            pid = "SESSION",
+            value = null,
+            unit = "",
+            raw = if (detail.isEmpty()) "[$status]" else "[$status $detail]",
+            latencyMs = 0L,
+            status = status,
+            rxNanos = ns,
+            requestCommand = status,
+            utcTimestampMs = System.currentTimeMillis()
+        )
     }
 
     override fun onDestroy() {
@@ -468,6 +492,7 @@ class MainActivity : AppCompatActivity() {
     private fun startElmConnection(device: BluetoothDevice) {
         elmConnectJob?.cancel()
         resetTurboSessionState()
+        lastElmDevice = device
         val myGeneration = sessionGeneration
         val myMode = connectionMode
 
@@ -550,10 +575,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun performDisconnect(targetMode: AppConnectionMode = connectionMode) {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        reconnectJob?.cancel()
+        reconnectJob = null
         lifecycleScope.launch {
             stopPolling()
             if (asyncLogger.isLogging) {
-                asyncLogger.stopLogging()
+                stopWotLog(immediate = true, abortReason = "USER_DISCONNECT")
             }
             try {
                 when (targetMode) {
@@ -804,7 +831,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun stopWotLog(immediate: Boolean = false) {
+    private fun stopWotLog(immediate: Boolean = false, abortReason: String? = null) {
         runOnUiThread {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
@@ -815,8 +842,26 @@ class MainActivity : AppCompatActivity() {
         } else {
             recordingStartRequested.set(false)
             recordingStopRequested.set(false)
+            reconnectJob?.cancel()
+            reconnectJob = null
             lifecycleScope.launch {
+                RecordingKeepAliveService.stop(this@MainActivity)
                 binding.btnToggleLog.isEnabled = false
+                if (abortReason != null && asyncLogger.isLogging) {
+                    val stopNs = SystemClock.elapsedRealtimeNanos()
+                    val stopUtc = System.currentTimeMillis()
+                    asyncLogger.logRawEvent(
+                        pid = "SESSION",
+                        value = null,
+                        unit = "",
+                        raw = "[SESSION_ABORT reason=$abortReason]",
+                        latencyMs = 0L,
+                        status = "SESSION_ABORT",
+                        rxNanos = stopNs,
+                        requestCommand = "ABORT",
+                        utcTimestampMs = stopUtc
+                    )
+                }
                 turboScheduler.reset()
                 val (_, pairFile) = asyncLogger.stopLogging()
                 renderLoggingState()
@@ -834,7 +879,7 @@ class MainActivity : AppCompatActivity() {
                 val formatted = report.formatHumanReadable()
                 withContext(Dispatchers.Main) {
                     val title = when (report.overallVerdict) {
-                        com.vag.vcdsandroid.analysis.PullVerdict.PASS_ACCEPTANCE_PULL -> "✅ ЗВІТ ЗАЇЗДУ: ІДЕАЛЬНО"
+                        com.vag.vcdsandroid.analysis.PullVerdict.PASS_ACCEPTANCE_PULL -> "✅ ЗВІТ ЗАЇЗДУ: ЛОГ ПРИЙНЯТО"
                         com.vag.vcdsandroid.analysis.PullVerdict.INCOMPLETE_PULL_WARNING -> "⚠️ ЗВІТ ЗАЇЗДУ: УВАГА"
                         com.vag.vcdsandroid.analysis.PullVerdict.POOR_DATA_QUALITY_ERROR -> "🔴 ЗВІТ ЗАЇЗДУ: ПОМИЛКА"
                     }
@@ -1156,7 +1201,7 @@ class MainActivity : AppCompatActivity() {
         if (asyncLogger.lastWriterError != null) {
             val err = asyncLogger.lastWriterError ?: "Writer exception"
             asyncLogger.clearWriterError()
-            stopWotLog(immediate = true)
+            stopWotLog(immediate = true, abortReason = "WRITER_ERROR")
             binding.tvLogMetrics.text = "🔴 LOGGER FAILED: $err"
             binding.tvLogMetrics.setTextColor(Color.parseColor("#F85149"))
             Toast.makeText(this@MainActivity, "CSV Logger failed: $err", Toast.LENGTH_LONG).show()
@@ -1461,10 +1506,16 @@ class MainActivity : AppCompatActivity() {
     // =========================================================================
 
     private fun handleCoreTelemetryLost() {
+        val device = lastElmDevice
+        if (asyncLogger.isLogging && device != null && connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+            pollingJob?.cancel() // called from inside the polling loop: stop it at the next suspension point
+            runOnUiThread { if (reconnectJob?.isActive != true) startGapReconnect(device) }
+            return
+        }
         runOnUiThread {
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             if (asyncLogger.isLogging) {
-                stopWotLog(immediate = true)
+                stopWotLog(immediate = true, abortReason = "CORE_TELEMETRY_LOST")
             }
             stopPolling()
             elmEngine.disconnect()
@@ -1474,6 +1525,45 @@ class MainActivity : AppCompatActivity() {
             binding.tvStatus.setTextColor(Color.parseColor("#F85149"))
             renderLoggingState()
             Toast.makeText(this@MainActivity, "Core telemetry lost! 3 consecutive timeouts.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * Long drive log: link loss (ignition off at a stop, adapter hiccup, K-line timeout) does NOT close the file.
+     * Mark SESSION_GAP, drop the link, retry the same adapter every RECONNECT_INTERVAL_MS until it comes back
+     * (SESSION_RESUME) or the user presses STOP LOG / disconnects.
+     */
+    private fun startGapReconnect(device: BluetoothDevice) {
+        logSessionEvent("SESSION_GAP", "reason=CORE_TELEMETRY_LOST")
+        reconnectJob?.cancel()
+        reconnectJob = lifecycleScope.launch {
+            pollingJob?.cancel()
+            pollingJob = null
+            withContext(Dispatchers.IO) { try { elmEngine.disconnect() } catch (_: Exception) {} }
+            var attempt = 0
+            while (isActive && asyncLogger.isLogging) {
+                attempt++
+                binding.tvStatus.text = "RECONNECTING (log still open)"
+                binding.tvStatus.setTextColor(Color.parseColor("#D29922"))
+                binding.tvPreFlightStatus.text = "LINK LOST - reconnect attempt $attempt\nLog file stays open; press STOP LOG to finish"
+                binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
+                renderLoggingState()
+                delay(RECONNECT_INTERVAL_MS)
+                if (!asyncLogger.isLogging) break
+                val ok = try { elmEngine.connect(device, forceGeneric = true) } catch (_: Exception) { false }
+                if (ok && asyncLogger.isLogging) {
+                    coreTelemetryHealth.reset()
+                    turboScheduler.reset()
+                    logSessionEvent("SESSION_RESUME", "attempts=$attempt")
+                    binding.tvPreFlightStatus.text = "LINK RESTORED - recording resumed"
+                    binding.tvPreFlightStatus.setTextColor(Color.parseColor("#3FB950"))
+                    updateStatusUI()
+                    renderLoggingState()
+                    startTurboFastPolling()
+                    break
+                }
+                if (!ok) withContext(Dispatchers.IO) { try { elmEngine.disconnect() } catch (_: Exception) {} }
+            }
         }
     }
 
@@ -1519,16 +1609,15 @@ class MainActivity : AppCompatActivity() {
             if (asyncLogger.isLogging) {
                 if (baro.valueMbar == null) {
                     consecutiveNoBaroCount++
-                    if (consecutiveNoBaroCount >= 2) {
-                        stopWotLog()
-                        runOnUiThread {
-                            binding.tvPreFlightStatus.text = "🔴 BARO LOST — LOG STOPPED\nBarometer expired during recording"
-                            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#F85149"))
-                            Toast.makeText(this@MainActivity, "BARO LOST — LOG STOPPED", Toast.LENGTH_LONG).show()
-                        }
-                        return
+                    // Long drive log: absolute MAP stays valid without BARO (baro column empty in those rows,
+                    // the session snapshot BARO covers analysis). Mark it once instead of aborting the log.
+                    if (consecutiveNoBaroCount >= 2 && !baroUnavailableLogged) {
+                        baroUnavailableLogged = true
+                        logSessionEvent("BARO_UNAVAILABLE", "rows continue with empty baro")
                     }
                 } else {
+                    if (baroUnavailableLogged) logSessionEvent("BARO_RESTORED", "")
+                    baroUnavailableLogged = false
                     consecutiveNoBaroCount = 0
                 }
             }
@@ -1656,6 +1745,7 @@ class MainActivity : AppCompatActivity() {
                         turboScheduler.reset()
                         val (_, pairFile) = asyncLogger.stopLogging()
                         withContext(Dispatchers.Main) {
+                            RecordingKeepAliveService.stop(this@MainActivity)
                             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                             renderLoggingState()
                             if (pairFile != null && pairFile.exists()) {
@@ -1690,7 +1780,9 @@ class MainActivity : AppCompatActivity() {
                             utcTimestampMs = startUtc
                         )
                         snapshotPreLogTelemetry()
+                        baroUnavailableLogged = false
                         withContext(Dispatchers.Main) {
+                            RecordingKeepAliveService.start(this@MainActivity, pairFile.name)
                             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                             renderLoggingState()
                             Toast.makeText(this@MainActivity, "Log Started: ${pairFile.name}", Toast.LENGTH_SHORT).show()

@@ -4,8 +4,8 @@ object TelemetryFreshnessPolicy {
     const val RPM_MAX_AGE_MS = 1000L
     const val MAP_MAX_AGE_MS = 1000L
     const val MAF_MAX_AGE_MS = 2500L
-    const val SPEED_MAX_AGE_MS = 4500L
-    const val LOAD_MAX_AGE_MS = 4500L
+    const val SPEED_MAX_AGE_MS = 5000L  // 8 pairs incl. one temperature slot = 21 cmds x 216 ms
+    const val LOAD_MAX_AGE_MS = 5000L
     const val SLOW_MAX_AGE_MS = 12000L
     const val PHONE_BARO_MAX_AGE_MS = 5000L
 

@@ -14,11 +14,14 @@ class TurboScheduler {
     }
 
     /**
-     * Deterministic aux cadence used during active RECORDING (4/8/8 per real-car validation):
+     * Deterministic aux cadence used during active RECORDING (4/8/8 per real-car validation, plus temperatures):
      * - MAF (0110): every 4th RPM/MAP pair
      * - Speed (010D): every 8th RPM/MAP pair
      * - Load (0104): every 8th RPM/MAP pair, offset from Speed by 4 pairs
-     * Leaves 75% of cycles strictly dedicated to RPM+MAP, maximizing pair acquisition rate (~1.85 Hz).
+     * - One "temperature slot" every 8th pair (offset 2): IAT (010F), except every 64th pair Coolant (0105)
+     *   and every 64th pair offset 32 Voltage (0142). Charge-air temperature under load is required to
+     *   cross-check MAF against speed-density (MAP x IAT x displacement); without it MAF bias is unidentifiable.
+     * Exactly one extra bus command per 8 pairs: 21 commands x 216 ms = 4536 ms, inside SPEED/LOAD_MAX_AGE_MS.
      */
     fun nextRecordingAuxPids(): List<String> {
         pairCount++
@@ -26,6 +29,15 @@ class TurboScheduler {
         if (pairCount % 4L == 0L) pids.add("0110")  // MAF
         if (pairCount % 8L == 0L) pids.add("010D") // Speed
         if (pairCount % 8L == 4L) pids.add("0104") // Load
+        if (pairCount % 8L == 2L) {
+            pids.add(
+                when (pairCount % 64L) {
+                    2L -> "0105"  // Coolant
+                    34L -> "0142" // Voltage
+                    else -> "010F" // IAT
+                }
+            )
+        }
         return pids
     }
 
@@ -50,7 +62,7 @@ class TurboScheduler {
 
     /**
      * Check if a slow PID should be queried in LIVE mode (~every 2500 ms).
-     * Never queried in RECORDING mode.
+     * LIVE mode only; RECORDING polls IAT/Coolant/Voltage through nextRecordingAuxPids().
      */
     fun checkLiveSlowPid(nowMs: Long, intervalMs: Long = 2500L): String? {
         if (lastSlowPidMs == 0L || nowMs - lastSlowPidMs >= intervalMs) {

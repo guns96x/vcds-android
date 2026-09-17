@@ -46,10 +46,21 @@ class TurboSchedulerTest {
         }
 
         val allAuxPids = auxMap.values.flatten()
-        assertFalse(allAuxPids.contains("0105"))
-        assertFalse(allAuxPids.contains("010F"))
-        assertFalse(allAuxPids.contains("0142"))
         assertFalse(allAuxPids.contains("0133"))
+    }
+
+    @Test
+    fun testRecordingPollsTemperaturesWithoutStackingOnCoreAux() {
+        val scheduler = TurboScheduler()
+        val auxMap = (1..128).associateWith { scheduler.nextRecordingAuxPids() }
+        for ((i, pids) in auxMap) {
+            val slot = i % 8 == 2
+            assertEquals("Coolant on pair %64==2 (pair $i)", i % 64 == 2, pids.contains("0105"))
+            assertEquals("Voltage on pair %64==34 (pair $i)", i % 64 == 34, pids.contains("0142"))
+            assertEquals("IAT on the remaining temperature slots (pair $i)", slot && i % 64 != 2 && i % 64 != 34, pids.contains("010F"))
+            if (slot) assertEquals("Temperature slot never stacks onto another aux (pair $i: $pids)", 1, pids.size)
+        }
+        assertEquals(12, auxMap.values.flatten().count { it == "010F" })
     }
 
     @Test
@@ -98,6 +109,8 @@ class TurboSchedulerTest {
             var lastMafMs: Long? = null
             var lastSpeedMs: Long? = null
             var lastLoadMs: Long? = null
+            var lastIatMs: Long? = null
+            var maxIatIntervalMs = 0L
 
             var maxMafIntervalMs = 0L
             var maxSpeedIntervalMs = 0L
@@ -123,6 +136,10 @@ class TurboSchedulerTest {
                             if (lastLoadMs != null) maxLoadIntervalMs = maxOf(maxLoadIntervalMs, simulatedClockMs - lastLoadMs)
                             lastLoadMs = simulatedClockMs
                         }
+                        "010F" -> {
+                            if (lastIatMs != null) maxIatIntervalMs = maxOf(maxIatIntervalMs, simulatedClockMs - lastIatMs)
+                            lastIatMs = simulatedClockMs
+                        }
                     }
                 }
             }
@@ -131,16 +148,18 @@ class TurboSchedulerTest {
                 // Under nominal measured latency, intervals must be strictly below declared thresholds
                 assertTrue("Recording MAF max interval ($maxMafIntervalMs ms) must be < MAF_MAX_AGE_MS (2500 ms)",
                     maxMafIntervalMs < TelemetryFreshnessPolicy.MAF_MAX_AGE_MS)
-                assertTrue("Recording Speed max interval ($maxSpeedIntervalMs ms) must be < SPEED_MAX_AGE_MS (4500 ms)",
+                assertTrue("Recording Speed max interval ($maxSpeedIntervalMs ms) must be < SPEED_MAX_AGE_MS",
                     maxSpeedIntervalMs < TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS)
-                assertTrue("Recording Load max interval ($maxLoadIntervalMs ms) must be < LOAD_MAX_AGE_MS (4500 ms)",
+                assertTrue("Recording Load max interval ($maxLoadIntervalMs ms) must be < LOAD_MAX_AGE_MS",
                     maxLoadIntervalMs < TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS)
+                assertTrue("Recording IAT max interval ($maxIatIntervalMs ms) must be < SLOW_MAX_AGE_MS",
+                    maxIatIntervalMs < TelemetryFreshnessPolicy.SLOW_MAX_AGE_MS)
             } else if (cmdLatencyMs == 260L) {
-                // Under sustained p95 stress latency (260 ms/command), 8 pairs equals 20 bus commands = 5200 ms.
-                // This explicitly confirms the mathematical budget and why nominal <=216 ms is required.
-                assertEquals(2600L, maxMafIntervalMs)
-                assertEquals(5200L, maxSpeedIntervalMs)
-                assertEquals(5200L, maxLoadIntervalMs)
+                // Under sustained p95 stress latency (260 ms/command), 8 pairs equals 21 bus commands = 5460 ms
+                // (one temperature slot). Confirms the budget and why nominal <=216 ms is required.
+                assertEquals(2860L, maxMafIntervalMs)
+                assertEquals(5460L, maxSpeedIntervalMs)
+                assertEquals(5460L, maxLoadIntervalMs)
             }
         }
     }
@@ -157,6 +176,8 @@ class TurboSchedulerTest {
             var lastMafMs: Long? = null
             var lastSpeedMs: Long? = null
             var lastLoadMs: Long? = null
+            var lastIatMs: Long? = null
+            var maxIatIntervalMs = 0L
 
             var maxMafIntervalMs = 0L
             var maxSpeedIntervalMs = 0L
@@ -182,6 +203,10 @@ class TurboSchedulerTest {
                             if (lastLoadMs != null) maxLoadIntervalMs = maxOf(maxLoadIntervalMs, simulatedClockMs - lastLoadMs)
                             lastLoadMs = simulatedClockMs
                         }
+                        "010F" -> {
+                            if (lastIatMs != null) maxIatIntervalMs = maxOf(maxIatIntervalMs, simulatedClockMs - lastIatMs)
+                            lastIatMs = simulatedClockMs
+                        }
                     }
                 }
 
@@ -196,7 +221,7 @@ class TurboSchedulerTest {
 
             assertTrue("Live MAF max interval ($maxMafIntervalMs ms) with $slowCmdCount slow cmds must be < MAF_MAX_AGE_MS (2500 ms)",
                 maxMafIntervalMs < TelemetryFreshnessPolicy.MAF_MAX_AGE_MS)
-            assertTrue("Live Speed max interval ($maxSpeedIntervalMs ms) with $slowCmdCount slow cmds must be < SPEED_MAX_AGE_MS (4500 ms)",
+            assertTrue("Live Speed max interval ($maxSpeedIntervalMs ms) with $slowCmdCount slow cmds must be < SPEED_MAX_AGE_MS",
                 maxSpeedIntervalMs < TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS)
             assertTrue("Live Load max interval ($maxLoadIntervalMs ms) with $slowCmdCount slow cmds must be < LOAD_MAX_AGE_MS (4500 ms)",
                 maxLoadIntervalMs < TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS)
