@@ -114,6 +114,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var elmEngine: Elm327DiagnosticEngine
     private lateinit var asyncLogger: AsyncCsvLogger
 
+    /**
+     * Auxiliary measuring groups, sampled one per poll cycle so the core group
+     * 011 cadence is untouched. Order puts the channels that close the open
+     * questions first: 008/003 limiters and airflow, then 007 temperatures that
+     * feed the derate maps, 010 ECU barometer, 004 actual injection timing,
+     * 009/015 further limiters and actual torque, 001 the quantity that
+     * survives every limiter.
+     */
+    private val AUX_GROUP_ROTATION = intArrayOf(8, 3, 7, 10, 4, 9, 15, 1)
+
     private var connectionMode = AppConnectionMode.TURBO_FAST_OBD
     private var isPermissionRequested = false
     private var currentDevice: UsbDevice? = null
@@ -1894,43 +1904,89 @@ class MainActivity : AppCompatActivity() {
                     logGroupChannel("G011_N75_DUTY", n75, "%", 11)
                 }
 
-                if (cycleCount % 2 == 0) {
-                    val g008 = if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
-                        elmEngine.readMeasuringGroup(8)
-                    } else {
-                        engine.readMeasuringGroup(8)
+                // Auxiliary groups rotate one per cycle so the core group 011 rate is
+                // unaffected. Composition follows the Ross-Tech label file for EDC16 PD
+                // (038-906-016-BHW), the authoritative source for what each block
+                // carries. That file documents group 008 as TORQUE in Nm; the previous
+                // in-app table called it injected quantity in mg/str.
+                when (AUX_GROUP_ROTATION[cycleCount % AUX_GROUP_ROTATION.size]) {
+                    8 -> readAuxGroup(8)?.let { g ->
+                        if (g.values.size >= 4) {
+                            val driver = g.values[1].rawValue
+                            val torque = g.values[2].rawValue
+                            val smoke = g.values[3].rawValue
+                            binding.tvDriverWish.text = String.format(Locale.US, "Driver: %.1f Nm", driver)
+                            binding.tvTorqueLimit.text = String.format(Locale.US, "Torque: %.1f Nm", torque)
+                            binding.tvSmokeLimit.text = String.format(Locale.US, "Smoke: %.1f Nm", smoke)
+                            logGroupChannel("G008_DRIVER_INTENTION_TRQ", driver, "Nm", 8)
+                            logGroupChannel("G008_TORQUE_LIMITATION", torque, "Nm", 8)
+                            logGroupChannel("G008_SMOKE_LIMITATION", smoke, "Nm", 8)
+                        }
                     }
-                    if (g008 != null && g008.values.size >= 4) {
-                        val lastDriverWish = g008.values[1].rawValue
-                        val lastTorqueLim = g008.values[2].rawValue
-                        val lastSmokeLim = g008.values[3].rawValue
-
-                        binding.tvDriverWish.text = String.format(Locale.US, "Driver: %.1f mg", lastDriverWish)
-                        binding.tvTorqueLimit.text = String.format(Locale.US, "Torque: %.1f mg", lastTorqueLim)
-                        binding.tvSmokeLimit.text = String.format(Locale.US, "Smoke: %.1f mg", lastSmokeLim)
-
-                        logGroupChannel("G008_DRIVER_WISH_IQ", lastDriverWish, "mg", 8)
-                        logGroupChannel("G008_TORQUE_LIMIT_IQ", lastTorqueLim, "mg", 8)
-                        logGroupChannel("G008_SMOKE_LIMIT_IQ", lastSmokeLim, "mg", 8)
+                    3 -> readAuxGroup(3)?.let { g ->
+                        if (g.values.size >= 4) {
+                            val mafSpec = g.values[1].rawValue
+                            val mafAct = g.values[2].rawValue
+                            val egr = g.values[3].rawValue
+                            binding.tvMafSpecified.text = String.format(Locale.US, "Target: %.0f mg/str", mafSpec)
+                            binding.tvMafActual.text = String.format(Locale.US, "Actual: %.0f mg/str", mafAct)
+                            binding.tvEgrDuty.text = String.format(Locale.US, "EGR: %.1f %%", egr)
+                            logGroupChannel("G003_MAF_SPEC", mafSpec, "mg/str", 3)
+                            logGroupChannel("G003_MAF_ACT", mafAct, "mg/str", 3)
+                            logGroupChannel("G003_EGR_DUTY", egr, "%", 3)
+                        }
                     }
-                } else {
-                    val g003 = if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
-                        elmEngine.readMeasuringGroup(3)
-                    } else {
-                        engine.readMeasuringGroup(3)
+                    // Fuel temp (G81), intake air temp (G72), coolant (G62): the exact
+                    // axes of the thermal derate maps EngPrt_facAirOvhtPrv_MAP,
+                    // EngPrt_facCTOvhtPrv_MAP and EngPrt_facFlTempLim_MAP.
+                    7 -> readAuxGroup(7)?.let { g ->
+                        if (g.values.size >= 4) {
+                            logGroupChannel("G007_FUEL_TEMP", g.values[0].rawValue, "C", 7)
+                            logGroupChannel("G007_FUEL_COOLING", g.values[1].rawValue, "%", 7)
+                            logGroupChannel("G007_INTAKE_AIR_TEMP", g.values[2].rawValue, "C", 7)
+                            logGroupChannel("G007_COOLANT_TEMP", g.values[3].rawValue, "C", 7)
+                        }
                     }
-                    if (g003 != null && g003.values.size >= 4) {
-                        val mafReq = g003.values[1].rawValue
-                        val lastMafAct = g003.values[2].rawValue
-                        val egr = g003.values[3].rawValue
-
-                        binding.tvMafSpecified.text = String.format(Locale.US, "Target: %.0f mg/s", mafReq)
-                        binding.tvMafActual.text = String.format(Locale.US, "Actual: %.0f mg/s", lastMafAct)
-                        binding.tvEgrDuty.text = String.format(Locale.US, "EGR: %.1f %%", egr)
-
-                        logGroupChannel("G003_MAF_SPEC", mafReq, "mg/s", 3)
-                        logGroupChannel("G003_MAF_ACT", lastMafAct, "mg/s", 3)
-                        logGroupChannel("G003_EGR_DUTY", egr, "%", 3)
+                    // Atmospheric pressure straight from the ECU beats the phone barometer.
+                    10 -> readAuxGroup(10)?.let { g ->
+                        if (g.values.size >= 4) {
+                            logGroupChannel("G010_MAF_ACT", g.values[0].rawValue, "mg/str", 10)
+                            logGroupChannel("G010_ATMOSPHERIC_PRESSURE", g.values[1].rawValue, "mbar", 10)
+                            logGroupChannel("G010_MANIFOLD_PRESSURE_ACT", g.values[2].rawValue, "mbar", 10)
+                            logGroupChannel("G010_THROTTLE_POS", g.values[3].rawValue, "%", 10)
+                        }
+                    }
+                    // Actual start of injection: verifies the timing advance this
+                    // car's tune added against the stock calibration.
+                    4 -> readAuxGroup(4)?.let { g ->
+                        if (g.values.size >= 4) {
+                            logGroupChannel("G004_INJECTION_START", g.values[1].rawValue, "degKW", 4)
+                            logGroupChannel("G004_INJECTION_DURATION", g.values[2].rawValue, "degKW", 4)
+                            logGroupChannel("G004_TORSION_VALUE", g.values[3].rawValue, "degKW", 4)
+                        }
+                    }
+                    // Further torque limiters: transmission intervention, restriction.
+                    9 -> readAuxGroup(9)?.let { g ->
+                        if (g.values.size >= 4) {
+                            logGroupChannel("G009_CRUISE_DESIRED_TRQ", g.values[1].rawValue, "Nm", 9)
+                            logGroupChannel("G009_TRANSMISSION_TRQ", g.values[2].rawValue, "Nm", 9)
+                            logGroupChannel("G009_TORQUE_RESTRICTION", g.values[3].rawValue, "Nm", 9)
+                        }
+                    }
+                    15 -> readAuxGroup(15)?.let { g ->
+                        if (g.values.size >= 4) {
+                            logGroupChannel("G015_ENGINE_TORQUE", g.values[1].rawValue, "Nm", 15)
+                            logGroupChannel("G015_FUEL_CONSUMPTION", g.values[2].rawValue, "", 15)
+                            logGroupChannel("G015_DRIVER_INTENTION_TRQ", g.values[3].rawValue, "Nm", 15)
+                        }
+                    }
+                    // Quantity that survives every limiter.
+                    1 -> readAuxGroup(1)?.let { g ->
+                        if (g.values.size >= 4) {
+                            logGroupChannel("G001_INJECTION_QUANTITY", g.values[1].rawValue, "mg/str", 1)
+                            logGroupChannel("G001_SUPPLY_DURATION", g.values[2].rawValue, "degKW", 1)
+                            logGroupChannel("G001_COOLANT_TEMP", g.values[3].rawValue, "C", 1)
+                        }
                     }
                 }
                 cycleCount++
@@ -1938,6 +1994,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+
+    /** Reads one auxiliary measuring group on whichever transport is active. */
+    private suspend fun readAuxGroup(group: Int) =
+        if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
+            elmEngine.readMeasuringGroup(group)
+        } else {
+            engine.readMeasuringGroup(group)
+        }
 
     /**
      * Writes one VAG measuring-group channel into the RAW csv.
