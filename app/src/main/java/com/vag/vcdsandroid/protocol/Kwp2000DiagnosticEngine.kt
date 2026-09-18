@@ -44,6 +44,15 @@ class Kwp2000DiagnosticEngine(
     private val commMutex = Mutex()
     private val dtcLookup = HashMap<String, Pair<String, String>>()
 
+    private companion object {
+        /**
+         * KWP2000 physical address of the diagnostic tester (us). Any received
+         * frame whose SOURCE byte equals this is our own K-Line transmission
+         * echoed back by the interface, never a reply from the ECU.
+         */
+        const val TESTER_ADDRESS = 0xF1
+    }
+
     // Mock engine state for simulation mode
     private var mockRpm = 1400.0
     private var mockSimTime = 0.0
@@ -542,60 +551,16 @@ class Kwp2000DiagnosticEngine(
         return msg
     }
 
-    private fun extractPayload(buffer: ByteArray, count: Int): ByteArray? {
-        if (count < 4) return null
-
-        // Pass 1: Search for valid KWP2000 response addressed to Tester (target == 0xF1, source != 0xF1)
-        for (i in 0 until count - 3) {
-            val fmt = buffer[i].toInt() and 0xFF
-            if ((fmt and 0xC0) != 0x80) continue
-
-            val target = buffer[i + 1].toInt() and 0xFF
-            val source = buffer[i + 2].toInt() and 0xFF
-
-            // Filter out local transmission echo (where source is Tester 0xF1)
-            if (target != 0xF1 || source == 0xF1) continue
-
-            val length = fmt and 0x3F
-            val totalMsgLen = length + 4
-            if (i + totalMsgLen > count) continue
-
-            var calculatedCs = 0
-            for (k in i until i + totalMsgLen - 1) {
-                calculatedCs += (buffer[k].toInt() and 0xFF)
-            }
-            calculatedCs = calculatedCs and 0xFF
-            val receivedCs = buffer[i + totalMsgLen - 1].toInt() and 0xFF
-            if (calculatedCs == receivedCs) {
-                val payload = ByteArray(length)
-                System.arraycopy(buffer, i + 3, payload, 0, length)
-                return payload
-            }
-        }
-
-        // Pass 2: Fallback for generic frames if address bytes vary
-        for (i in 0 until count - 3) {
-            val fmt = buffer[i].toInt() and 0xFF
-            if ((fmt and 0xC0) != 0x80) continue
-            val length = fmt and 0x3F
-            val totalMsgLen = length + 4
-            if (i + totalMsgLen > count) continue
-
-            var calculatedCs = 0
-            for (k in i until i + totalMsgLen - 1) {
-                calculatedCs += (buffer[k].toInt() and 0xFF)
-            }
-            calculatedCs = calculatedCs and 0xFF
-            val receivedCs = buffer[i + totalMsgLen - 1].toInt() and 0xFF
-            if (calculatedCs == receivedCs) {
-                val payload = ByteArray(length)
-                System.arraycopy(buffer, i + 3, payload, 0, length)
-                return payload
-            }
-        }
-
-        return null
-    }
+    /** Visible for unit tests: K-Line echo rejection is safety-relevant. */
+    /**
+     * Delegates to [KwpFrameParser], which is Android-free and unit tested.
+     *
+     * The rules live there because they are safety relevant: on K-Line our own
+     * transmission is echoed back as a checksum-valid frame, and accepting it
+     * would feed the request we just sent back to the caller as live ECU data.
+     */
+    internal fun extractPayload(buffer: ByteArray, count: Int): ByteArray? =
+        KwpFrameParser.extractPayload(buffer, count)
 
     /**
      * Realistic EDC16U34 4th-gear WOT acceleration simulation.
