@@ -1887,6 +1887,11 @@ class MainActivity : AppCompatActivity() {
                         actualBoost.toFloat(),
                         n75.toFloat()
                     )
+
+                    logGroupChannel("G011_RPM", rpmVal, "rpm", 11)
+                    logGroupChannel("G011_BOOST_SPEC", targetBoost, "mbar", 11)
+                    logGroupChannel("G011_BOOST_ACT", actualBoost, "mbar", 11)
+                    logGroupChannel("G011_N75_DUTY", n75, "%", 11)
                 }
 
                 if (cycleCount % 2 == 0) {
@@ -1903,6 +1908,10 @@ class MainActivity : AppCompatActivity() {
                         binding.tvDriverWish.text = String.format(Locale.US, "Driver: %.1f mg", lastDriverWish)
                         binding.tvTorqueLimit.text = String.format(Locale.US, "Torque: %.1f mg", lastTorqueLim)
                         binding.tvSmokeLimit.text = String.format(Locale.US, "Smoke: %.1f mg", lastSmokeLim)
+
+                        logGroupChannel("G008_DRIVER_WISH_IQ", lastDriverWish, "mg", 8)
+                        logGroupChannel("G008_TORQUE_LIMIT_IQ", lastTorqueLim, "mg", 8)
+                        logGroupChannel("G008_SMOKE_LIMIT_IQ", lastSmokeLim, "mg", 8)
                     }
                 } else {
                     val g003 = if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
@@ -1918,12 +1927,37 @@ class MainActivity : AppCompatActivity() {
                         binding.tvMafSpecified.text = String.format(Locale.US, "Target: %.0f mg/s", mafReq)
                         binding.tvMafActual.text = String.format(Locale.US, "Actual: %.0f mg/s", lastMafAct)
                         binding.tvEgrDuty.text = String.format(Locale.US, "EGR: %.1f %%", egr)
+
+                        logGroupChannel("G003_MAF_SPEC", mafReq, "mg/s", 3)
+                        logGroupChannel("G003_MAF_ACT", lastMafAct, "mg/s", 3)
+                        logGroupChannel("G003_EGR_DUTY", egr, "%", 3)
                     }
                 }
                 cycleCount++
                 delay(30)
             }
         }
+    }
+
+    /**
+     * Writes one VAG measuring-group channel into the RAW csv.
+     *
+     * Without this the group poll loop only painted the on-screen labels and no
+     * file was produced, so a road session in Mode B left nothing to analyse —
+     * which is the whole point of the cable (groups 008/003 carry the limiter
+     * and airflow channels that generic OBD-II Mode 01 never transmits).
+     */
+    private fun logGroupChannel(label: String, value: Double, unit: String, group: Int) {
+        if (!asyncLogger.isLogging) return
+        asyncLogger.logRawEvent(
+            pid = label,
+            value = value,
+            unit = unit,
+            raw = String.format(Locale.US, "%.3f", value),
+            latencyMs = 0L,
+            status = "VALID",
+            requestCommand = String.format(Locale.US, "21%02X", group)
+        )
     }
 
 private fun updateStatusUI() {
