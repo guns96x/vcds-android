@@ -46,6 +46,8 @@ import com.vag.vcdsandroid.sensors.PhoneBaroReading
 
 import com.vag.vcdsandroid.protocol.TransportMode
 import com.vag.vcdsandroid.usb.UsbKwpTransport
+import com.vag.vcdsandroid.upload.GitHubSettings
+import com.vag.vcdsandroid.upload.GitHubUploader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -333,6 +335,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         // Log toggle button
+        binding.btnUploadGitHub.setOnClickListener { onUploadLatestLogClicked() }
+
         binding.btnToggleLog.setOnClickListener {
             if (recordingStartRequested.get() || recordingStopRequested.get()) {
                 return@setOnClickListener
@@ -2022,6 +2026,115 @@ class MainActivity : AppCompatActivity() {
             status = "VALID",
             requestCommand = String.format(Locale.US, "21%02X", group)
         )
+    }
+
+    // ---------------------------------------------------------------- GitHub
+
+    /** Newest csv in the log directory, or null when nothing has been recorded. */
+    private fun latestLogFile(): java.io.File? {
+        val dir = java.io.File(
+            getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), "VCDS_Logs"
+        )
+        return dir.listFiles { f -> f.isFile && f.name.endsWith(".csv", ignoreCase = true) }
+            ?.maxByOrNull { it.lastModified() }
+    }
+
+    /**
+     * Sends the newest log to GitHub. Asks for the destination and token the
+     * first time; nothing is ever compiled into the apk.
+     */
+    private fun onUploadLatestLogClicked() {
+        val file = latestLogFile()
+        if (file == null) {
+            Toast.makeText(this, "No log recorded yet.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val settings = GitHubSettings(this)
+        val values = settings.load()
+        if (values.missingField() != null) {
+            showGitHubSettingsDialog(settings, values) { updated -> performUpload(updated, file) }
+        } else {
+            performUpload(values, file)
+        }
+    }
+
+    private fun performUpload(values: GitHubSettings.Values, file: java.io.File) {
+        val sizeKb = file.length() / 1024
+        Toast.makeText(this, "Uploading ${file.name} (${sizeKb} KB)...", Toast.LENGTH_SHORT).show()
+        binding.btnUploadGitHub.isEnabled = false
+        lifecycleScope.launch {
+            val result = withContext(Dispatchers.IO) { GitHubUploader.upload(values, file) }
+            binding.btnUploadGitHub.isEnabled = true
+            val message = when (result) {
+                is GitHubUploader.Result.Success -> "Uploaded to ${result.path}"
+                is GitHubUploader.Result.Failure -> "Upload failed: ${result.message}"
+                is GitHubUploader.Result.NotConfigured -> "Missing ${result.missing}"
+            }
+            Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
+            logSessionEvent("GITHUB_UPLOAD", message)
+        }
+    }
+
+    /**
+     * Collects destination and token. The token field is masked on redisplay so
+     * an existing secret is never shown back in full.
+     */
+    private fun showGitHubSettingsDialog(
+        settings: GitHubSettings,
+        current: GitHubSettings.Values,
+        onSaved: (GitHubSettings.Values) -> Unit
+    ) {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val container = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(pad, pad, pad, 0)
+        }
+
+        fun field(label: String, value: String, password: Boolean = false) =
+            android.widget.EditText(this).apply {
+                hint = label
+                setText(value)
+                if (password) {
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                        android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
+                }
+            }.also { container.addView(it) }
+
+        val tokenField = field("Fine-grained token (Contents: write)", current.token, password = true)
+        val ownerField = field("Owner", current.owner)
+        val repoField = field("Repository", current.repo)
+        val branchField = field("Branch", current.branch)
+        val dirField = field("Directory in repo", current.directory)
+
+        if (!settings.tokenIsPersisted()) {
+            container.addView(android.widget.TextView(this).apply {
+                text = "Secure storage unavailable on this device: the token will " +
+                    "be kept for this session only and not written to disk."
+                textSize = 11f
+            })
+        }
+
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("GitHub upload")
+            .setView(container)
+            .setPositiveButton("Save and send") { _, _ ->
+                val updated = GitHubSettings.Values(
+                    token = tokenField.text.toString().trim(),
+                    owner = ownerField.text.toString().trim(),
+                    repo = repoField.text.toString().trim(),
+                    branch = branchField.text.toString().trim(),
+                    directory = dirField.text.toString().trim()
+                )
+                settings.save(updated)
+                val missing = updated.missingField()
+                if (missing != null) {
+                    Toast.makeText(this, "Missing $missing", Toast.LENGTH_SHORT).show()
+                } else {
+                    onSaved(updated)
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
 private fun updateStatusUI() {

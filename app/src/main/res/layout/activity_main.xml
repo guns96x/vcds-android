@@ -569,6 +569,18 @@
                         app:backgroundTint="@color/accent_green"
                         app:cornerRadius="8dp" />
 
+                    <!-- Send the newest log straight to GitHub -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnUploadGitHub"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="8dp"
+                        android:text="SEND LAST LOG TO GITHUB"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        app:cornerRadius="8dp" />
+
                     <!-- Collapsible RAW DEBUG toggle -->
                     <LinearLayout
                         android:id="@+id/layoutRawDebugHeader"
