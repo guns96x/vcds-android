@@ -124,9 +124,18 @@ class MainActivity : AppCompatActivity() {
      * 009/015 further limiters and actual torque, 001 the quantity that
      * survives every limiter.
      */
-    private val AUX_GROUP_ROTATION = intArrayOf(8, 3, 7, 10, 4, 9, 15, 1)
+    private val AUX_GROUP_ROTATION = intArrayOf(
+        // Weighted: the channels that change fastest during a pull come round
+        // more often. 008 limiters and 003 airflow three times a sweep, 007
+        // temperatures twice, the slower context channels once.
+        8, 3, 7, 10,
+        8, 3, 4, 15,
+        8, 3, 7, 1,
+        9, 13, 23, 20,
+        62, 6, 2
+    )
 
-    private var connectionMode = AppConnectionMode.TURBO_FAST_OBD
+    private var connectionMode = AppConnectionMode.USB_HARDWARE
     private var isPermissionRequested = false
     private var currentDevice: UsbDevice? = null
 
@@ -289,26 +298,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         // Mode toggle button
-        binding.btnModeToggle.setOnClickListener {
-            val modes = arrayOf(
-                "Mode A: Turbo Fast (OBD-II High Speed)",
-                "Mode B: VAG OEM (Group 011 / TP 2.0)",
-                "Mode C: USB FTDI (KKL Cable)",
-                "Mode D: Virtual Simulator (Demo)"
-            )
-            AlertDialog.Builder(this)
-                .setTitle("Select Diagnostic Mode")
-                .setItems(modes) { _, which ->
-                    val newMode = when (which) {
-                        0 -> AppConnectionMode.TURBO_FAST_OBD
-                        1 -> AppConnectionMode.VAG_OEM_TP20
-                        2 -> AppConnectionMode.USB_HARDWARE
-                        else -> AppConnectionMode.SIMULATOR_DEMO
-                    }
-                    switchConnectionMode(newMode)
-                }
-                .show()
-        }
+        // One mode only: the VCDS/KKL cable speaking KWP2000 to the engine ECU.
+        // The picker is gone because the other transports could not deliver the
+        // measuring groups this project needs — generic OBD-II Mode 01 does not
+        // transmit the limiter or temperature channels at all.
+        binding.btnModeToggle.isEnabled = false
+        binding.btnModeToggle.text = "CABLE - KWP2000 MEASURING GROUPS"
+
 
         // Connect button
         binding.btnConnect.setOnClickListener {
@@ -1990,6 +1986,56 @@ class MainActivity : AppCompatActivity() {
                             logGroupChannel("G001_INJECTION_QUANTITY", g.values[1].rawValue, "mg/str", 1)
                             logGroupChannel("G001_SUPPLY_DURATION", g.values[2].rawValue, "degKW", 1)
                             logGroupChannel("G001_COOLANT_TEMP", g.values[3].rawValue, "C", 1)
+                        }
+                    }
+                    // Per-cylinder balance: a drifting injector shows here first.
+                    13 -> readAuxGroup(13)?.let { g ->
+                        if (g.values.size >= 4) {
+                            for (c in 0..3) {
+                                logGroupChannel("G013_IQ_CYL${c + 1}", g.values[c].rawValue, "mg/str", 13)
+                            }
+                        }
+                    }
+                    // Solenoid switching period per cylinder — PD injector health.
+                    23 -> readAuxGroup(23)?.let { g ->
+                        if (g.values.size >= 4) {
+                            for (c in 0..3) {
+                                logGroupChannel("G023_BIP_CYL${c + 1}", g.values[c].rawValue, "", 23)
+                            }
+                        }
+                    }
+                    // Traction and engine-drag intervention cut torque too, and
+                    // would otherwise look like an unexplained loss in the log.
+                    20 -> readAuxGroup(20)?.let { g ->
+                        if (g.values.size >= 4) {
+                            logGroupChannel("G020_ENGINE_TORQUE", g.values[1].rawValue, "Nm", 20)
+                            logGroupChannel("G020_LIMIT_ASR", g.values[2].rawValue, "", 20)
+                            logGroupChannel("G020_LIMIT_MSR", g.values[3].rawValue, "", 20)
+                        }
+                    }
+                    // Ambient temperature is the reference the intake air
+                    // temperature has to be read against.
+                    62 -> readAuxGroup(62)?.let { g ->
+                        if (g.values.size >= 3) {
+                            logGroupChannel("G062_COOLANT_OUT_ENGINE", g.values[0].rawValue, "C", 62)
+                            logGroupChannel("G062_COOLANT_OUT_RADIATOR", g.values[1].rawValue, "C", 62)
+                            logGroupChannel("G062_AMBIENT_TEMP", g.values[2].rawValue, "C", 62)
+                        }
+                    }
+                    // Road speed lets gear be derived instead of guessed.
+                    6 -> readAuxGroup(6)?.let { g ->
+                        if (g.values.size >= 4) {
+                            logGroupChannel("G006_VEHICLE_SPEED", g.values[0].rawValue, "km/h", 6)
+                            logGroupChannel("G006_SWITCH_POSITIONS", g.values[1].rawValue, "", 6)
+                            logGroupChannel("G006_THROTTLE_POS", g.values[2].rawValue, "%", 6)
+                            logGroupChannel("G006_CRUISE_STATUS", g.values[3].rawValue, "", 6)
+                        }
+                    }
+                    2 -> readAuxGroup(2)?.let { g ->
+                        if (g.values.size >= 4) {
+                            logGroupChannel("G002_THROTTLE_POS", g.values[1].rawValue, "%", 2)
+                            logGroupChannel("G002_OPERATING_COND", g.values[2].rawValue, "", 2)
+                            logGroupChannel("G002_COOLANT_TEMP", g.values[3].rawValue, "C", 2)
                         }
                     }
                 }
