@@ -29,7 +29,9 @@ class MeasuringGroupTest {
             Triple(0x12, 250, 210),  // 2100 mbar
             Triple(0x17, 200, 128)   // 100 %
         )
-        val group = assertNotNull(MeasuringGroup.decode(data)) as MeasuringGroup
+        val group = MeasuringGroup.decode(data)
+        assertNotNull(group)
+        group!!
         assertEquals(800.0, group.values[0].rawValue, 0.001)
         assertEquals("RPM", group.values[0].unit)
         assertEquals(2000.0, group.values[1].rawValue, 0.001)
@@ -48,7 +50,9 @@ class MeasuringGroupTest {
             Triple(0x5E, 180, 75),
             Triple(0x5E, 160, 75)
         )
-        val group = assertNotNull(MeasuringGroup.decode(data)) as MeasuringGroup
+        val group = MeasuringGroup.decode(data)
+        assertNotNull(group)
+        group!!
         assertEquals(100.0, group.values[1].rawValue, 0.001)
         assertEquals("Nm", group.values[1].unit)
         assertEquals(90.0, group.values[2].rawValue, 0.001)
@@ -64,7 +68,9 @@ class MeasuringGroupTest {
             Triple(0x1A, 80, 120),
             Triple(0x1A, 70, 110)
         )
-        val group = assertNotNull(MeasuringGroup.decode(data)) as MeasuringGroup
+        val group = MeasuringGroup.decode(data)
+        assertNotNull(group)
+        group!!
         group.values.forEach {
             assertEquals(40.0, it.rawValue, 0.001)
             assertEquals("°C", it.unit)
@@ -80,7 +86,9 @@ class MeasuringGroupTest {
             Triple(0xFE, 0, 2),
             Triple(0xFE, 0, 3)
         )
-        val group = assertNotNull(MeasuringGroup.decode(data)) as MeasuringGroup
+        val group = MeasuringGroup.decode(data)
+        assertNotNull(group)
+        group!!
         assertEquals(0x1234.toDouble(), group.values[0].rawValue, 0.001)
         assertEquals("raw", group.values[0].unit)
     }
