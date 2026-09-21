@@ -58,16 +58,11 @@ import java.io.File
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * The only transport this app supports.
- *
- * Bluetooth ELM327 was removed rather than hidden: generic OBD-II Mode 01 does
- * not transmit the VAG measuring groups at all, so a session recorded over it
- * cannot answer the questions this app exists to answer. Leaving the option in
- * the interface only invited recording a useless drive.
- */
 enum class AppConnectionMode {
-    CABLE_KWP2000     // VCDS / KKL cable over USB-OTG, KWP2000 on K-Line
+    TURBO_FAST_OBD,   // Mode A: High-speed OBD-II RPM+MAP pairs (ELM327 Bluetooth)
+    VAG_OEM_TP20,     // Mode B: VAG OEM Group 011/008/003 (TP 2.0 CAN)
+    USB_HARDWARE,     // USB FTDI K-Line
+    SIMULATOR_DEMO    // Virtual Demo
 }
 
 data class DiagnosticSample(
@@ -129,18 +124,9 @@ class MainActivity : AppCompatActivity() {
      * 009/015 further limiters and actual torque, 001 the quantity that
      * survives every limiter.
      */
-    private val AUX_GROUP_ROTATION = intArrayOf(
-        // Weighted: the channels that change fastest during a pull come round
-        // more often. 008 limiters and 003 airflow three times a sweep, 007
-        // temperatures twice, the slower context channels once.
-        8, 3, 7, 10,
-        8, 3, 4, 15,
-        8, 3, 7, 1,
-        9, 13, 23, 20,
-        62, 6, 2
-    )
+    private val AUX_GROUP_ROTATION = intArrayOf(8, 3, 7, 10, 4, 9, 15, 1)
 
-    private var connectionMode = AppConnectionMode.CABLE_KWP2000
+    private var connectionMode = AppConnectionMode.TURBO_FAST_OBD
     private var isPermissionRequested = false
     private var currentDevice: UsbDevice? = null
 
@@ -252,7 +238,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupListeners()
-        applyCableMode()
+        switchConnectionMode(AppConnectionMode.TURBO_FAST_OBD)
         startUiTicker()
     }
 
@@ -303,17 +289,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         // Mode toggle button
-        // One mode only: the VCDS/KKL cable speaking KWP2000 to the engine ECU.
-        // The picker is gone because the other transports could not deliver the
-        // measuring groups this project needs — generic OBD-II Mode 01 does not
-        // transmit the limiter or temperature channels at all.
-        binding.btnModeToggle.isEnabled = false
-        binding.btnModeToggle.text = "CABLE - KWP2000 MEASURING GROUPS"
-
+        binding.btnModeToggle.setOnClickListener {
+            val modes = arrayOf(
+                "Mode A: Turbo Fast (OBD-II High Speed)",
+                "Mode B: VAG OEM (Group 011 / TP 2.0)",
+                "Mode C: USB FTDI (KKL Cable)",
+                "Mode D: Virtual Simulator (Demo)"
+            )
+            AlertDialog.Builder(this)
+                .setTitle("Select Diagnostic Mode")
+                .setItems(modes) { _, which ->
+                    val newMode = when (which) {
+                        0 -> AppConnectionMode.TURBO_FAST_OBD
+                        1 -> AppConnectionMode.VAG_OEM_TP20
+                        2 -> AppConnectionMode.USB_HARDWARE
+                        else -> AppConnectionMode.SIMULATOR_DEMO
+                    }
+                    switchConnectionMode(newMode)
+                }
+                .show()
+        }
 
         // Connect button
         binding.btnConnect.setOnClickListener {
-            val isConnected = engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+            val isConnected = when (connectionMode) {
+                AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
+                    elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+                AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
+                    engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+            }
             if (isConnected) {
                 performDisconnect()
             } else {
@@ -355,7 +359,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnScanDtc.setOnClickListener {
             lifecycleScope.launch {
                 binding.tvDtcList.text = "Scanning DTCs..."
-                val dtcs = if (false) {
+                val dtcs = if (connectionMode == AppConnectionMode.VAG_OEM_TP20 || connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
                     elmEngine.readFaultCodes()
                 } else {
                     engine.readFaultCodes()
@@ -370,7 +374,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnClearDtc.setOnClickListener {
             lifecycleScope.launch {
-                val ok = if (false) {
+                val ok = if (connectionMode == AppConnectionMode.VAG_OEM_TP20 || connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
                     elmEngine.clearFaultCodes()
                 } else {
                     engine.clearFaultCodes()
@@ -384,25 +388,51 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun applyCableMode() {
+    private fun switchConnectionMode(newMode: AppConnectionMode) {
+        if (connectionMode != newMode) {
+            val oldMode = connectionMode
+            performDisconnect(oldMode)
+            connectionMode = newMode
+            resetTurboSessionState()
+        }
 
-        // One mode. The Bluetooth / OBD-II panel stays hidden permanently:
-        // generic Mode 01 cannot deliver the measuring groups this app exists
-        // to record, so offering it only invites recording a useless session.
-        binding.btnModeToggle.text = "CABLE - KWP2000 MEASURING GROUPS"
-        binding.layoutTurboFast.visibility = View.GONE
-        binding.layoutOemGroups.visibility = View.VISIBLE
-        engine.setMode(TransportMode.USB_HARDWARE)
+        when (newMode) {
+            AppConnectionMode.TURBO_FAST_OBD -> {
+                binding.btnModeToggle.text = "Mode: A (Turbo Fast)"
+                binding.layoutTurboFast.visibility = View.VISIBLE
+                binding.layoutOemGroups.visibility = View.GONE
+            }
+            AppConnectionMode.VAG_OEM_TP20 -> {
+                binding.btnModeToggle.text = "Mode: B (VAG OEM)"
+                binding.layoutTurboFast.visibility = View.GONE
+                binding.layoutOemGroups.visibility = View.VISIBLE
+            }
+            AppConnectionMode.USB_HARDWARE -> {
+                binding.btnModeToggle.text = "Mode: USB K-Line"
+                binding.layoutTurboFast.visibility = View.GONE
+                binding.layoutOemGroups.visibility = View.VISIBLE
+                engine.setMode(TransportMode.USB_HARDWARE)
+            }
+            AppConnectionMode.SIMULATOR_DEMO -> {
+                binding.btnModeToggle.text = "Mode: Simulator"
+                binding.layoutTurboFast.visibility = View.GONE
+                binding.layoutOemGroups.visibility = View.VISIBLE
+                engine.setMode(TransportMode.SIMULATOR_DEMO)
+            }
+        }
         updateStatusUI()
     }
 
-    /**
-     * Opens the cable. There is no transport choice: the Bluetooth and
-     * simulator branches went with their modes, so pressing Connect can only
-     * ever mean "talk to the ECU over the VCDS/KKL cable".
-     */
     private fun performConnect() {
-        run {
+        if (connectionMode == AppConnectionMode.TURBO_FAST_OBD || connectionMode == AppConnectionMode.VAG_OEM_TP20) {
+            connectElmBluetooth()
+        } else if (connectionMode == AppConnectionMode.SIMULATOR_DEMO) {
+            lifecycleScope.launch {
+                engine.connect(null)
+                updateStatusUI()
+                startOemPolling()
+            }
+        } else {
             val dev = currentDevice ?: transport.findAvailableDevice()
             if (dev == null) {
                 Toast.makeText(this, "No USB FTDI / KKL cable detected.", Toast.LENGTH_LONG).show()
@@ -489,7 +519,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnToggleLog.isEnabled = false
 
         elmConnectJob = lifecycleScope.launch {
-            val isTurboFast = false   // Bluetooth OBD-II mode was removed
+            val isTurboFast = (myMode == AppConnectionMode.TURBO_FAST_OBD)
             val success = elmEngine.connect(device, forceGeneric = isTurboFast)
 
             if (!isActive || myGeneration != sessionGeneration || myMode != connectionMode) {
@@ -506,7 +536,7 @@ class MainActivity : AppCompatActivity() {
             renderLoggingState()
 
             if (success) {
-                if (false) {
+                if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
                     // P1: Auto-probe BARO immediately after connect
                     withContext(Dispatchers.IO) {
                         try {
@@ -568,7 +598,8 @@ class MainActivity : AppCompatActivity() {
             }
             try {
                 when (targetMode) {
-                    AppConnectionMode.CABLE_KWP2000 -> engine.disconnect()
+                    AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 -> elmEngine.disconnect()
+                    AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO -> engine.disconnect()
                 }
             } catch (e: Exception) {
                 Log.w("MainActivity", "Error during disconnect: ${e.message}")
@@ -602,7 +633,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun isWotLogReady(nowNs: Long = SystemClock.elapsedRealtimeNanos()): Boolean {
-        val isConnected = engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+        val isConnected = when (connectionMode) {
+            AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
+                elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+            AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
+                engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+        }
         val hasCore = isCoreTelemetryReady(nowNs)
         val hasBaro = sessionBaroResolver.resolve(nowNs).valueMbar != null
         val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
@@ -643,7 +679,12 @@ class MainActivity : AppCompatActivity() {
                 return@runOnUiThread
             }
 
-            val isConnected = engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+            val isConnected = when (connectionMode) {
+                AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
+                    elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+                AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
+                    engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+            }
             val canStart = isConnected && isWotLogReady()
 
             if (isLogging) {
@@ -1480,7 +1521,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleCoreTelemetryLost() {
         val device = lastElmDevice
-        if (asyncLogger.isLogging && device != null && false) {
+        if (asyncLogger.isLogging && device != null && connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
             pollingJob?.cancel() // called from inside the polling loop: stop it at the next suspension point
             runOnUiThread { if (reconnectJob?.isActive != true) startGapReconnect(device) }
             return
@@ -1814,7 +1855,7 @@ class MainActivity : AppCompatActivity() {
         private fun startOemPolling() {
         stopPolling()
         pollingJob = lifecycleScope.launch {
-            if (false && !elmEngine.isTp20Active) {
+            if (connectionMode == AppConnectionMode.VAG_OEM_TP20 && !elmEngine.isTp20Active) {
                 runOnUiThread {
                     Toast.makeText(this@MainActivity, "TP2.0 unavailable — use Mode A Generic OBD", Toast.LENGTH_LONG).show()
                     binding.tvBoostSpecified.text = "N/A"
@@ -1832,12 +1873,13 @@ class MainActivity : AppCompatActivity() {
             var cycleCount = 0
             while (isActive) {
                 val isConnected = when (connectionMode) {
-                    AppConnectionMode.CABLE_KWP2000 -> engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+                    AppConnectionMode.VAG_OEM_TP20 -> elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+                    AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO -> engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
                     else -> false
                 }
                 if (!isConnected) break
 
-                val g011 = if (false) {
+                val g011 = if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
                     elmEngine.readMeasuringGroup(11)
                 } else {
                     engine.readMeasuringGroup(11)
@@ -1950,56 +1992,6 @@ class MainActivity : AppCompatActivity() {
                             logGroupChannel("G001_COOLANT_TEMP", g.values[3].rawValue, "C", 1)
                         }
                     }
-                    // Per-cylinder balance: a drifting injector shows here first.
-                    13 -> readAuxGroup(13)?.let { g ->
-                        if (g.values.size >= 4) {
-                            for (c in 0..3) {
-                                logGroupChannel("G013_IQ_CYL${c + 1}", g.values[c].rawValue, "mg/str", 13)
-                            }
-                        }
-                    }
-                    // Solenoid switching period per cylinder — PD injector health.
-                    23 -> readAuxGroup(23)?.let { g ->
-                        if (g.values.size >= 4) {
-                            for (c in 0..3) {
-                                logGroupChannel("G023_BIP_CYL${c + 1}", g.values[c].rawValue, "", 23)
-                            }
-                        }
-                    }
-                    // Traction and engine-drag intervention cut torque too, and
-                    // would otherwise look like an unexplained loss in the log.
-                    20 -> readAuxGroup(20)?.let { g ->
-                        if (g.values.size >= 4) {
-                            logGroupChannel("G020_ENGINE_TORQUE", g.values[1].rawValue, "Nm", 20)
-                            logGroupChannel("G020_LIMIT_ASR", g.values[2].rawValue, "", 20)
-                            logGroupChannel("G020_LIMIT_MSR", g.values[3].rawValue, "", 20)
-                        }
-                    }
-                    // Ambient temperature is the reference the intake air
-                    // temperature has to be read against.
-                    62 -> readAuxGroup(62)?.let { g ->
-                        if (g.values.size >= 3) {
-                            logGroupChannel("G062_COOLANT_OUT_ENGINE", g.values[0].rawValue, "C", 62)
-                            logGroupChannel("G062_COOLANT_OUT_RADIATOR", g.values[1].rawValue, "C", 62)
-                            logGroupChannel("G062_AMBIENT_TEMP", g.values[2].rawValue, "C", 62)
-                        }
-                    }
-                    // Road speed lets gear be derived instead of guessed.
-                    6 -> readAuxGroup(6)?.let { g ->
-                        if (g.values.size >= 4) {
-                            logGroupChannel("G006_VEHICLE_SPEED", g.values[0].rawValue, "km/h", 6)
-                            logGroupChannel("G006_SWITCH_POSITIONS", g.values[1].rawValue, "", 6)
-                            logGroupChannel("G006_THROTTLE_POS", g.values[2].rawValue, "%", 6)
-                            logGroupChannel("G006_CRUISE_STATUS", g.values[3].rawValue, "", 6)
-                        }
-                    }
-                    2 -> readAuxGroup(2)?.let { g ->
-                        if (g.values.size >= 4) {
-                            logGroupChannel("G002_THROTTLE_POS", g.values[1].rawValue, "%", 2)
-                            logGroupChannel("G002_OPERATING_COND", g.values[2].rawValue, "", 2)
-                            logGroupChannel("G002_COOLANT_TEMP", g.values[3].rawValue, "C", 2)
-                        }
-                    }
                 }
                 cycleCount++
                 delay(30)
@@ -2009,7 +2001,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Reads one auxiliary measuring group on whichever transport is active. */
     private suspend fun readAuxGroup(group: Int) =
-        if (false) {
+        if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
             elmEngine.readMeasuringGroup(group)
         } else {
             engine.readMeasuringGroup(group)
@@ -2146,49 +2138,102 @@ class MainActivity : AppCompatActivity() {
     }
 
 private fun updateStatusUI() {
-                // One transport, so no mode dispatch: this reflects the cable
-        // connection only. The ELM327 and simulator arms were removed with
-        // their modes.
-            when (engine.state) {
-                DiagState.CONNECTED, DiagState.POLLING -> {
-                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
-                    val info = transport.getActiveAdapterInfo()
-                    binding.tvStatus.text = "Connected (USB)"
-                    binding.tvSubStatus.text = "ECU Online | ${info?.displayName ?: "USB Adapter"}"
-                    binding.btnConnect.text = "Disconnect"
-                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#30363D"))
-                }
-                DiagState.CONNECTING -> {
-                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
-                    binding.tvStatus.text = "Connecting..."
-                    binding.tvSubStatus.text = "Negotiating USB protocol"
-                }
-                DiagState.ERROR -> {
-                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
-                    binding.tvStatus.text = "Error Connecting"
-                    binding.tvSubStatus.text = engine.lastError ?: "USB timeout"
-                    binding.btnConnect.text = "Retry"
-                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
-                }
-                DiagState.DISCONNECTED -> {
-                    val dev = currentDevice ?: transport.findAvailableDevice()
-                    if (dev == null) {
+        when (connectionMode) {
+            AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 -> {
+                when (elmEngine.state) {
+                    DiagState.CONNECTED, DiagState.POLLING -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
+                        val protoMode = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) "Turbo Fast (OBD-II)" else "VW TP 2.0 (OEM)"
+                        binding.tvStatus.text = "Connected: $protoMode"
+                        binding.tvSubStatus.text = "ECU Online | ${elmEngine.transport.connectedDeviceName ?: "V-LINK"}"
+                        binding.btnConnect.text = "Disconnect"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#DA3633"))
+                        binding.btnConnect.setTextColor(Color.WHITE)
+                    }
+                    DiagState.CONNECTING -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                        binding.tvStatus.text = "Connecting..."
+                        binding.tvSubStatus.text = "Negotiating ELM327 Bluetooth protocol..."
+                    }
+                    DiagState.ERROR -> {
                         binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
-                        binding.tvStatus.text = "No USB Adapter"
-                        binding.tvSubStatus.text = "Plug in USB cable or switch to Mode A/B (BT)"
+                        binding.tvStatus.text = "Connection Error"
+                        binding.tvSubStatus.text = elmEngine.lastError ?: "ELM327 timeout"
+                        binding.btnConnect.text = "Retry"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                        binding.btnConnect.setTextColor(Color.WHITE)
+                    }
+                    DiagState.DISCONNECTED -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                        val title = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) "Ready: Mode A (Turbo Fast)" else "Ready: Mode B (VAG OEM)"
+                        binding.tvStatus.text = title
+                        binding.tvSubStatus.text = "Ignition ON -> Tap Connect"
                         binding.btnConnect.text = "Connect"
                         binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
-                    } else {
-                        val info = UsbKwpTransport.identifyDevice(dev)
+                        binding.btnConnect.setTextColor(Color.WHITE)
+                    }
+                }
+            }
+            AppConnectionMode.USB_HARDWARE -> {
+                when (engine.state) {
+                    DiagState.CONNECTED, DiagState.POLLING -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
+                        val info = transport.getActiveAdapterInfo()
+                        binding.tvStatus.text = "Connected (USB)"
+                        binding.tvSubStatus.text = "ECU Online | ${info?.displayName ?: "USB Adapter"}"
+                        binding.btnConnect.text = "Disconnect"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#30363D"))
+                    }
+                    DiagState.CONNECTING -> {
                         binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
-                        binding.tvStatus.text = "Ready: ${info.displayName}"
-                        binding.tvSubStatus.text = "Ignition ON -> Tap Connect"
+                        binding.tvStatus.text = "Connecting..."
+                        binding.tvSubStatus.text = "Negotiating USB protocol"
+                    }
+                    DiagState.ERROR -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
+                        binding.tvStatus.text = "Error Connecting"
+                        binding.tvSubStatus.text = engine.lastError ?: "USB timeout"
+                        binding.btnConnect.text = "Retry"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                    }
+                    DiagState.DISCONNECTED -> {
+                        val dev = currentDevice ?: transport.findAvailableDevice()
+                        if (dev == null) {
+                            binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
+                            binding.tvStatus.text = "No USB Adapter"
+                            binding.tvSubStatus.text = "Plug in USB cable or switch to Mode A/B (BT)"
+                            binding.btnConnect.text = "Connect"
+                            binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                        } else {
+                            val info = UsbKwpTransport.identifyDevice(dev)
+                            binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                            binding.tvStatus.text = "Ready: ${info.displayName}"
+                            binding.tvSubStatus.text = "Ignition ON -> Tap Connect"
+                            binding.btnConnect.text = "Connect"
+                            binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                        }
+                    }
+                }
+            }
+            AppConnectionMode.SIMULATOR_DEMO -> {
+                when (engine.state) {
+                    DiagState.CONNECTED, DiagState.POLLING -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
+                        binding.tvStatus.text = "Simulated EDC16 (Demo Mode)"
+                        binding.tvSubStatus.text = "Virtual Golf 5 1.9 TDI BLS active"
+                        binding.btnConnect.text = "Disconnect"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#30363D"))
+                    }
+                    else -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                        binding.tvStatus.text = "Simulator Ready"
+                        binding.tvSubStatus.text = "Tap Connect to start simulated telemetry"
                         binding.btnConnect.text = "Connect"
                         binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
                     }
                 }
             }
-        
+        }
 
         renderLoggingState()
     }
