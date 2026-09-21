@@ -46,9 +46,26 @@ sealed class Tp20Result {
 
 object Tp20FrameParser {
     /**
-     * Parses multi-frame CAN response received from ELM327 for a TP 2.0 query.
+     * Parses a measuring-group KWP response carried over TP 2.0 and validates
+     * the expected positive service (0x61) and group number.
      */
-    fun parse(rawResp: String, expectedGroup: Int, currentTxSeq: Int): Tp20Result {
+    fun parse(rawResp: String, expectedGroup: Int, currentTxSeq: Int): Tp20Result =
+        parseInternal(rawResp, currentTxSeq, expectedGroup, minPayloadLength = 14)
+
+    /**
+     * Parses an arbitrary KWP payload carried over TP 2.0. Framing, segmentation,
+     * payload length, ACK sequence and control frames are still validated, but
+     * the KWP service byte is left to the caller (needed for DTC 0x18/0x14).
+     */
+    fun parseKwp(rawResp: String, currentTxSeq: Int, minPayloadLength: Int = 1): Tp20Result =
+        parseInternal(rawResp, currentTxSeq, expectedGroup = null, minPayloadLength = minPayloadLength)
+
+    private fun parseInternal(
+        rawResp: String,
+        currentTxSeq: Int,
+        expectedGroup: Int?,
+        minPayloadLength: Int
+    ): Tp20Result {
         if (rawResp.contains("NO DATA", ignoreCase = true) ||
             rawResp.contains("UNABLE TO CONNECT", ignoreCase = true) ||
             rawResp.contains("BUS BUSY", ignoreCase = true)
@@ -78,6 +95,7 @@ object Tp20FrameParser {
         val payloadBytes = ArrayList<Byte>()
         var lastRxSeq = -1
         var needsAck = false
+        var previousDataSeq: Int? = null
 
         for (line in lines) {
             // Check standalone control frames (length exactly 2 hex characters)
@@ -103,6 +121,20 @@ object Tp20FrameParser {
             val opcodeByte = line.substring(0, 2).toIntOrNull(16) ?: continue
             val highNibble = (opcodeByte shr 4) and 0x0F
             val seq = opcodeByte and 0x0F
+
+            if (highNibble in 0x0..0x3) {
+                val previous = previousDataSeq
+                if (previous != null) {
+                    val expected = (previous + 1) and 0x0F
+                    if (seq != expected) {
+                        return Tp20Result.ProtocolError(
+                            "TP2 sequence mismatch: expected %X, got %X"
+                                .format(Locale.US, expected, seq)
+                        )
+                    }
+                }
+                previousDataSeq = seq
+            }
 
             when (highNibble) {
                 0x0 -> {
@@ -200,15 +232,36 @@ object Tp20FrameParser {
                     needsAck = true
                 }
                 0x3 -> {
-                    // Segmented frame requesting immediate ACK: 3x <payload...>
-                    val dataHex = line.substring(2)
-                    for (k in 0 until dataHex.length step 2) {
-                        if (k + 2 <= dataHex.length) {
-                            payloadBytes.add(dataHex.substring(k, k + 2).toInt(16).toByte())
+                    // Last data packet; no ACK is requested by opcode 0x3.
+                    // If this is also the first packet, it carries the total
+                    // two-byte KWP payload length like every other first frame.
+                    if (expectedPayloadLen < 0) {
+                        if (line.length < 6) {
+                            return Tp20Result.ProtocolError(
+                                "TP2 first 3x frame is missing the two-byte payload length"
+                            )
+                        }
+                        val lenHi = line.substring(2, 4).toIntOrNull(16)
+                            ?: return Tp20Result.ProtocolError("Invalid TP2 length high byte")
+                        val lenLo = line.substring(4, 6).toIntOrNull(16)
+                            ?: return Tp20Result.ProtocolError("Invalid TP2 length low byte")
+                        expectedPayloadLen = (lenHi shl 8) or lenLo
+                        val dataHex = line.substring(6)
+                        for (k in 0 until dataHex.length step 2) {
+                            if (k + 2 <= dataHex.length) {
+                                payloadBytes.add(dataHex.substring(k, k + 2).toInt(16).toByte())
+                            }
+                        }
+                    } else {
+                        val dataHex = line.substring(2)
+                        for (k in 0 until dataHex.length step 2) {
+                            if (k + 2 <= dataHex.length) {
+                                payloadBytes.add(dataHex.substring(k, k + 2).toInt(16).toByte())
+                            }
                         }
                     }
                     lastRxSeq = seq
-                    needsAck = true
+                    needsAck = false
                 }
                 0xA -> {
                     if (line == "A8") {
@@ -238,9 +291,13 @@ object Tp20FrameParser {
             return Tp20Result.Incomplete(expectedPayloadLen, payloadBytes.size)
         }
 
-        // For KWP measuring group, we need at least 14 bytes (header 61 + group + 12 bytes for 4 values)
-        if (payloadBytes.size < 14) {
-            return Tp20Result.Incomplete(14, payloadBytes.size)
+        val requiredMin = if (expectedGroup != null) {
+            maxOf(14, minPayloadLength)
+        } else {
+            minPayloadLength.coerceAtLeast(1)
+        }
+        if (payloadBytes.size < requiredMin) {
+            return Tp20Result.Incomplete(requiredMin, payloadBytes.size)
         }
 
         val finalBytes = if (expectedPayloadLen > 0 && payloadBytes.size >= expectedPayloadLen) {
@@ -249,11 +306,16 @@ object Tp20FrameParser {
             payloadBytes.toByteArray()
         }
 
-        // Validate KWP2000 positive response header: 0x61 <expectedGroup>
-        val respService = finalBytes[0].toInt() and 0xFF
-        val respGroup = finalBytes[1].toInt() and 0xFF
-        if (respService != 0x61 || respGroup != expectedGroup) {
-            return Tp20Result.ProtocolError("Invalid KWP header: expected 61 %02X, got %02X %02X".format(Locale.US, expectedGroup, respService, respGroup))
+        if (expectedGroup != null) {
+            // Measuring-group positive response: 0x61 <group>.
+            val respService = finalBytes[0].toInt() and 0xFF
+            val respGroup = finalBytes[1].toInt() and 0xFF
+            if (respService != 0x61 || respGroup != expectedGroup) {
+                return Tp20Result.ProtocolError(
+                    "Invalid KWP header: expected 61 %02X, got %02X %02X"
+                        .format(Locale.US, expectedGroup, respService, respGroup)
+                )
+            }
         }
 
         val ackSeq = if (lastRxSeq >= 0) (lastRxSeq + 1) and 0x0F else 0

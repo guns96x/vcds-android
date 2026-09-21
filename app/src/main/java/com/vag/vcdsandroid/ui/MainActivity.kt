@@ -58,16 +58,11 @@ import java.io.File
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 
-/**
- * The only transport this app supports.
- *
- * Bluetooth ELM327 was removed rather than hidden: generic OBD-II Mode 01 does
- * not transmit the VAG measuring groups at all, so a session recorded over it
- * cannot answer the questions this app exists to answer. Leaving the option in
- * the interface only invited recording a useless drive.
- */
 enum class AppConnectionMode {
-    CABLE_KWP2000     // VCDS / KKL cable over USB-OTG, KWP2000 on K-Line
+    TURBO_FAST_OBD,   // Mode A: High-speed OBD-II RPM+MAP pairs (ELM327 Bluetooth)
+    VAG_OEM_TP20,     // Mode B: VAG OEM Group 011/008/003 (TP 2.0 CAN)
+    USB_HARDWARE,     // USB FTDI K-Line
+    SIMULATOR_DEMO    // Virtual Demo
 }
 
 data class DiagnosticSample(
@@ -130,9 +125,7 @@ class MainActivity : AppCompatActivity() {
      * survives every limiter.
      */
     private val AUX_GROUP_ROTATION = intArrayOf(
-        // Weighted: the channels that change fastest during a pull come round
-        // more often. 008 limiters and 003 airflow three times a sweep, 007
-        // temperatures twice, the slower context channels once.
+        // Fast-changing limiter/airflow channels are weighted more heavily.
         8, 3, 7, 10,
         8, 3, 4, 15,
         8, 3, 7, 1,
@@ -140,7 +133,7 @@ class MainActivity : AppCompatActivity() {
         62, 6, 2
     )
 
-    private var connectionMode = AppConnectionMode.CABLE_KWP2000
+    private var connectionMode = AppConnectionMode.TURBO_FAST_OBD
     private var isPermissionRequested = false
     private var currentDevice: UsbDevice? = null
 
@@ -157,6 +150,7 @@ class MainActivity : AppCompatActivity() {
     private val turboScheduler = TurboScheduler()
     private val coreTelemetryHealth = CoreTelemetryHealth(3)
     private var preflightReport: PreflightReport? = null
+    private var oemPreflightOk: Boolean = false
     private var stressJob: Job? = null
     private var elmConnectJob: Job? = null
     private var sessionGeneration: Long = 0L
@@ -252,7 +246,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupListeners()
-        applyCableMode()
+        switchConnectionMode(AppConnectionMode.TURBO_FAST_OBD)
         startUiTicker()
     }
 
@@ -303,17 +297,35 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         // Mode toggle button
-        // One mode only: the VCDS/KKL cable speaking KWP2000 to the engine ECU.
-        // The picker is gone because the other transports could not deliver the
-        // measuring groups this project needs — generic OBD-II Mode 01 does not
-        // transmit the limiter or temperature channels at all.
-        binding.btnModeToggle.isEnabled = false
-        binding.btnModeToggle.text = "CABLE - KWP2000 MEASURING GROUPS"
-
+        binding.btnModeToggle.setOnClickListener {
+            val modes = arrayOf(
+                "Mode A: Turbo Fast (OBD-II High Speed)",
+                "Mode B: VAG OEM (Group 011 / TP 2.0)",
+                "Mode C: USB FTDI (KKL Cable)",
+                "Mode D: Virtual Simulator (Demo)"
+            )
+            AlertDialog.Builder(this)
+                .setTitle("Select Diagnostic Mode")
+                .setItems(modes) { _, which ->
+                    val newMode = when (which) {
+                        0 -> AppConnectionMode.TURBO_FAST_OBD
+                        1 -> AppConnectionMode.VAG_OEM_TP20
+                        2 -> AppConnectionMode.USB_HARDWARE
+                        else -> AppConnectionMode.SIMULATOR_DEMO
+                    }
+                    switchConnectionMode(newMode)
+                }
+                .show()
+        }
 
         // Connect button
         binding.btnConnect.setOnClickListener {
-            val isConnected = engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+            val isConnected = when (connectionMode) {
+                AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
+                    elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+                AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
+                    engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+            }
             if (isConnected) {
                 performDisconnect()
             } else {
@@ -326,7 +338,11 @@ class MainActivity : AppCompatActivity() {
             runPreFlightCheck()
         }
         binding.btnCheckData.setOnLongClickListener {
-            runRpmStressTest()
+            if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+                runRpmStressTest()
+            } else {
+                runOemGroupStressTest()
+            }
             true
         }
 
@@ -337,10 +353,10 @@ class MainActivity : AppCompatActivity() {
             if (recordingStartRequested.get() || recordingStopRequested.get()) {
                 return@setOnClickListener
             }
-            if (!asyncLogger.isLogging) {
-                startWotLog()
+            if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+                if (!asyncLogger.isLogging) startWotLog() else stopWotLog()
             } else {
-                stopWotLog()
+                if (!asyncLogger.isLogging) startOemLog() else stopOemLog()
             }
         }
 
@@ -351,11 +367,17 @@ class MainActivity : AppCompatActivity() {
             binding.tvRawDebugHeaderTitle.text = if (isRawDebugExpanded) "▼ RAW DEBUG (tap to collapse)" else "▶ RAW DEBUG (tap to toggle)"
         }
 
-        // DTC Buttons for Mode B / Bluetooth
+        // DTC actions are transport-specific. Do not send generic OBD 03/04
+        // while the ELM is configured as a raw VW TP2.0 transport.
         binding.btnScanDtc.setOnClickListener {
+            if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
+                binding.tvDtcList.text =
+                    "TP2.0 DTC service is not implemented yet. Use Turbo Fast for SAE DTCs or USB KWP for VAG KWP DTCs."
+                return@setOnClickListener
+            }
             lifecycleScope.launch {
                 binding.tvDtcList.text = "Scanning DTCs..."
-                val dtcs = if (false) {
+                val dtcs = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
                     elmEngine.readFaultCodes()
                 } else {
                     engine.readFaultCodes()
@@ -369,40 +391,71 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnClearDtc.setOnClickListener {
+            if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
+                binding.tvDtcList.text =
+                    "TP2.0 DTC clear is disabled until the KWP-over-TP2 service is implemented and tested."
+                return@setOnClickListener
+            }
             lifecycleScope.launch {
-                val ok = if (false) {
+                val ok = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
                     elmEngine.clearFaultCodes()
                 } else {
                     engine.clearFaultCodes()
                 }
-                if (ok) {
-                    binding.tvDtcList.text = "Fault codes cleared successfully."
+                binding.tvDtcList.text = if (ok) {
+                    "Fault codes cleared successfully."
                 } else {
-                    binding.tvDtcList.text = "Failed to clear DTCs."
+                    "Failed to clear DTCs."
                 }
             }
         }
     }
 
-    private fun applyCableMode() {
+    private fun switchConnectionMode(newMode: AppConnectionMode) {
+        if (connectionMode != newMode) {
+            val oldMode = connectionMode
+            performDisconnect(oldMode)
+            connectionMode = newMode
+            resetTurboSessionState()
+        }
 
-        // One mode. The Bluetooth / OBD-II panel stays hidden permanently:
-        // generic Mode 01 cannot deliver the measuring groups this app exists
-        // to record, so offering it only invites recording a useless session.
-        binding.btnModeToggle.text = "CABLE - KWP2000 MEASURING GROUPS"
-        binding.layoutTurboFast.visibility = View.GONE
-        binding.layoutOemGroups.visibility = View.VISIBLE
-        engine.setMode(TransportMode.USB_HARDWARE)
+        when (newMode) {
+            AppConnectionMode.TURBO_FAST_OBD -> {
+                binding.btnModeToggle.text = "Mode: A (Turbo Fast)"
+                binding.layoutTurboFast.visibility = View.VISIBLE
+                binding.layoutOemGroups.visibility = View.GONE
+            }
+            AppConnectionMode.VAG_OEM_TP20 -> {
+                binding.btnModeToggle.text = "Mode: B (VAG OEM)"
+                binding.layoutTurboFast.visibility = View.GONE
+                binding.layoutOemGroups.visibility = View.VISIBLE
+            }
+            AppConnectionMode.USB_HARDWARE -> {
+                binding.btnModeToggle.text = "Mode: USB K-Line"
+                binding.layoutTurboFast.visibility = View.GONE
+                binding.layoutOemGroups.visibility = View.VISIBLE
+                engine.setMode(TransportMode.USB_HARDWARE)
+            }
+            AppConnectionMode.SIMULATOR_DEMO -> {
+                binding.btnModeToggle.text = "Mode: Simulator"
+                binding.layoutTurboFast.visibility = View.GONE
+                binding.layoutOemGroups.visibility = View.VISIBLE
+                engine.setMode(TransportMode.SIMULATOR_DEMO)
+            }
+        }
         updateStatusUI()
     }
 
-    /**
-     * Opens the cable. There is no transport choice: the Bluetooth and
-     * simulator branches went with their modes, so pressing Connect can only
-     * ever mean "talk to the ECU over the VCDS/KKL cable".
-     */
     private fun performConnect() {
-        run {
+        if (connectionMode == AppConnectionMode.TURBO_FAST_OBD || connectionMode == AppConnectionMode.VAG_OEM_TP20) {
+            connectElmBluetooth()
+        } else if (connectionMode == AppConnectionMode.SIMULATOR_DEMO) {
+            lifecycleScope.launch {
+                engine.connect(null)
+                updateStatusUI()
+                startOemPolling()
+            }
+        } else {
             val dev = currentDevice ?: transport.findAvailableDevice()
             if (dev == null) {
                 Toast.makeText(this, "No USB FTDI / KKL cable detected.", Toast.LENGTH_LONG).show()
@@ -489,7 +542,7 @@ class MainActivity : AppCompatActivity() {
         binding.btnToggleLog.isEnabled = false
 
         elmConnectJob = lifecycleScope.launch {
-            val isTurboFast = false   // Bluetooth OBD-II mode was removed
+            val isTurboFast = (myMode == AppConnectionMode.TURBO_FAST_OBD)
             val success = elmEngine.connect(device, forceGeneric = isTurboFast)
 
             if (!isActive || myGeneration != sessionGeneration || myMode != connectionMode) {
@@ -506,7 +559,7 @@ class MainActivity : AppCompatActivity() {
             renderLoggingState()
 
             if (success) {
-                if (false) {
+                if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
                     // P1: Auto-probe BARO immediately after connect
                     withContext(Dispatchers.IO) {
                         try {
@@ -564,11 +617,16 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             stopPolling()
             if (asyncLogger.isLogging) {
-                stopWotLog(immediate = true, abortReason = "USER_DISCONNECT")
+                if (targetMode == AppConnectionMode.TURBO_FAST_OBD) {
+                    stopWotLog(immediate = true, abortReason = "USER_DISCONNECT")
+                } else {
+                    stopOemLog(abortReason = "USER_DISCONNECT")
+                }
             }
             try {
                 when (targetMode) {
-                    AppConnectionMode.CABLE_KWP2000 -> engine.disconnect()
+                    AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 -> elmEngine.disconnect()
+                    AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO -> engine.disconnect()
                 }
             } catch (e: Exception) {
                 Log.w("MainActivity", "Error during disconnect: ${e.message}")
@@ -601,8 +659,15 @@ class MainActivity : AppCompatActivity() {
                 isFreshValid("010B", TelemetryFreshnessPolicy.MAP_MAX_AGE_MS, nowNs)
     }
 
+    private fun isCurrentModeConnected(): Boolean = when (connectionMode) {
+        AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
+            elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+        AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
+            engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+    }
+
     private fun isWotLogReady(nowNs: Long = SystemClock.elapsedRealtimeNanos()): Boolean {
-        val isConnected = engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+        if (connectionMode != AppConnectionMode.TURBO_FAST_OBD) return false
         val hasCore = isCoreTelemetryReady(nowNs)
         val hasBaro = sessionBaroResolver.resolve(nowNs).valueMbar != null
         val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
@@ -611,7 +676,7 @@ class MainActivity : AppCompatActivity() {
         val spdOk = isFreshValid("010D", TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS, nowNs)
         val lodOk = isFreshValid("0104", TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS, nowNs)
 
-        return isConnected && hasCore && hasBaro && isGreen && mafOk && spdOk && lodOk
+        return isCurrentModeConnected() && hasCore && hasBaro && isGreen && mafOk && spdOk && lodOk
     }
 
     private fun renderLoggingState() {
@@ -643,8 +708,9 @@ class MainActivity : AppCompatActivity() {
                 return@runOnUiThread
             }
 
-            val isConnected = engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
-            val canStart = isConnected && isWotLogReady()
+            val isConnected = isCurrentModeConnected()
+            val isTurboFast = connectionMode == AppConnectionMode.TURBO_FAST_OBD
+            val canStart = if (isTurboFast) isWotLogReady() else isConnected && oemPreflightOk
 
             if (isLogging) {
                 binding.btnToggleLog.isEnabled = true
@@ -656,7 +722,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnModeToggle.isEnabled = false
                 binding.btnConnect.isEnabled = false
             } else {
-                binding.btnToggleLog.text = "START 4TH GEAR WOT LOG"
+                binding.btnToggleLog.text = if (isTurboFast) "START 4TH GEAR WOT LOG" else "START OEM RAW LOG"
                 binding.btnToggleLog.isEnabled = canStart
                 if (canStart) {
                     binding.btnToggleLog.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#238636"))
@@ -672,17 +738,20 @@ class MainActivity : AppCompatActivity() {
                 binding.btnConnect.isEnabled = true
 
                 if (isConnected && !canStart) {
-                    val hasCore = isCoreTelemetryReady()
-                    val hasBaro = sessionBaroResolver.resolve(SystemClock.elapsedRealtimeNanos()).valueMbar != null
-                    val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
-                    if (!isGreen) {
-                        if (preflightReport == null) {
+                    if (!isTurboFast) {
+                        binding.tvPreFlightStatus.text = "OEM CHECK DATA REQUIRED: validate Groups 011/008/003 before logging"
+                        binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
+                    } else {
+                        val hasCore = isCoreTelemetryReady()
+                        val hasBaro = sessionBaroResolver.resolve(SystemClock.elapsedRealtimeNanos()).valueMbar != null
+                        val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
+                        if (!isGreen && preflightReport == null) {
                             binding.tvPreFlightStatus.text = "CHECK DATA REQUIRED: Run pre-flight check before logging"
                             binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
+                        } else if (hasCore && !hasBaro) {
+                            binding.tvPreFlightStatus.text = "RAW TELEMETRY OK — BOOST NOT READY: engine off + ignition on once for BARO baseline"
+                            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
                         }
-                    } else if (hasCore && !hasBaro) {
-                        binding.tvPreFlightStatus.text = "RAW TELEMETRY OK — BOOST NOT READY: engine off + ignition on once for BARO baseline"
-                        binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
                     }
                 }
             }
@@ -694,6 +763,7 @@ class MainActivity : AppCompatActivity() {
         recordingStopRequested.set(false)
         sessionGeneration++
         preflightReport = null
+        oemPreflightOk = false
         coreTelemetryHealth.reset()
         latestSamples.clear()
         sessionBaroResolver.reset()
@@ -761,6 +831,49 @@ class MainActivity : AppCompatActivity() {
         recordingStartRequested.set(true)
         recordingStopRequested.set(false)
         renderLoggingState()
+    }
+
+    private fun startOemLog() {
+        if (!isCurrentModeConnected()) {
+            Toast.makeText(this, "OEM transport is not connected.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!oemPreflightOk) {
+            Toast.makeText(this, "Run CHECK DATA first; Groups 011/008/003 must pass.", Toast.LENGTH_LONG).show()
+            renderLoggingState()
+            return
+        }
+
+        logStartUtcMs = System.currentTimeMillis()
+        val (rawFile, _) = asyncLogger.startLogging()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        logSessionEvent("SESSION_START", "mode=$connectionMode raw_oem=true")
+        RecordingKeepAliveService.start(this, rawFile.name)
+        renderLoggingState()
+        Toast.makeText(this, "OEM RAW log started: ${rawFile.name}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun stopOemLog(abortReason: String? = null) {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        lifecycleScope.launch {
+            if (asyncLogger.isLogging) {
+                if (abortReason != null) {
+                    logSessionEvent("SESSION_ABORT", "reason=$abortReason mode=$connectionMode")
+                } else {
+                    logSessionEvent("SESSION_STOP", "mode=$connectionMode")
+                }
+            }
+            RecordingKeepAliveService.stop(this@MainActivity)
+            val (rawFile, _) = asyncLogger.stopLogging()
+            renderLoggingState()
+            if (rawFile != null && rawFile.exists()) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "OEM RAW log saved: ${rawFile.name} (${rawFile.length() / 1024} KB)",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun snapshotPreLogTelemetry() {
@@ -1174,31 +1287,56 @@ class MainActivity : AppCompatActivity() {
         if (asyncLogger.lastWriterError != null) {
             val err = asyncLogger.lastWriterError ?: "Writer exception"
             asyncLogger.clearWriterError()
-            stopWotLog(immediate = true, abortReason = "WRITER_ERROR")
+            if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+                stopWotLog(immediate = true, abortReason = "WRITER_ERROR")
+            } else {
+                stopOemLog(abortReason = "WRITER_ERROR")
+            }
             binding.tvLogMetrics.text = "🔴 LOGGER FAILED: $err"
             binding.tvLogMetrics.setTextColor(Color.parseColor("#F85149"))
             Toast.makeText(this@MainActivity, "CSV Logger failed: $err", Toast.LENGTH_LONG).show()
             return
         }
 
-        // Recording / Queue Stats compact line (Pairs and Raw)
+        // Recording / Queue Stats compact line.
         val sizeKb = asyncLogger.fileSizeBytes / 1024
+        val turboMode = connectionMode == AppConnectionMode.TURBO_FAST_OBD
         if (asyncLogger.isLogging) {
             val elapsedSec = (System.currentTimeMillis() - logStartUtcMs) / 1000
             val min = elapsedSec / 60
             val sec = elapsedSec % 60
-            binding.tvLogMetrics.text = String.format(
-                Locale.US,
-                "REC ACTIVE (%02d:%02d) | Pairs: %d | Raw: %d | Queue: %d | Dropped: %d | %d KB",
-                min, sec, asyncLogger.rowsWritten, asyncLogger.rawRowsWritten, asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
-            )
+            binding.tvLogMetrics.text = if (turboMode) {
+                String.format(
+                    Locale.US,
+                    "REC ACTIVE (%02d:%02d) | Pairs: %d | Raw: %d | Queue: %d | Dropped: %d | %d KB",
+                    min, sec, asyncLogger.rowsWritten, asyncLogger.rawRowsWritten,
+                    asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
+                )
+            } else {
+                String.format(
+                    Locale.US,
+                    "OEM REC (%02d:%02d) | Raw: %d | Queue: %d | Dropped: %d | %d KB",
+                    min, sec, asyncLogger.rawRowsWritten, asyncLogger.queueSize,
+                    asyncLogger.droppedRecords, sizeKb
+                )
+            }
             binding.tvLogMetrics.setTextColor(Color.parseColor("#F85149"))
         } else {
-            binding.tvLogMetrics.text = String.format(
-                Locale.US,
-                "REC OFF | Pairs: %d | Raw: %d | Queue: %d | Dropped: %d | %d KB",
-                asyncLogger.rowsWritten, asyncLogger.rawRowsWritten, asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
-            )
+            binding.tvLogMetrics.text = if (turboMode) {
+                String.format(
+                    Locale.US,
+                    "REC OFF | Pairs: %d | Raw: %d | Queue: %d | Dropped: %d | %d KB",
+                    asyncLogger.rowsWritten, asyncLogger.rawRowsWritten,
+                    asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
+                )
+            } else {
+                String.format(
+                    Locale.US,
+                    "OEM REC OFF | Raw: %d | Queue: %d | Dropped: %d | %d KB",
+                    asyncLogger.rawRowsWritten, asyncLogger.queueSize,
+                    asyncLogger.droppedRecords, sizeKb
+                )
+            }
             binding.tvLogMetrics.setTextColor(Color.parseColor("#8B949E"))
         }
     }
@@ -1207,7 +1345,128 @@ class MainActivity : AppCompatActivity() {
     // PRE-FLIGHT SELF CHECK (Deterministic Probe across all 9 PIDs)
     // =========================================================================
 
+    private fun runOemPreFlightCheck() {
+        if (asyncLogger.isLogging) {
+            Toast.makeText(this, "Stop the current log first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!isCurrentModeConnected()) {
+            Toast.makeText(this, "Connect the selected OEM transport first.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (connectionMode == AppConnectionMode.VAG_OEM_TP20 && !elmEngine.isTp20Active) {
+            oemPreflightOk = false
+            binding.tvPreFlightStatus.text = "OEM NOT READY: TP2.0 channel is not active"
+            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#F85149"))
+            renderLoggingState()
+            return
+        }
+
+        val wasPolling = pollingJob?.isActive == true
+        stopPolling()
+        preFlightJob = lifecycleScope.launch {
+            binding.btnCheckData.isEnabled = false
+            binding.tvPreFlightStatus.text = "OEM pre-flight: reading Groups 011 / 008 / 003..."
+            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
+
+            val g011 = readAuxGroup(11)
+            val g008 = readAuxGroup(8)
+            val g003 = readAuxGroup(3)
+
+            fun decoded(group: com.vag.vcdsandroid.model.MeasuringGroup?): Boolean =
+                group != null && group.values.size >= 4 && group.values.none { it.unit == "raw" }
+
+            val ok011 = decoded(g011)
+            val ok008 = decoded(g008)
+            val ok003 = decoded(g003)
+            oemPreflightOk = ok011 && ok008 && ok003
+
+            val unit011 = g011?.values?.joinToString("/") { it.unit.ifEmpty { "-" } } ?: "NO REPLY"
+            val unit008 = g008?.values?.joinToString("/") { it.unit.ifEmpty { "-" } } ?: "NO REPLY"
+            val unit003 = g003?.values?.joinToString("/") { it.unit.ifEmpty { "-" } } ?: "NO REPLY"
+
+            binding.tvPreFlightStatus.text = buildString {
+                append(if (oemPreflightOk) "OEM READY TO LOG" else "OEM NOT READY")
+                append("\nG011: ${if (ok011) "OK" else "FAIL"} [$unit011]")
+                append("\nG008: ${if (ok008) "OK" else "FAIL"} [$unit008]")
+                append("\nG003: ${if (ok003) "OK" else "FAIL"} [$unit003]")
+            }
+            binding.tvPreFlightStatus.setTextColor(
+                Color.parseColor(if (oemPreflightOk) "#3FB950" else "#F85149")
+            )
+
+            preFlightJob = null
+            if (wasPolling && isCurrentModeConnected()) startOemPolling()
+            renderLoggingState()
+        }
+    }
+
+    private fun runOemGroupStressTest() {
+        if (asyncLogger.isLogging) {
+            Toast.makeText(this, "Stop the current log first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!isCurrentModeConnected()) {
+            Toast.makeText(this, "Connect the selected OEM transport first.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (connectionMode == AppConnectionMode.VAG_OEM_TP20 && !elmEngine.isTp20Active) {
+            Toast.makeText(this, "TP2.0 channel is not active.", Toast.LENGTH_LONG).show()
+            return
+        }
+
+        val wasPolling = pollingJob?.isActive == true
+        stopPolling()
+        stressJob = lifecycleScope.launch {
+            binding.btnCheckData.isEnabled = false
+            val latencies = mutableListOf<Long>()
+            var requests = 0
+            var valid = 0
+            var minRpm: Double? = null
+            var maxRpm: Double? = null
+            val startMs = SystemClock.elapsedRealtime()
+
+            while (SystemClock.elapsedRealtime() - startMs < 10_000L) {
+                val t0 = SystemClock.elapsedRealtime()
+                val g = readAuxGroup(11)
+                latencies.add(SystemClock.elapsedRealtime() - t0)
+                requests++
+                if (g != null && g.values.size >= 4 && g.values.none { it.unit == "raw" }) {
+                    valid++
+                    val rpm = g.values[0].rawValue
+                    minRpm = minOf(minRpm ?: rpm, rpm)
+                    maxRpm = maxOf(maxRpm ?: rpm, rpm)
+                }
+            }
+
+            val sorted = latencies.sorted()
+            val mean = if (latencies.isNotEmpty()) latencies.average() else 0.0
+            val median = if (sorted.isNotEmpty()) sorted[sorted.size / 2] else 0L
+            val p95 = if (sorted.isNotEmpty()) sorted[(sorted.size - 1) * 95 / 100] else 0L
+            val hz = valid / 10.0
+            val summary = String.format(
+                Locale.US,
+                "OEM G011 STRESS 10s\nRequests: %d\nValid: %d\nRate: %.2f Hz\nLatency mean/median/p95: %.0f/%d/%d ms\nRPM min/max: %.0f / %.0f",
+                requests, valid, hz, mean, median, p95, minRpm ?: 0.0, maxRpm ?: 0.0
+            )
+            Log.i("OEM_G011_STRESS", summary.replace("\n", " | "))
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("OEM Group 011 stress test")
+                .setMessage(summary)
+                .setPositiveButton("OK", null)
+                .show()
+
+            stressJob = null
+            if (wasPolling && isCurrentModeConnected()) startOemPolling()
+            renderLoggingState()
+        }
+    }
+
     private fun runPreFlightCheck() {
+        if (connectionMode != AppConnectionMode.TURBO_FAST_OBD) {
+            runOemPreFlightCheck()
+            return
+        }
         if (asyncLogger.isLogging) {
             Toast.makeText(this, "Stop the current log first", Toast.LENGTH_SHORT).show()
             return
@@ -1343,6 +1602,7 @@ class MainActivity : AppCompatActivity() {
             binding.btnCheckData.isEnabled = true
             renderLoggingState()
 
+            preFlightJob = null
             if (wasPolling && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
                 startTurboFastPolling()
             }
@@ -1453,6 +1713,7 @@ class MainActivity : AppCompatActivity() {
                 .setPositiveButton("OK", null)
                 .show()
 
+            stressJob = null
             if (wasPolling && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
                 startTurboFastPolling()
             }
@@ -1480,7 +1741,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleCoreTelemetryLost() {
         val device = lastElmDevice
-        if (asyncLogger.isLogging && device != null && false) {
+        if (asyncLogger.isLogging && device != null && connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
             pollingJob?.cancel() // called from inside the polling loop: stop it at the next suspension point
             runOnUiThread { if (reconnectJob?.isActive != true) startGapReconnect(device) }
             return
@@ -1814,7 +2075,7 @@ class MainActivity : AppCompatActivity() {
         private fun startOemPolling() {
         stopPolling()
         pollingJob = lifecycleScope.launch {
-            if (false && !elmEngine.isTp20Active) {
+            if (connectionMode == AppConnectionMode.VAG_OEM_TP20 && !elmEngine.isTp20Active) {
                 runOnUiThread {
                     Toast.makeText(this@MainActivity, "TP2.0 unavailable — use Mode A Generic OBD", Toast.LENGTH_LONG).show()
                     binding.tvBoostSpecified.text = "N/A"
@@ -1832,12 +2093,13 @@ class MainActivity : AppCompatActivity() {
             var cycleCount = 0
             while (isActive) {
                 val isConnected = when (connectionMode) {
-                    AppConnectionMode.CABLE_KWP2000 -> engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+                    AppConnectionMode.VAG_OEM_TP20 -> elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+                    AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO -> engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
                     else -> false
                 }
                 if (!isConnected) break
 
-                val g011 = if (false) {
+                val g011 = if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
                     elmEngine.readMeasuringGroup(11)
                 } else {
                     engine.readMeasuringGroup(11)
@@ -1850,9 +2112,9 @@ class MainActivity : AppCompatActivity() {
                     val n75 = g011.values[3].rawValue
 
                     binding.tvRpm.text = String.format(Locale.US, "%.0f RPM", rpmVal)
-                    binding.tvBoostSpecified.text = String.format(Locale.US, "%.0f", targetBoost)
-                    binding.tvBoostActual.text = String.format(Locale.US, "%.0f", actualBoost)
-                    binding.tvN75.text = String.format(Locale.US, "%.1f %%", n75)
+                    binding.tvBoostSpecified.text = String.format(Locale.US, "%.0f %s", targetBoost, g011.values[1].unit)
+                    binding.tvBoostActual.text = String.format(Locale.US, "%.0f %s", actualBoost, g011.values[2].unit)
+                    binding.tvN75.text = String.format(Locale.US, "%.1f %s", n75, g011.values[3].unit)
 
                     binding.liveGraphView.addTelemetryPoint(
                         targetBoost.toFloat(),
@@ -1860,10 +2122,10 @@ class MainActivity : AppCompatActivity() {
                         n75.toFloat()
                     )
 
-                    logGroupChannel("G011_RPM", rpmVal, "rpm", 11)
-                    logGroupChannel("G011_BOOST_SPEC", targetBoost, "mbar", 11)
-                    logGroupChannel("G011_BOOST_ACT", actualBoost, "mbar", 11)
-                    logGroupChannel("G011_N75_DUTY", n75, "%", 11)
+                    logGroupChannel("G011_RPM", rpmVal, g011.values[0].unit, 11)
+                    logGroupChannel("G011_BOOST_SPEC", targetBoost, g011.values[1].unit, 11)
+                    logGroupChannel("G011_BOOST_ACT", actualBoost, g011.values[2].unit, 11)
+                    logGroupChannel("G011_N75_DUTY", n75, g011.values[3].unit, 11)
                 }
 
                 // Auxiliary groups rotate one per cycle so the core group 011 rate is
@@ -1877,12 +2139,12 @@ class MainActivity : AppCompatActivity() {
                             val driver = g.values[1].rawValue
                             val torque = g.values[2].rawValue
                             val smoke = g.values[3].rawValue
-                            binding.tvDriverWish.text = String.format(Locale.US, "Driver: %.1f Nm", driver)
-                            binding.tvTorqueLimit.text = String.format(Locale.US, "Torque: %.1f Nm", torque)
-                            binding.tvSmokeLimit.text = String.format(Locale.US, "Smoke: %.1f Nm", smoke)
-                            logGroupChannel("G008_DRIVER_INTENTION_TRQ", driver, "Nm", 8)
-                            logGroupChannel("G008_TORQUE_LIMITATION", torque, "Nm", 8)
-                            logGroupChannel("G008_SMOKE_LIMITATION", smoke, "Nm", 8)
+                            binding.tvDriverWish.text = String.format(Locale.US, "Driver: %.1f %s", driver, g.values[1].unit)
+                            binding.tvTorqueLimit.text = String.format(Locale.US, "Torque: %.1f %s", torque, g.values[2].unit)
+                            binding.tvSmokeLimit.text = String.format(Locale.US, "Smoke: %.1f %s", smoke, g.values[3].unit)
+                            logGroupChannel("G008_DRIVER_INTENTION", driver, g.values[1].unit, 8)
+                            logGroupChannel("G008_TORQUE_LIMITATION", torque, g.values[2].unit, 8)
+                            logGroupChannel("G008_SMOKE_LIMITATION", smoke, g.values[3].unit, 8)
                         }
                     }
                     3 -> readAuxGroup(3)?.let { g ->
@@ -1890,12 +2152,12 @@ class MainActivity : AppCompatActivity() {
                             val mafSpec = g.values[1].rawValue
                             val mafAct = g.values[2].rawValue
                             val egr = g.values[3].rawValue
-                            binding.tvMafSpecified.text = String.format(Locale.US, "Target: %.0f mg/str", mafSpec)
-                            binding.tvMafActual.text = String.format(Locale.US, "Actual: %.0f mg/str", mafAct)
-                            binding.tvEgrDuty.text = String.format(Locale.US, "EGR: %.1f %%", egr)
-                            logGroupChannel("G003_MAF_SPEC", mafSpec, "mg/str", 3)
-                            logGroupChannel("G003_MAF_ACT", mafAct, "mg/str", 3)
-                            logGroupChannel("G003_EGR_DUTY", egr, "%", 3)
+                            binding.tvMafSpecified.text = String.format(Locale.US, "Target: %.0f %s", mafSpec, g.values[1].unit)
+                            binding.tvMafActual.text = String.format(Locale.US, "Actual: %.0f %s", mafAct, g.values[2].unit)
+                            binding.tvEgrDuty.text = String.format(Locale.US, "EGR: %.1f %s", egr, g.values[3].unit)
+                            logGroupChannel("G003_MAF_SPEC", mafSpec, g.values[1].unit, 3)
+                            logGroupChannel("G003_MAF_ACT", mafAct, g.values[2].unit, 3)
+                            logGroupChannel("G003_EGR_DUTY", egr, g.values[3].unit, 3)
                         }
                     }
                     // Fuel temp (G81), intake air temp (G72), coolant (G62): the exact
@@ -1903,101 +2165,95 @@ class MainActivity : AppCompatActivity() {
                     // EngPrt_facCTOvhtPrv_MAP and EngPrt_facFlTempLim_MAP.
                     7 -> readAuxGroup(7)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G007_FUEL_TEMP", g.values[0].rawValue, "C", 7)
-                            logGroupChannel("G007_FUEL_COOLING", g.values[1].rawValue, "%", 7)
-                            logGroupChannel("G007_INTAKE_AIR_TEMP", g.values[2].rawValue, "C", 7)
-                            logGroupChannel("G007_COOLANT_TEMP", g.values[3].rawValue, "C", 7)
+                            logGroupChannel("G007_FUEL_TEMP", g.values[0].rawValue, g.values[0].unit, 7)
+                            logGroupChannel("G007_FUEL_COOLING", g.values[1].rawValue, g.values[1].unit, 7)
+                            logGroupChannel("G007_INTAKE_AIR_TEMP", g.values[2].rawValue, g.values[2].unit, 7)
+                            logGroupChannel("G007_COOLANT_TEMP", g.values[3].rawValue, g.values[3].unit, 7)
                         }
                     }
                     // Atmospheric pressure straight from the ECU beats the phone barometer.
                     10 -> readAuxGroup(10)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G010_MAF_ACT", g.values[0].rawValue, "mg/str", 10)
-                            logGroupChannel("G010_ATMOSPHERIC_PRESSURE", g.values[1].rawValue, "mbar", 10)
-                            logGroupChannel("G010_MANIFOLD_PRESSURE_ACT", g.values[2].rawValue, "mbar", 10)
-                            logGroupChannel("G010_THROTTLE_POS", g.values[3].rawValue, "%", 10)
+                            logGroupChannel("G010_MAF_ACT", g.values[0].rawValue, g.values[0].unit, 10)
+                            logGroupChannel("G010_ATMOSPHERIC_PRESSURE", g.values[1].rawValue, g.values[1].unit, 10)
+                            logGroupChannel("G010_MANIFOLD_PRESSURE_ACT", g.values[2].rawValue, g.values[2].unit, 10)
+                            logGroupChannel("G010_THROTTLE_POS", g.values[3].rawValue, g.values[3].unit, 10)
                         }
                     }
                     // Actual start of injection: verifies the timing advance this
                     // car's tune added against the stock calibration.
                     4 -> readAuxGroup(4)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G004_INJECTION_START", g.values[1].rawValue, "degKW", 4)
-                            logGroupChannel("G004_INJECTION_DURATION", g.values[2].rawValue, "degKW", 4)
-                            logGroupChannel("G004_TORSION_VALUE", g.values[3].rawValue, "degKW", 4)
+                            logGroupChannel("G004_INJECTION_START", g.values[1].rawValue, g.values[1].unit, 4)
+                            logGroupChannel("G004_INJECTION_DURATION", g.values[2].rawValue, g.values[2].unit, 4)
+                            logGroupChannel("G004_TORSION_VALUE", g.values[3].rawValue, g.values[3].unit, 4)
                         }
                     }
                     // Further torque limiters: transmission intervention, restriction.
                     9 -> readAuxGroup(9)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G009_CRUISE_DESIRED_TRQ", g.values[1].rawValue, "Nm", 9)
-                            logGroupChannel("G009_TRANSMISSION_TRQ", g.values[2].rawValue, "Nm", 9)
-                            logGroupChannel("G009_TORQUE_RESTRICTION", g.values[3].rawValue, "Nm", 9)
+                            logGroupChannel("G009_CRUISE_DESIRED_TRQ", g.values[1].rawValue, g.values[1].unit, 9)
+                            logGroupChannel("G009_TRANSMISSION_TRQ", g.values[2].rawValue, g.values[2].unit, 9)
+                            logGroupChannel("G009_TORQUE_RESTRICTION", g.values[3].rawValue, g.values[3].unit, 9)
                         }
                     }
                     15 -> readAuxGroup(15)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G015_ENGINE_TORQUE", g.values[1].rawValue, "Nm", 15)
-                            logGroupChannel("G015_FUEL_CONSUMPTION", g.values[2].rawValue, "", 15)
-                            logGroupChannel("G015_DRIVER_INTENTION_TRQ", g.values[3].rawValue, "Nm", 15)
+                            logGroupChannel("G015_ENGINE_TORQUE", g.values[1].rawValue, g.values[1].unit, 15)
+                            logGroupChannel("G015_FUEL_CONSUMPTION", g.values[2].rawValue, g.values[2].unit, 15)
+                            logGroupChannel("G015_DRIVER_INTENTION_TRQ", g.values[3].rawValue, g.values[3].unit, 15)
                         }
                     }
                     // Quantity that survives every limiter.
                     1 -> readAuxGroup(1)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G001_INJECTION_QUANTITY", g.values[1].rawValue, "mg/str", 1)
-                            logGroupChannel("G001_SUPPLY_DURATION", g.values[2].rawValue, "degKW", 1)
-                            logGroupChannel("G001_COOLANT_TEMP", g.values[3].rawValue, "C", 1)
+                            logGroupChannel("G001_INJECTION_QUANTITY", g.values[1].rawValue, g.values[1].unit, 1)
+                            logGroupChannel("G001_SUPPLY_DURATION", g.values[2].rawValue, g.values[2].unit, 1)
+                            logGroupChannel("G001_COOLANT_TEMP", g.values[3].rawValue, g.values[3].unit, 1)
                         }
                     }
-                    // Per-cylinder balance: a drifting injector shows here first.
+                    // Additional context groups retained from the expanded OEM logger.
+                    // Units always come from the scaler decoder; unsupported scalers stay "raw".
                     13 -> readAuxGroup(13)?.let { g ->
                         if (g.values.size >= 4) {
-                            for (c in 0..3) {
-                                logGroupChannel("G013_IQ_CYL${c + 1}", g.values[c].rawValue, "mg/str", 13)
+                            for (i in 0..3) {
+                                logGroupChannel("G013_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 13)
                             }
                         }
                     }
-                    // Solenoid switching period per cylinder — PD injector health.
                     23 -> readAuxGroup(23)?.let { g ->
                         if (g.values.size >= 4) {
-                            for (c in 0..3) {
-                                logGroupChannel("G023_BIP_CYL${c + 1}", g.values[c].rawValue, "", 23)
+                            for (i in 0..3) {
+                                logGroupChannel("G023_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 23)
                             }
                         }
                     }
-                    // Traction and engine-drag intervention cut torque too, and
-                    // would otherwise look like an unexplained loss in the log.
                     20 -> readAuxGroup(20)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G020_ENGINE_TORQUE", g.values[1].rawValue, "Nm", 20)
-                            logGroupChannel("G020_LIMIT_ASR", g.values[2].rawValue, "", 20)
-                            logGroupChannel("G020_LIMIT_MSR", g.values[3].rawValue, "", 20)
+                            for (i in 0..3) {
+                                logGroupChannel("G020_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 20)
+                            }
                         }
                     }
-                    // Ambient temperature is the reference the intake air
-                    // temperature has to be read against.
                     62 -> readAuxGroup(62)?.let { g ->
-                        if (g.values.size >= 3) {
-                            logGroupChannel("G062_COOLANT_OUT_ENGINE", g.values[0].rawValue, "C", 62)
-                            logGroupChannel("G062_COOLANT_OUT_RADIATOR", g.values[1].rawValue, "C", 62)
-                            logGroupChannel("G062_AMBIENT_TEMP", g.values[2].rawValue, "C", 62)
+                        if (g.values.size >= 4) {
+                            for (i in 0..3) {
+                                logGroupChannel("G062_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 62)
+                            }
                         }
                     }
-                    // Road speed lets gear be derived instead of guessed.
                     6 -> readAuxGroup(6)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G006_VEHICLE_SPEED", g.values[0].rawValue, "km/h", 6)
-                            logGroupChannel("G006_SWITCH_POSITIONS", g.values[1].rawValue, "", 6)
-                            logGroupChannel("G006_THROTTLE_POS", g.values[2].rawValue, "%", 6)
-                            logGroupChannel("G006_CRUISE_STATUS", g.values[3].rawValue, "", 6)
+                            for (i in 0..3) {
+                                logGroupChannel("G006_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 6)
+                            }
                         }
                     }
                     2 -> readAuxGroup(2)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G002_THROTTLE_POS", g.values[1].rawValue, "%", 2)
-                            logGroupChannel("G002_OPERATING_COND", g.values[2].rawValue, "", 2)
-                            logGroupChannel("G002_COOLANT_TEMP", g.values[3].rawValue, "C", 2)
+                            for (i in 0..3) {
+                                logGroupChannel("G002_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 2)
+                            }
                         }
                     }
                 }
@@ -2009,7 +2265,7 @@ class MainActivity : AppCompatActivity() {
 
     /** Reads one auxiliary measuring group on whichever transport is active. */
     private suspend fun readAuxGroup(group: Int) =
-        if (false) {
+        if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
             elmEngine.readMeasuringGroup(group)
         } else {
             engine.readMeasuringGroup(group)
@@ -2038,13 +2294,31 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- GitHub
 
-    /** Newest csv in the log directory, or null when nothing has been recorded. */
+    /**
+     * Newest meaningful log for the active acquisition pipeline.
+     *
+     * AsyncCsvLogger creates both RAW and Turbo_Pair files. OEM modes intentionally
+     * write only RAW measuring-group events, so blindly taking the newest CSV can
+     * select the empty/header-only Turbo_Pair sibling.
+     */
     private fun latestLogFile(): java.io.File? {
         val dir = java.io.File(
             getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), "VCDS_Logs"
         )
-        return dir.listFiles { f -> f.isFile && f.name.endsWith(".csv", ignoreCase = true) }
-            ?.maxByOrNull { it.lastModified() }
+        val files = dir.listFiles { f ->
+            f.isFile && f.name.endsWith(".csv", ignoreCase = true)
+        }?.toList().orEmpty()
+        if (files.isEmpty()) return null
+
+        val preferredPrefix = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+            "Turbo_Pair_"
+        } else {
+            "Event_RAW_"
+        }
+
+        return files.filter { it.name.startsWith(preferredPrefix) }
+            .maxByOrNull { it.lastModified() }
+            ?: files.maxByOrNull { it.lastModified() }
     }
 
     /**
@@ -2146,49 +2420,102 @@ class MainActivity : AppCompatActivity() {
     }
 
 private fun updateStatusUI() {
-                // One transport, so no mode dispatch: this reflects the cable
-        // connection only. The ELM327 and simulator arms were removed with
-        // their modes.
-            when (engine.state) {
-                DiagState.CONNECTED, DiagState.POLLING -> {
-                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
-                    val info = transport.getActiveAdapterInfo()
-                    binding.tvStatus.text = "Connected (USB)"
-                    binding.tvSubStatus.text = "ECU Online | ${info?.displayName ?: "USB Adapter"}"
-                    binding.btnConnect.text = "Disconnect"
-                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#30363D"))
-                }
-                DiagState.CONNECTING -> {
-                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
-                    binding.tvStatus.text = "Connecting..."
-                    binding.tvSubStatus.text = "Negotiating USB protocol"
-                }
-                DiagState.ERROR -> {
-                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
-                    binding.tvStatus.text = "Error Connecting"
-                    binding.tvSubStatus.text = engine.lastError ?: "USB timeout"
-                    binding.btnConnect.text = "Retry"
-                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
-                }
-                DiagState.DISCONNECTED -> {
-                    val dev = currentDevice ?: transport.findAvailableDevice()
-                    if (dev == null) {
+        when (connectionMode) {
+            AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 -> {
+                when (elmEngine.state) {
+                    DiagState.CONNECTED, DiagState.POLLING -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
+                        val protoMode = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) "Turbo Fast (OBD-II)" else "VW TP 2.0 (OEM)"
+                        binding.tvStatus.text = "Connected: $protoMode"
+                        binding.tvSubStatus.text = "ECU Online | ${elmEngine.transport.connectedDeviceName ?: "V-LINK"}"
+                        binding.btnConnect.text = "Disconnect"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#DA3633"))
+                        binding.btnConnect.setTextColor(Color.WHITE)
+                    }
+                    DiagState.CONNECTING -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                        binding.tvStatus.text = "Connecting..."
+                        binding.tvSubStatus.text = "Negotiating ELM327 Bluetooth protocol..."
+                    }
+                    DiagState.ERROR -> {
                         binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
-                        binding.tvStatus.text = "No USB Adapter"
-                        binding.tvSubStatus.text = "Plug in USB cable or switch to Mode A/B (BT)"
+                        binding.tvStatus.text = "Connection Error"
+                        binding.tvSubStatus.text = elmEngine.lastError ?: "ELM327 timeout"
+                        binding.btnConnect.text = "Retry"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                        binding.btnConnect.setTextColor(Color.WHITE)
+                    }
+                    DiagState.DISCONNECTED -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                        val title = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) "Ready: Mode A (Turbo Fast)" else "Ready: Mode B (VAG OEM)"
+                        binding.tvStatus.text = title
+                        binding.tvSubStatus.text = "Ignition ON -> Tap Connect"
                         binding.btnConnect.text = "Connect"
                         binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
-                    } else {
-                        val info = UsbKwpTransport.identifyDevice(dev)
+                        binding.btnConnect.setTextColor(Color.WHITE)
+                    }
+                }
+            }
+            AppConnectionMode.USB_HARDWARE -> {
+                when (engine.state) {
+                    DiagState.CONNECTED, DiagState.POLLING -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
+                        val info = transport.getActiveAdapterInfo()
+                        binding.tvStatus.text = "Connected (USB)"
+                        binding.tvSubStatus.text = "ECU Online | ${info?.displayName ?: "USB Adapter"}"
+                        binding.btnConnect.text = "Disconnect"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#30363D"))
+                    }
+                    DiagState.CONNECTING -> {
                         binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
-                        binding.tvStatus.text = "Ready: ${info.displayName}"
-                        binding.tvSubStatus.text = "Ignition ON -> Tap Connect"
+                        binding.tvStatus.text = "Connecting..."
+                        binding.tvSubStatus.text = "Negotiating USB protocol"
+                    }
+                    DiagState.ERROR -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
+                        binding.tvStatus.text = "Error Connecting"
+                        binding.tvSubStatus.text = engine.lastError ?: "USB timeout"
+                        binding.btnConnect.text = "Retry"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                    }
+                    DiagState.DISCONNECTED -> {
+                        val dev = currentDevice ?: transport.findAvailableDevice()
+                        if (dev == null) {
+                            binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
+                            binding.tvStatus.text = "No USB Adapter"
+                            binding.tvSubStatus.text = "Plug in USB cable or switch to Mode A/B (BT)"
+                            binding.btnConnect.text = "Connect"
+                            binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                        } else {
+                            val info = UsbKwpTransport.identifyDevice(dev)
+                            binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                            binding.tvStatus.text = "Ready: ${info.displayName}"
+                            binding.tvSubStatus.text = "Ignition ON -> Tap Connect"
+                            binding.btnConnect.text = "Connect"
+                            binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                        }
+                    }
+                }
+            }
+            AppConnectionMode.SIMULATOR_DEMO -> {
+                when (engine.state) {
+                    DiagState.CONNECTED, DiagState.POLLING -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
+                        binding.tvStatus.text = "Simulated EDC16 (Demo Mode)"
+                        binding.tvSubStatus.text = "Virtual Golf 5 1.9 TDI BLS active"
+                        binding.btnConnect.text = "Disconnect"
+                        binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#30363D"))
+                    }
+                    else -> {
+                        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                        binding.tvStatus.text = "Simulator Ready"
+                        binding.tvSubStatus.text = "Tap Connect to start simulated telemetry"
                         binding.btnConnect.text = "Connect"
                         binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
                     }
                 }
             }
-        
+        }
 
         renderLoggingState()
     }

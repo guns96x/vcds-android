@@ -219,9 +219,10 @@ class Kwp2000DiagnosticEngine(
 
     private suspend fun tryRossTechCanInit(target: Byte): Boolean {
         try {
-            // FT232R DTR# is active-low: setDtr(false) → DTR# HIGH → RESET HIGH → MCU runs
-            // Try both polarities in case board has an inverter
-            val dtrStates = listOf(false, true)
+            // FT232R DTR# is active-low. Keep the interface MCU released from reset.
+            // The old second pass used DTR=true (RESET low) and then tried to talk
+            // to a processor it had just held in reset, which cannot be a valid probe.
+            val dtrStates = listOf(false)
             for (dtrState in dtrStates) {
                 Log.i("VCDS_PROBE", "--- Trying DTR=$dtrState (FT232R DTR# = ${if (dtrState) "LOW/reset" else "HIGH/run"}) ---")
                 transport.setDtr(dtrState)
@@ -354,11 +355,7 @@ class Kwp2000DiagnosticEngine(
             transport.purge()
             val startComm = buildMessage(target, 0xF1.toByte(), byteArrayOf(0x81.toByte()))
             transport.write(startComm)
-            val respBuffer = ByteArray(64)
-            val readBytes = transport.read(respBuffer, 450)
-            if (readBytes <= 0) return false
-
-            val payload = extractPayload(respBuffer, readBytes) ?: return false
+            val payload = readKwpPayload(450) ?: return false
             return payload.isNotEmpty() && (payload[0] == 0xC1.toByte() || payload[0] == 0x50.toByte())
         } catch (_: Exception) {
             return false
@@ -370,11 +367,7 @@ class Kwp2000DiagnosticEngine(
             transport.purge()
             val idReq = buildMessage(target, 0xF1.toByte(), byteArrayOf(0x1A.toByte(), 0x9B.toByte()))
             transport.write(idReq)
-            val respBuffer = ByteArray(128)
-            val readBytes = transport.read(respBuffer, 600)
-            if (readBytes <= 0) return false
-
-            val payload = extractPayload(respBuffer, readBytes) ?: return false
+            val payload = readKwpPayload(600) ?: return false
             return payload.isNotEmpty() && (payload[0] == 0x5A.toByte() || payload[0] == 0x61.toByte())
         } catch (_: Exception) {
             return false
@@ -387,15 +380,40 @@ class Kwp2000DiagnosticEngine(
             transport.sendFastInitPulse()
             val startComm = buildMessage(target, 0xF1.toByte(), byteArrayOf(0x81.toByte()))
             transport.write(startComm)
-            val respBuffer = ByteArray(64)
-            val readBytes = transport.read(respBuffer, 450)
-            if (readBytes <= 0) return false
-
-            val payload = extractPayload(respBuffer, readBytes) ?: return false
+            val payload = readKwpPayload(450) ?: return false
             return payload.isNotEmpty() && (payload[0] == 0xC1.toByte() || payload[0] == 0x50.toByte())
         } catch (_: Exception) {
             return false
         }
+    }
+
+    /**
+     * Accumulates USB serial chunks until a complete checksum-valid ECU KWP frame
+     * is present or the deadline expires. A serial read is not a message boundary:
+     * K-Line echo and the ECU response may arrive in separate USB packets.
+     */
+    private fun readKwpPayload(timeoutMs: Int, maxBytes: Int = 512): ByteArray? {
+        val aggregate = ByteArray(maxBytes)
+        var used = 0
+        val deadlineNs = System.nanoTime() + timeoutMs.toLong() * 1_000_000L
+
+        while (used < maxBytes) {
+            val nowNs = System.nanoTime()
+            if (nowNs >= deadlineNs) break
+
+            val remainingMs = ((deadlineNs - nowNs) / 1_000_000L).coerceAtLeast(1L).toInt()
+            val chunk = ByteArray(minOf(128, maxBytes - used))
+            val count = transport.read(chunk, minOf(80, remainingMs))
+
+            if (count > 0) {
+                System.arraycopy(chunk, 0, aggregate, used, count)
+                used += count
+
+                val payload = extractPayload(aggregate, used)
+                if (payload != null) return payload
+            }
+        }
+        return null
     }
 
     fun disconnect() {
@@ -429,11 +447,13 @@ class Kwp2000DiagnosticEngine(
                 val request = buildMessage(targetEcuAddress, 0xF1.toByte(), byteArrayOf(0x21.toByte(), groupNumber.toByte()))
                 transport.write(request)
 
-                val buffer = ByteArray(128)
-                val count = transport.read(buffer, 350)
-                if (count < 6) return@withContext null
-
-                val payload = extractPayload(buffer, count) ?: return@withContext null
+                val payload = readKwpPayload(350) ?: return@withContext null
+                if (payload.size < 2 || payload[0] != 0x61.toByte() ||
+                    (payload[1].toInt() and 0xFF) != groupNumber
+                ) {
+                    lastError = "Unexpected reply while reading Group $groupNumber"
+                    return@withContext null
+                }
                 return@withContext MeasuringGroup.decode(payload)
             } catch (e: Exception) {
                 lastError = "Read Group $groupNumber failed: ${e.message}"
@@ -469,9 +489,7 @@ class Kwp2000DiagnosticEngine(
                 val request = buildMessage(targetEcuAddress, 0xF1.toByte(), byteArrayOf(0x18.toByte(), 0x02.toByte(), 0xFF.toByte(), 0x00.toByte()))
                 transport.write(request)
 
-                val buffer = ByteArray(256)
-                val count = transport.read(buffer, 600)
-                val payload = extractPayload(buffer, count) ?: return@withContext emptyList()
+                val payload = readKwpPayload(600) ?: return@withContext emptyList()
 
                 if (payload.isEmpty() || payload[0] != 0x58.toByte()) {
                     return@withContext emptyList()
@@ -522,9 +540,7 @@ class Kwp2000DiagnosticEngine(
                 val request = buildMessage(targetEcuAddress, 0xF1.toByte(), byteArrayOf(0x14.toByte(), 0xFF.toByte(), 0x00.toByte()))
                 transport.write(request)
 
-                val buffer = ByteArray(32)
-                val count = transport.read(buffer, 500)
-                val payload = extractPayload(buffer, count) ?: return@withContext false
+                val payload = readKwpPayload(500) ?: return@withContext false
 
                 return@withContext payload.isNotEmpty() && payload[0] == 0x54.toByte()
             } catch (e: Exception) {
