@@ -143,6 +143,7 @@ class MainActivity : AppCompatActivity() {
     private val turboScheduler = TurboScheduler()
     private val coreTelemetryHealth = CoreTelemetryHealth(3)
     private var preflightReport: PreflightReport? = null
+    private var oemPreflightOk: Boolean = false
     private var stressJob: Job? = null
     private var elmConnectJob: Job? = null
     private var sessionGeneration: Long = 0L
@@ -330,7 +331,11 @@ class MainActivity : AppCompatActivity() {
             runPreFlightCheck()
         }
         binding.btnCheckData.setOnLongClickListener {
-            runRpmStressTest()
+            if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+                runRpmStressTest()
+            } else {
+                runOemGroupStressTest()
+            }
             true
         }
 
@@ -341,10 +346,10 @@ class MainActivity : AppCompatActivity() {
             if (recordingStartRequested.get() || recordingStopRequested.get()) {
                 return@setOnClickListener
             }
-            if (!asyncLogger.isLogging) {
-                startWotLog()
+            if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+                if (!asyncLogger.isLogging) startWotLog() else stopWotLog()
             } else {
-                stopWotLog()
+                if (!asyncLogger.isLogging) startOemLog() else stopOemLog()
             }
         }
 
@@ -594,7 +599,11 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             stopPolling()
             if (asyncLogger.isLogging) {
-                stopWotLog(immediate = true, abortReason = "USER_DISCONNECT")
+                if (targetMode == AppConnectionMode.TURBO_FAST_OBD) {
+                    stopWotLog(immediate = true, abortReason = "USER_DISCONNECT")
+                } else {
+                    stopOemLog(abortReason = "USER_DISCONNECT")
+                }
             }
             try {
                 when (targetMode) {
@@ -632,13 +641,15 @@ class MainActivity : AppCompatActivity() {
                 isFreshValid("010B", TelemetryFreshnessPolicy.MAP_MAX_AGE_MS, nowNs)
     }
 
+    private fun isCurrentModeConnected(): Boolean = when (connectionMode) {
+        AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
+            elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
+        AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
+            engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+    }
+
     private fun isWotLogReady(nowNs: Long = SystemClock.elapsedRealtimeNanos()): Boolean {
-        val isConnected = when (connectionMode) {
-            AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
-                elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
-            AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
-                engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
-        }
+        if (connectionMode != AppConnectionMode.TURBO_FAST_OBD) return false
         val hasCore = isCoreTelemetryReady(nowNs)
         val hasBaro = sessionBaroResolver.resolve(nowNs).valueMbar != null
         val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
@@ -647,7 +658,7 @@ class MainActivity : AppCompatActivity() {
         val spdOk = isFreshValid("010D", TelemetryFreshnessPolicy.SPEED_MAX_AGE_MS, nowNs)
         val lodOk = isFreshValid("0104", TelemetryFreshnessPolicy.LOAD_MAX_AGE_MS, nowNs)
 
-        return isConnected && hasCore && hasBaro && isGreen && mafOk && spdOk && lodOk
+        return isCurrentModeConnected() && hasCore && hasBaro && isGreen && mafOk && spdOk && lodOk
     }
 
     private fun renderLoggingState() {
@@ -679,13 +690,9 @@ class MainActivity : AppCompatActivity() {
                 return@runOnUiThread
             }
 
-            val isConnected = when (connectionMode) {
-                AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
-                    elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
-                AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
-                    engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
-            }
-            val canStart = isConnected && isWotLogReady()
+            val isConnected = isCurrentModeConnected()
+            val isTurboFast = connectionMode == AppConnectionMode.TURBO_FAST_OBD
+            val canStart = if (isTurboFast) isWotLogReady() else isConnected && oemPreflightOk
 
             if (isLogging) {
                 binding.btnToggleLog.isEnabled = true
@@ -697,7 +704,7 @@ class MainActivity : AppCompatActivity() {
                 binding.btnModeToggle.isEnabled = false
                 binding.btnConnect.isEnabled = false
             } else {
-                binding.btnToggleLog.text = "START 4TH GEAR WOT LOG"
+                binding.btnToggleLog.text = if (isTurboFast) "START 4TH GEAR WOT LOG" else "START OEM RAW LOG"
                 binding.btnToggleLog.isEnabled = canStart
                 if (canStart) {
                     binding.btnToggleLog.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#238636"))
@@ -735,6 +742,7 @@ class MainActivity : AppCompatActivity() {
         recordingStopRequested.set(false)
         sessionGeneration++
         preflightReport = null
+        oemPreflightOk = false
         coreTelemetryHealth.reset()
         latestSamples.clear()
         sessionBaroResolver.reset()
@@ -802,6 +810,49 @@ class MainActivity : AppCompatActivity() {
         recordingStartRequested.set(true)
         recordingStopRequested.set(false)
         renderLoggingState()
+    }
+
+    private fun startOemLog() {
+        if (!isCurrentModeConnected()) {
+            Toast.makeText(this, "OEM transport is not connected.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!oemPreflightOk) {
+            Toast.makeText(this, "Run CHECK DATA first; Groups 011/008/003 must pass.", Toast.LENGTH_LONG).show()
+            renderLoggingState()
+            return
+        }
+
+        logStartUtcMs = System.currentTimeMillis()
+        val (rawFile, _) = asyncLogger.startLogging()
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        logSessionEvent("SESSION_START", "mode=$connectionMode raw_oem=true")
+        RecordingKeepAliveService.start(this, rawFile.name)
+        renderLoggingState()
+        Toast.makeText(this, "OEM RAW log started: ${rawFile.name}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun stopOemLog(abortReason: String? = null) {
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        lifecycleScope.launch {
+            if (asyncLogger.isLogging) {
+                if (abortReason != null) {
+                    logSessionEvent("SESSION_ABORT", "reason=$abortReason mode=$connectionMode")
+                } else {
+                    logSessionEvent("SESSION_STOP", "mode=$connectionMode")
+                }
+            }
+            RecordingKeepAliveService.stop(this@MainActivity)
+            val (rawFile, _) = asyncLogger.stopLogging()
+            renderLoggingState()
+            if (rawFile != null && rawFile.exists()) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "OEM RAW log saved: ${rawFile.name} (${rawFile.length() / 1024} KB)",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
     }
 
     private fun snapshotPreLogTelemetry() {
