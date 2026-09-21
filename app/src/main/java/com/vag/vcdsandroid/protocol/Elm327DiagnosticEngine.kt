@@ -323,13 +323,9 @@ class Elm327DiagnosticEngine(private val context: Context) {
             if (!transport.isConnected || state != DiagState.CONNECTED) return@withContext null
 
             if (isTp20Active) {
-                val tpGroup = when (groupNum) {
-                    11 -> tp20Transport.readGroup011()
-                    8 -> tp20Transport.readGroup008()
-                    3 -> tp20Transport.readGroup003()
-                    else -> null
-                }
-                return@withContext tpGroup
+                // VwTp20Transport already implements a generic KWP 0x21 reader.
+                // Do not artificially restrict OEM mode to only 011/008/003.
+                return@withContext tp20Transport.readMeasuringGroup(groupNum)
             }
 
             return@withContext when (groupNum) {
