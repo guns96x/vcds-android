@@ -246,6 +246,75 @@ class VwTp20Transport(
      */
     private var consecutiveFails: Int = 0
 
+    /**
+     * Sends an arbitrary KWP2000 payload over the already negotiated VW TP 2.0
+     * channel and returns the reassembled KWP payload.
+     */
+    suspend fun requestKwp(payload: ByteArray, timeoutMs: Long = 2000L): ByteArray? {
+        require(payload.isNotEmpty() && payload.size <= 0xFF) {
+            "KWP payload length must be 1..255"
+        }
+
+        if (!isChannelOpen) {
+            val ok = setupChannel(0x01)
+            if (!ok) {
+                delay(1000L)
+                return null
+            }
+        }
+
+        val currentTxSeq = txSequence and 0x0F
+        val currentTxOpcode = 0x10 or currentTxSeq
+        val payloadHex = payload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+        val queryCmd = String.format(
+            Locale.US,
+            "%02X 00 %02X %s",
+            currentTxOpcode,
+            payload.size,
+            payloadHex
+        )
+
+        Log.i(TAG, "TX KWP >> $queryCmd")
+        val resp = transport.sendCommand(queryCmd, timeoutMs)
+        Log.i(TAG, "RX KWP << ${resp.raw.trim()} (${resp.elapsedMs}ms)")
+
+        when (val result = Tp20FrameParser.parseKwp(resp.raw, currentTxSeq, minPayloadLength = 1)) {
+            is Tp20Result.Success -> {
+                if (result.needsAck && result.lastRxSeq >= 0) {
+                    val ackCmd = String.format(Locale.US, "%02X", result.ackCode)
+                    transport.sendCommand(ackCmd, 250L)
+                }
+                if (result.sawKeepAlive) {
+                    transport.sendCommand("A1 0F 8A FF 4A FF", 250L)
+                }
+                txSequence = result.nextTxSeq
+                consecutiveFails = 0
+                return result.kwpPayload
+            }
+
+            is Tp20Result.PeerDisconnect -> {
+                try { transport.sendCommand("A8", 200L) } catch (_: Exception) {}
+                isChannelOpen = false
+                txSequence = 0
+                return null
+            }
+
+            is Tp20Result.PeerBusy -> return null
+
+            is Tp20Result.Incomplete,
+            is Tp20Result.ProtocolError,
+            is Tp20Result.TimeoutOrNoData -> {
+                consecutiveFails++
+                if (consecutiveFails >= 2) {
+                    isChannelOpen = false
+                    setupChannel(0x01)
+                    consecutiveFails = 0
+                }
+                return null
+            }
+        }
+    }
+
     suspend fun readMeasuringGroup(groupNum: Int): MeasuringGroup? {
         if (!isChannelOpen) {
             val ok = setupChannel(0x01)
