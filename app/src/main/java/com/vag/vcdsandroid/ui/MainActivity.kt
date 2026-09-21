@@ -1343,6 +1343,13 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "Connect the selected OEM transport first.", Toast.LENGTH_SHORT).show()
             return
         }
+        if (connectionMode == AppConnectionMode.VAG_OEM_TP20 && !elmEngine.isTp20Active) {
+            oemPreflightOk = false
+            binding.tvPreFlightStatus.text = "OEM NOT READY: TP2.0 channel is not active"
+            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#F85149"))
+            renderLoggingState()
+            return
+        }
 
         val wasPolling = pollingJob?.isActive == true
         stopPolling()
@@ -1390,6 +1397,10 @@ class MainActivity : AppCompatActivity() {
         }
         if (!isCurrentModeConnected()) {
             Toast.makeText(this, "Connect the selected OEM transport first.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (connectionMode == AppConnectionMode.VAG_OEM_TP20 && !elmEngine.isTp20Active) {
+            Toast.makeText(this, "TP2.0 channel is not active.", Toast.LENGTH_LONG).show()
             return
         }
 
