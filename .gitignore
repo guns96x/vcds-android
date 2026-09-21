@@ -8,3 +8,5 @@ app/build/
 /screen_*.jpg
 /window_dump.xml
 /sample_log.csv
+__pycache__/
+*.pyc
