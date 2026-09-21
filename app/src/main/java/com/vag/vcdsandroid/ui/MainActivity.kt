@@ -720,17 +720,20 @@ class MainActivity : AppCompatActivity() {
                 binding.btnConnect.isEnabled = true
 
                 if (isConnected && !canStart) {
-                    val hasCore = isCoreTelemetryReady()
-                    val hasBaro = sessionBaroResolver.resolve(SystemClock.elapsedRealtimeNanos()).valueMbar != null
-                    val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
-                    if (!isGreen) {
-                        if (preflightReport == null) {
+                    if (!isTurboFast) {
+                        binding.tvPreFlightStatus.text = "OEM CHECK DATA REQUIRED: validate Groups 011/008/003 before logging"
+                        binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
+                    } else {
+                        val hasCore = isCoreTelemetryReady()
+                        val hasBaro = sessionBaroResolver.resolve(SystemClock.elapsedRealtimeNanos()).valueMbar != null
+                        val isGreen = preflightReport?.verdict == PreflightVerdict.GREEN
+                        if (!isGreen && preflightReport == null) {
                             binding.tvPreFlightStatus.text = "CHECK DATA REQUIRED: Run pre-flight check before logging"
                             binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
+                        } else if (hasCore && !hasBaro) {
+                            binding.tvPreFlightStatus.text = "RAW TELEMETRY OK — BOOST NOT READY: engine off + ignition on once for BARO baseline"
+                            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
                         }
-                    } else if (hasCore && !hasBaro) {
-                        binding.tvPreFlightStatus.text = "RAW TELEMETRY OK — BOOST NOT READY: engine off + ignition on once for BARO baseline"
-                        binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
                     }
                 }
             }
@@ -1299,7 +1302,115 @@ class MainActivity : AppCompatActivity() {
     // PRE-FLIGHT SELF CHECK (Deterministic Probe across all 9 PIDs)
     // =========================================================================
 
+    private fun runOemPreFlightCheck() {
+        if (asyncLogger.isLogging) {
+            Toast.makeText(this, "Stop the current log first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!isCurrentModeConnected()) {
+            Toast.makeText(this, "Connect the selected OEM transport first.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val wasPolling = pollingJob?.isActive == true
+        stopPolling()
+        preFlightJob = lifecycleScope.launch {
+            binding.btnCheckData.isEnabled = false
+            binding.tvPreFlightStatus.text = "OEM pre-flight: reading Groups 011 / 008 / 003..."
+            binding.tvPreFlightStatus.setTextColor(Color.parseColor("#D29922"))
+
+            val g011 = readAuxGroup(11)
+            val g008 = readAuxGroup(8)
+            val g003 = readAuxGroup(3)
+
+            fun decoded(group: com.vag.vcdsandroid.model.MeasuringGroup?): Boolean =
+                group != null && group.values.size >= 4 && group.values.none { it.unit == "raw" }
+
+            val ok011 = decoded(g011)
+            val ok008 = decoded(g008)
+            val ok003 = decoded(g003)
+            oemPreflightOk = ok011 && ok008 && ok003
+
+            val unit011 = g011?.values?.joinToString("/") { it.unit.ifEmpty { "-" } } ?: "NO REPLY"
+            val unit008 = g008?.values?.joinToString("/") { it.unit.ifEmpty { "-" } } ?: "NO REPLY"
+            val unit003 = g003?.values?.joinToString("/") { it.unit.ifEmpty { "-" } } ?: "NO REPLY"
+
+            binding.tvPreFlightStatus.text = buildString {
+                append(if (oemPreflightOk) "OEM READY TO LOG" else "OEM NOT READY")
+                append("\nG011: ${if (ok011) "OK" else "FAIL"} [$unit011]")
+                append("\nG008: ${if (ok008) "OK" else "FAIL"} [$unit008]")
+                append("\nG003: ${if (ok003) "OK" else "FAIL"} [$unit003]")
+            }
+            binding.tvPreFlightStatus.setTextColor(
+                Color.parseColor(if (oemPreflightOk) "#3FB950" else "#F85149")
+            )
+
+            if (wasPolling && isCurrentModeConnected()) startOemPolling()
+            renderLoggingState()
+        }
+    }
+
+    private fun runOemGroupStressTest() {
+        if (asyncLogger.isLogging) {
+            Toast.makeText(this, "Stop the current log first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!isCurrentModeConnected()) {
+            Toast.makeText(this, "Connect the selected OEM transport first.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val wasPolling = pollingJob?.isActive == true
+        stopPolling()
+        stressJob = lifecycleScope.launch {
+            binding.btnCheckData.isEnabled = false
+            val latencies = mutableListOf<Long>()
+            var requests = 0
+            var valid = 0
+            var minRpm: Double? = null
+            var maxRpm: Double? = null
+            val startMs = SystemClock.elapsedRealtime()
+
+            while (SystemClock.elapsedRealtime() - startMs < 10_000L) {
+                val t0 = SystemClock.elapsedRealtime()
+                val g = readAuxGroup(11)
+                latencies.add(SystemClock.elapsedRealtime() - t0)
+                requests++
+                if (g != null && g.values.size >= 4 && g.values.none { it.unit == "raw" }) {
+                    valid++
+                    val rpm = g.values[0].rawValue
+                    minRpm = minOf(minRpm ?: rpm, rpm)
+                    maxRpm = maxOf(maxRpm ?: rpm, rpm)
+                }
+            }
+
+            val sorted = latencies.sorted()
+            val mean = if (latencies.isNotEmpty()) latencies.average() else 0.0
+            val median = if (sorted.isNotEmpty()) sorted[sorted.size / 2] else 0L
+            val p95 = if (sorted.isNotEmpty()) sorted[(sorted.size - 1) * 95 / 100] else 0L
+            val hz = valid / 10.0
+            val summary = String.format(
+                Locale.US,
+                "OEM G011 STRESS 10s\nRequests: %d\nValid: %d\nRate: %.2f Hz\nLatency mean/median/p95: %.0f/%d/%d ms\nRPM min/max: %.0f / %.0f",
+                requests, valid, hz, mean, median, p95, minRpm ?: 0.0, maxRpm ?: 0.0
+            )
+            Log.i("OEM_G011_STRESS", summary.replace("\n", " | "))
+            AlertDialog.Builder(this@MainActivity)
+                .setTitle("OEM Group 011 stress test")
+                .setMessage(summary)
+                .setPositiveButton("OK", null)
+                .show()
+
+            if (wasPolling && isCurrentModeConnected()) startOemPolling()
+            renderLoggingState()
+        }
+    }
+
     private fun runPreFlightCheck() {
+        if (connectionMode != AppConnectionMode.TURBO_FAST_OBD) {
+            runOemPreFlightCheck()
+            return
+        }
         if (asyncLogger.isLogging) {
             Toast.makeText(this, "Stop the current log first", Toast.LENGTH_SHORT).show()
             return
@@ -1943,9 +2054,9 @@ class MainActivity : AppCompatActivity() {
                     val n75 = g011.values[3].rawValue
 
                     binding.tvRpm.text = String.format(Locale.US, "%.0f RPM", rpmVal)
-                    binding.tvBoostSpecified.text = String.format(Locale.US, "%.0f", targetBoost)
-                    binding.tvBoostActual.text = String.format(Locale.US, "%.0f", actualBoost)
-                    binding.tvN75.text = String.format(Locale.US, "%.1f %%", n75)
+                    binding.tvBoostSpecified.text = String.format(Locale.US, "%.0f %s", targetBoost, g011.values[1].unit)
+                    binding.tvBoostActual.text = String.format(Locale.US, "%.0f %s", actualBoost, g011.values[2].unit)
+                    binding.tvN75.text = String.format(Locale.US, "%.1f %s", n75, g011.values[3].unit)
 
                     binding.liveGraphView.addTelemetryPoint(
                         targetBoost.toFloat(),
@@ -1953,10 +2064,10 @@ class MainActivity : AppCompatActivity() {
                         n75.toFloat()
                     )
 
-                    logGroupChannel("G011_RPM", rpmVal, "rpm", 11)
-                    logGroupChannel("G011_BOOST_SPEC", targetBoost, "mbar", 11)
-                    logGroupChannel("G011_BOOST_ACT", actualBoost, "mbar", 11)
-                    logGroupChannel("G011_N75_DUTY", n75, "%", 11)
+                    logGroupChannel("G011_RPM", rpmVal, g011.values[0].unit, 11)
+                    logGroupChannel("G011_BOOST_SPEC", targetBoost, g011.values[1].unit, 11)
+                    logGroupChannel("G011_BOOST_ACT", actualBoost, g011.values[2].unit, 11)
+                    logGroupChannel("G011_N75_DUTY", n75, g011.values[3].unit, 11)
                 }
 
                 // Auxiliary groups rotate one per cycle so the core group 011 rate is
@@ -1970,12 +2081,12 @@ class MainActivity : AppCompatActivity() {
                             val driver = g.values[1].rawValue
                             val torque = g.values[2].rawValue
                             val smoke = g.values[3].rawValue
-                            binding.tvDriverWish.text = String.format(Locale.US, "Driver: %.1f Nm", driver)
-                            binding.tvTorqueLimit.text = String.format(Locale.US, "Torque: %.1f Nm", torque)
-                            binding.tvSmokeLimit.text = String.format(Locale.US, "Smoke: %.1f Nm", smoke)
-                            logGroupChannel("G008_DRIVER_INTENTION_TRQ", driver, "Nm", 8)
-                            logGroupChannel("G008_TORQUE_LIMITATION", torque, "Nm", 8)
-                            logGroupChannel("G008_SMOKE_LIMITATION", smoke, "Nm", 8)
+                            binding.tvDriverWish.text = String.format(Locale.US, "Driver: %.1f %s", driver, g.values[1].unit)
+                            binding.tvTorqueLimit.text = String.format(Locale.US, "Torque: %.1f %s", torque, g.values[2].unit)
+                            binding.tvSmokeLimit.text = String.format(Locale.US, "Smoke: %.1f %s", smoke, g.values[3].unit)
+                            logGroupChannel("G008_DRIVER_INTENTION", driver, g.values[1].unit, 8)
+                            logGroupChannel("G008_TORQUE_LIMITATION", torque, g.values[2].unit, 8)
+                            logGroupChannel("G008_SMOKE_LIMITATION", smoke, g.values[3].unit, 8)
                         }
                     }
                     3 -> readAuxGroup(3)?.let { g ->
@@ -1983,12 +2094,12 @@ class MainActivity : AppCompatActivity() {
                             val mafSpec = g.values[1].rawValue
                             val mafAct = g.values[2].rawValue
                             val egr = g.values[3].rawValue
-                            binding.tvMafSpecified.text = String.format(Locale.US, "Target: %.0f mg/str", mafSpec)
-                            binding.tvMafActual.text = String.format(Locale.US, "Actual: %.0f mg/str", mafAct)
-                            binding.tvEgrDuty.text = String.format(Locale.US, "EGR: %.1f %%", egr)
-                            logGroupChannel("G003_MAF_SPEC", mafSpec, "mg/str", 3)
-                            logGroupChannel("G003_MAF_ACT", mafAct, "mg/str", 3)
-                            logGroupChannel("G003_EGR_DUTY", egr, "%", 3)
+                            binding.tvMafSpecified.text = String.format(Locale.US, "Target: %.0f %s", mafSpec, g.values[1].unit)
+                            binding.tvMafActual.text = String.format(Locale.US, "Actual: %.0f %s", mafAct, g.values[2].unit)
+                            binding.tvEgrDuty.text = String.format(Locale.US, "EGR: %.1f %s", egr, g.values[3].unit)
+                            logGroupChannel("G003_MAF_SPEC", mafSpec, g.values[1].unit, 3)
+                            logGroupChannel("G003_MAF_ACT", mafAct, g.values[2].unit, 3)
+                            logGroupChannel("G003_EGR_DUTY", egr, g.values[3].unit, 3)
                         }
                     }
                     // Fuel temp (G81), intake air temp (G72), coolant (G62): the exact
@@ -1996,51 +2107,51 @@ class MainActivity : AppCompatActivity() {
                     // EngPrt_facCTOvhtPrv_MAP and EngPrt_facFlTempLim_MAP.
                     7 -> readAuxGroup(7)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G007_FUEL_TEMP", g.values[0].rawValue, "C", 7)
-                            logGroupChannel("G007_FUEL_COOLING", g.values[1].rawValue, "%", 7)
-                            logGroupChannel("G007_INTAKE_AIR_TEMP", g.values[2].rawValue, "C", 7)
-                            logGroupChannel("G007_COOLANT_TEMP", g.values[3].rawValue, "C", 7)
+                            logGroupChannel("G007_FUEL_TEMP", g.values[0].rawValue, g.values[0].unit, 7)
+                            logGroupChannel("G007_FUEL_COOLING", g.values[1].rawValue, g.values[1].unit, 7)
+                            logGroupChannel("G007_INTAKE_AIR_TEMP", g.values[2].rawValue, g.values[2].unit, 7)
+                            logGroupChannel("G007_COOLANT_TEMP", g.values[3].rawValue, g.values[3].unit, 7)
                         }
                     }
                     // Atmospheric pressure straight from the ECU beats the phone barometer.
                     10 -> readAuxGroup(10)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G010_MAF_ACT", g.values[0].rawValue, "mg/str", 10)
-                            logGroupChannel("G010_ATMOSPHERIC_PRESSURE", g.values[1].rawValue, "mbar", 10)
-                            logGroupChannel("G010_MANIFOLD_PRESSURE_ACT", g.values[2].rawValue, "mbar", 10)
-                            logGroupChannel("G010_THROTTLE_POS", g.values[3].rawValue, "%", 10)
+                            logGroupChannel("G010_MAF_ACT", g.values[0].rawValue, g.values[0].unit, 10)
+                            logGroupChannel("G010_ATMOSPHERIC_PRESSURE", g.values[1].rawValue, g.values[1].unit, 10)
+                            logGroupChannel("G010_MANIFOLD_PRESSURE_ACT", g.values[2].rawValue, g.values[2].unit, 10)
+                            logGroupChannel("G010_THROTTLE_POS", g.values[3].rawValue, g.values[3].unit, 10)
                         }
                     }
                     // Actual start of injection: verifies the timing advance this
                     // car's tune added against the stock calibration.
                     4 -> readAuxGroup(4)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G004_INJECTION_START", g.values[1].rawValue, "degKW", 4)
-                            logGroupChannel("G004_INJECTION_DURATION", g.values[2].rawValue, "degKW", 4)
-                            logGroupChannel("G004_TORSION_VALUE", g.values[3].rawValue, "degKW", 4)
+                            logGroupChannel("G004_INJECTION_START", g.values[1].rawValue, g.values[1].unit, 4)
+                            logGroupChannel("G004_INJECTION_DURATION", g.values[2].rawValue, g.values[2].unit, 4)
+                            logGroupChannel("G004_TORSION_VALUE", g.values[3].rawValue, g.values[3].unit, 4)
                         }
                     }
                     // Further torque limiters: transmission intervention, restriction.
                     9 -> readAuxGroup(9)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G009_CRUISE_DESIRED_TRQ", g.values[1].rawValue, "Nm", 9)
-                            logGroupChannel("G009_TRANSMISSION_TRQ", g.values[2].rawValue, "Nm", 9)
-                            logGroupChannel("G009_TORQUE_RESTRICTION", g.values[3].rawValue, "Nm", 9)
+                            logGroupChannel("G009_CRUISE_DESIRED_TRQ", g.values[1].rawValue, g.values[1].unit, 9)
+                            logGroupChannel("G009_TRANSMISSION_TRQ", g.values[2].rawValue, g.values[2].unit, 9)
+                            logGroupChannel("G009_TORQUE_RESTRICTION", g.values[3].rawValue, g.values[3].unit, 9)
                         }
                     }
                     15 -> readAuxGroup(15)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G015_ENGINE_TORQUE", g.values[1].rawValue, "Nm", 15)
-                            logGroupChannel("G015_FUEL_CONSUMPTION", g.values[2].rawValue, "", 15)
-                            logGroupChannel("G015_DRIVER_INTENTION_TRQ", g.values[3].rawValue, "Nm", 15)
+                            logGroupChannel("G015_ENGINE_TORQUE", g.values[1].rawValue, g.values[1].unit, 15)
+                            logGroupChannel("G015_FUEL_CONSUMPTION", g.values[2].rawValue, g.values[2].unit, 15)
+                            logGroupChannel("G015_DRIVER_INTENTION_TRQ", g.values[3].rawValue, g.values[3].unit, 15)
                         }
                     }
                     // Quantity that survives every limiter.
                     1 -> readAuxGroup(1)?.let { g ->
                         if (g.values.size >= 4) {
-                            logGroupChannel("G001_INJECTION_QUANTITY", g.values[1].rawValue, "mg/str", 1)
-                            logGroupChannel("G001_SUPPLY_DURATION", g.values[2].rawValue, "degKW", 1)
-                            logGroupChannel("G001_COOLANT_TEMP", g.values[3].rawValue, "C", 1)
+                            logGroupChannel("G001_INJECTION_QUANTITY", g.values[1].rawValue, g.values[1].unit, 1)
+                            logGroupChannel("G001_SUPPLY_DURATION", g.values[2].rawValue, g.values[2].unit, 1)
+                            logGroupChannel("G001_COOLANT_TEMP", g.values[3].rawValue, g.values[3].unit, 1)
                         }
                     }
                 }
