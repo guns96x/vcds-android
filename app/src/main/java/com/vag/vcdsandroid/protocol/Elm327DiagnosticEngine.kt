@@ -454,6 +454,31 @@ class Elm327DiagnosticEngine(private val context: Context) {
     suspend fun readFaultCodes(): List<FaultCode> = withContext(Dispatchers.IO) {
         commMutex.withLock {
             if (!transport.isConnected) return@withContext emptyList()
+
+            if (isTp20Active) {
+                val payload = tp20Transport.requestKwp(
+                    byteArrayOf(0x18, 0x02, 0xFF.toByte(), 0x00),
+                    timeoutMs = 2500L
+                ) ?: return@withContext emptyList()
+
+                if (payload.isEmpty() || payload[0] != 0x58.toByte()) {
+                    return@withContext emptyList()
+                }
+
+                val codes = mutableListOf<FaultCode>()
+                var offset = 2
+                while (offset + 2 < payload.size) {
+                    val high = payload[offset].toInt() and 0xFF
+                    val low = payload[offset + 1].toInt() and 0xFF
+                    val status = payload[offset + 2].toInt() and 0xFF
+                    if (high != 0 || low != 0) {
+                        codes.add(FaultCode.parseFromBytes(high, low, status, emptyMap()))
+                    }
+                    offset += 3
+                }
+                return@withContext codes
+            }
+
             val resp = transport.sendCommand("03", 2500L)
             val clean = cleanHexResponse(resp.raw)
             val codes = mutableListOf<FaultCode>()
@@ -504,6 +529,15 @@ class Elm327DiagnosticEngine(private val context: Context) {
     suspend fun clearFaultCodes(): Boolean = withContext(Dispatchers.IO) {
         commMutex.withLock {
             if (!transport.isConnected) return@withContext false
+
+            if (isTp20Active) {
+                val payload = tp20Transport.requestKwp(
+                    byteArrayOf(0x14, 0xFF.toByte(), 0x00),
+                    timeoutMs = 2000L
+                ) ?: return@withContext false
+                return@withContext payload.isNotEmpty() && payload[0] == 0x54.toByte()
+            }
+
             val resp = transport.sendCommand("04", 2500L)
             return@withContext resp.raw.contains("44") || resp.raw.contains("OK")
         }
