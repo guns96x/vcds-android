@@ -1269,31 +1269,56 @@ class MainActivity : AppCompatActivity() {
         if (asyncLogger.lastWriterError != null) {
             val err = asyncLogger.lastWriterError ?: "Writer exception"
             asyncLogger.clearWriterError()
-            stopWotLog(immediate = true, abortReason = "WRITER_ERROR")
+            if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+                stopWotLog(immediate = true, abortReason = "WRITER_ERROR")
+            } else {
+                stopOemLog(abortReason = "WRITER_ERROR")
+            }
             binding.tvLogMetrics.text = "🔴 LOGGER FAILED: $err"
             binding.tvLogMetrics.setTextColor(Color.parseColor("#F85149"))
             Toast.makeText(this@MainActivity, "CSV Logger failed: $err", Toast.LENGTH_LONG).show()
             return
         }
 
-        // Recording / Queue Stats compact line (Pairs and Raw)
+        // Recording / Queue Stats compact line.
         val sizeKb = asyncLogger.fileSizeBytes / 1024
+        val turboMode = connectionMode == AppConnectionMode.TURBO_FAST_OBD
         if (asyncLogger.isLogging) {
             val elapsedSec = (System.currentTimeMillis() - logStartUtcMs) / 1000
             val min = elapsedSec / 60
             val sec = elapsedSec % 60
-            binding.tvLogMetrics.text = String.format(
-                Locale.US,
-                "REC ACTIVE (%02d:%02d) | Pairs: %d | Raw: %d | Queue: %d | Dropped: %d | %d KB",
-                min, sec, asyncLogger.rowsWritten, asyncLogger.rawRowsWritten, asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
-            )
+            binding.tvLogMetrics.text = if (turboMode) {
+                String.format(
+                    Locale.US,
+                    "REC ACTIVE (%02d:%02d) | Pairs: %d | Raw: %d | Queue: %d | Dropped: %d | %d KB",
+                    min, sec, asyncLogger.rowsWritten, asyncLogger.rawRowsWritten,
+                    asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
+                )
+            } else {
+                String.format(
+                    Locale.US,
+                    "OEM REC (%02d:%02d) | Raw: %d | Queue: %d | Dropped: %d | %d KB",
+                    min, sec, asyncLogger.rawRowsWritten, asyncLogger.queueSize,
+                    asyncLogger.droppedRecords, sizeKb
+                )
+            }
             binding.tvLogMetrics.setTextColor(Color.parseColor("#F85149"))
         } else {
-            binding.tvLogMetrics.text = String.format(
-                Locale.US,
-                "REC OFF | Pairs: %d | Raw: %d | Queue: %d | Dropped: %d | %d KB",
-                asyncLogger.rowsWritten, asyncLogger.rawRowsWritten, asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
-            )
+            binding.tvLogMetrics.text = if (turboMode) {
+                String.format(
+                    Locale.US,
+                    "REC OFF | Pairs: %d | Raw: %d | Queue: %d | Dropped: %d | %d KB",
+                    asyncLogger.rowsWritten, asyncLogger.rawRowsWritten,
+                    asyncLogger.queueSize, asyncLogger.droppedRecords, sizeKb
+                )
+            } else {
+                String.format(
+                    Locale.US,
+                    "OEM REC OFF | Raw: %d | Queue: %d | Dropped: %d | %d KB",
+                    asyncLogger.rawRowsWritten, asyncLogger.queueSize,
+                    asyncLogger.droppedRecords, sizeKb
+                )
+            }
             binding.tvLogMetrics.setTextColor(Color.parseColor("#8B949E"))
         }
     }
@@ -2196,13 +2221,31 @@ class MainActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- GitHub
 
-    /** Newest csv in the log directory, or null when nothing has been recorded. */
+    /**
+     * Newest meaningful log for the active acquisition pipeline.
+     *
+     * AsyncCsvLogger creates both RAW and Turbo_Pair files. OEM modes intentionally
+     * write only RAW measuring-group events, so blindly taking the newest CSV can
+     * select the empty/header-only Turbo_Pair sibling.
+     */
     private fun latestLogFile(): java.io.File? {
         val dir = java.io.File(
             getExternalFilesDir(android.os.Environment.DIRECTORY_DOCUMENTS), "VCDS_Logs"
         )
-        return dir.listFiles { f -> f.isFile && f.name.endsWith(".csv", ignoreCase = true) }
-            ?.maxByOrNull { it.lastModified() }
+        val files = dir.listFiles { f ->
+            f.isFile && f.name.endsWith(".csv", ignoreCase = true)
+        }?.toList().orEmpty()
+        if (files.isEmpty()) return null
+
+        val preferredPrefix = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+            "Turbo_Pair_"
+        } else {
+            "Event_RAW_"
+        }
+
+        return files.filter { it.name.startsWith(preferredPrefix) }
+            .maxByOrNull { it.lastModified() }
+            ?: files.maxByOrNull { it.lastModified() }
     }
 
     /**
