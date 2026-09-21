@@ -367,11 +367,17 @@ class MainActivity : AppCompatActivity() {
             binding.tvRawDebugHeaderTitle.text = if (isRawDebugExpanded) "▼ RAW DEBUG (tap to collapse)" else "▶ RAW DEBUG (tap to toggle)"
         }
 
-        // DTC Buttons for Mode B / Bluetooth
+        // DTC actions are transport-specific. Do not send generic OBD 03/04
+        // while the ELM is configured as a raw VW TP2.0 transport.
         binding.btnScanDtc.setOnClickListener {
+            if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
+                binding.tvDtcList.text =
+                    "TP2.0 DTC service is not implemented yet. Use Turbo Fast for SAE DTCs or USB KWP for VAG KWP DTCs."
+                return@setOnClickListener
+            }
             lifecycleScope.launch {
                 binding.tvDtcList.text = "Scanning DTCs..."
-                val dtcs = if (connectionMode == AppConnectionMode.VAG_OEM_TP20 || connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+                val dtcs = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
                     elmEngine.readFaultCodes()
                 } else {
                     engine.readFaultCodes()
@@ -385,16 +391,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnClearDtc.setOnClickListener {
+            if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
+                binding.tvDtcList.text =
+                    "TP2.0 DTC clear is disabled until the KWP-over-TP2 service is implemented and tested."
+                return@setOnClickListener
+            }
             lifecycleScope.launch {
-                val ok = if (connectionMode == AppConnectionMode.VAG_OEM_TP20 || connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
+                val ok = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
                     elmEngine.clearFaultCodes()
                 } else {
                     engine.clearFaultCodes()
                 }
-                if (ok) {
-                    binding.tvDtcList.text = "Fault codes cleared successfully."
+                binding.tvDtcList.text = if (ok) {
+                    "Fault codes cleared successfully."
                 } else {
-                    binding.tvDtcList.text = "Failed to clear DTCs."
+                    "Failed to clear DTCs."
                 }
             }
         }
