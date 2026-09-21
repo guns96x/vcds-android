@@ -1345,6 +1345,7 @@ class MainActivity : AppCompatActivity() {
                 Color.parseColor(if (oemPreflightOk) "#3FB950" else "#F85149")
             )
 
+            preFlightJob = null
             if (wasPolling && isCurrentModeConnected()) startOemPolling()
             renderLoggingState()
         }
@@ -1401,6 +1402,7 @@ class MainActivity : AppCompatActivity() {
                 .setPositiveButton("OK", null)
                 .show()
 
+            stressJob = null
             if (wasPolling && isCurrentModeConnected()) startOemPolling()
             renderLoggingState()
         }
@@ -1546,6 +1548,7 @@ class MainActivity : AppCompatActivity() {
             binding.btnCheckData.isEnabled = true
             renderLoggingState()
 
+            preFlightJob = null
             if (wasPolling && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
                 startTurboFastPolling()
             }
@@ -1656,6 +1659,7 @@ class MainActivity : AppCompatActivity() {
                 .setPositiveButton("OK", null)
                 .show()
 
+            stressJob = null
             if (wasPolling && (elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING)) {
                 startTurboFastPolling()
             }
