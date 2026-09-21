@@ -109,4 +109,47 @@ class VwTp20ParserTest {
         assertEquals(0, success.nextTxSeq) // 0x0F + 1 & 0x0F = 0
         assertEquals(0xB2, success.ackCode) // seq 1 + 1 = 2 -> B2
     }
+
+    @Test
+    fun testGenericKwpDtcPayloadIsPreserved() {
+        val raw = "10 00 05 58 01 12 34 40"
+
+        val result = Tp20FrameParser.parseKwp(raw, currentTxSeq = 0x0F)
+        assertTrue("Expected generic KWP success, got $result", result is Tp20Result.Success)
+
+        val success = result as Tp20Result.Success
+        assertArrayEquals(
+            byteArrayOf(0x58, 0x01, 0x12, 0x34, 0x40),
+            success.kwpPayload
+        )
+        assertTrue(success.needsAck)
+        assertEquals(0xB1, success.ackCode)
+        assertEquals(0, success.nextTxSeq)
+    }
+
+    @Test
+    fun testOpcode3SingleFrameParsesLengthAndDoesNotRequestAck() {
+        val raw = "30 00 02 54 00"
+
+        val result = Tp20FrameParser.parseKwp(raw, currentTxSeq = 0x04)
+        assertTrue("Expected success for 3x final frame, got $result", result is Tp20Result.Success)
+
+        val success = result as Tp20Result.Success
+        assertArrayEquals(byteArrayOf(0x54, 0x00), success.kwpPayload)
+        assertFalse("Opcode 0x3 means last packet without ACK", success.needsAck)
+        assertEquals(5, success.nextTxSeq)
+    }
+
+    @Test
+    fun testRejectsOutOfOrderDataSequence() {
+        val raw = """
+            2D 00 08 58 01 12 34 40
+            1F 56 78 20
+        """.trimIndent()
+
+        val result = Tp20FrameParser.parseKwp(raw, currentTxSeq = 0x02)
+        assertTrue("Expected sequence protocol error, got $result", result is Tp20Result.ProtocolError)
+        assertTrue((result as Tp20Result.ProtocolError).message.contains("sequence mismatch"))
+    }
+
 }
