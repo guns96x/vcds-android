@@ -1,13 +1,13 @@
 {
   "metadata": {
-    "pcap_file": "fixture_engine_connect.pcap",
+    "pcap_file": "synthetic_test_engine.pcap",
     "linktype": 249,
     "total_packets": 9,
     "control_transfers": 3,
     "bulk_out_transfers": 3,
-    "bulk_out_total_bytes": 14,
+    "bulk_out_total_bytes": 23,
     "bulk_in_transfers_with_data": 3,
-    "bulk_in_total_bytes": 26,
+    "bulk_in_total_bytes": 34,
     "ftdi_empty_heartbeats": 0
   },
   "transfers": [
@@ -113,12 +113,12 @@
       "endpoint_raw": "0x02",
       "direction": "OUT",
       "transfer_type": "BULK",
-      "data_length": 5,
-      "uart_payload_hex": "55aa0100fe",
-      "uart_payload_len": 5,
-      "ascii": "U....",
-      "summary": "BULK OUT (5 B): 55aa0100fe",
-      "raw_payload_hex": "55aa0100fe"
+      "data_length": 14,
+      "uart_payload_hex": "53594e54485f50494e475f303031",
+      "uart_payload_len": 14,
+      "ascii": "SYNTH_PING_001",
+      "summary": "BULK OUT (14 B): 53594e54485f50494e475f303031",
+      "raw_payload_hex": "53594e54485f50494e475f303031"
     },
     {
       "index": 5,
@@ -135,14 +135,14 @@
       "endpoint_raw": "0x81",
       "direction": "IN",
       "transfer_type": "BULK",
-      "data_length": 8,
+      "data_length": 16,
       "ftdi_status_hex": "0160",
       "is_heartbeat": false,
-      "uart_payload_hex": "55aa010100fd",
-      "uart_payload_len": 6,
-      "ascii": "U.....",
-      "summary": "BULK IN (6 B): 55aa010100fd",
-      "raw_payload_hex": "016055aa010100fd"
+      "uart_payload_hex": "53594e54485f504f4e475f303031",
+      "uart_payload_len": 14,
+      "ascii": "SYNTH_PONG_001",
+      "summary": "BULK IN (14 B): 53594e54485f504f4e475f303031",
+      "raw_payload_hex": "016053594e54485f504f4e475f303031"
     },
     {
       "index": 6,

@@ -24,9 +24,9 @@ All claims regarding the adapter hardware, physical link, and protocol framing a
 | **Coprocessor ATmega162** | `STRONGLY SUPPORTED` | `pabloaul/vag157-adapter`, B03-V2 teardowns | Microchip ATmega162 (PLCC-44 / TQFP-44) running cloned Ross-Tech firmware. |
 | **CAN Controller MCP2515** | `STRONGLY SUPPORTED` | Independent B03-V2 teardowns & PCB schematics | Standalone SPI CAN controller paired with TJA1050 / MCP2551 transceiver. |
 | **Logic ATF16V8B / GAL16V8** | `INFERRED` | Hardware teardowns | Programmable logic device handling K/L-line switching and security routing. |
-| **ATmega Reset on DTR#** | `STRONGLY SUPPORTED` | Hardware teardowns & FTDI pinout traces | MCU reset pin is tied to FTDI DTR# (active low). Reset is released when DTR is pulled low. |
-| **Host ↔ MCU Framing Protocol** | `UNKNOWN` | Requires live USBPcap capture differential analysis | Zero guessing allowed in code. Handled fail-safe via `AdapterResponse.Unsupported`. |
-| **MCU Operating Baud Rate** | `UNKNOWN` | Clones vary (57600, 115200, 250000, 500000) | Must be confirmed by inspecting FTDI `FTDI_SIO_SET_BAUDRATE` control URBs in capture. |
+| **ATmega Reset on DTR#** | `INFERRED` | Community teardowns | Hypothesized active-low reset wiring. `DTR=true` asserts DTR# LOW (holds reset); `DTR=false` releases DTR# HIGH (runs). Unverified on user's PCB. |
+| **Host ↔ MCU Framing Protocol** | `UNKNOWN` | Requires live USBPcap capture differential analysis | Zero bytes guessed; strictly ZERO-TX enforced in code. `AdapterResponse.Unsupported`. |
+| **MCU Operating Baud Rate** | `UNKNOWN` | Clones vary (57.6k to 500k) | Must be confirmed by inspecting FTDI `FTDI_SIO_SET_BAUDRATE` control URBs in capture. |
 
 ---
 
@@ -89,32 +89,25 @@ To support diverse adapters without architectural churn, `vcds-android` cleanly 
 ```
 
 ### Two-Stage Resolution:
-1. **Stage 1 (`AdapterRegistry.createHardwareDriver`)**: Inspects USB descriptors and creates the link driver (`UsbFtdiDriver`, `UsbCh34xDriver`, `UsbCdcDriver`).
+1. **Stage 1 (`AdapterRegistry.createHardwareDriver`)**: Inspects USB descriptors and creates the physical link driver (`UsbFtdiDriver`, `UsbCh34xDriver`, `UsbCdcDriver`).
 2. **Stage 2 (`AdapterRegistry.selectAdapter`)**:
-   - `0403:FA24` → `HexB03Adapter`
+   - `0403:FA24` → `HexB03Adapter` (Strict Zero-TX discovery mode; dynamic serial passed from descriptor)
    - `0403:FA20` → `HexLegacyAdapter`
    - `0403:FA30` → `HexV2Adapter`
-   - `0403:6001` → `KklAdapter` (10400 baud)
-   - `1A86:*`    → `KklAdapter` (CH340)
-   - Unknown FTDI → `KklAdapter` fallback (never crashes)
+   - Generic USB-UART bridges (`0403:6001`, `1A86:*`, `10C4:*`, `067B:*`) → `UnverifiedAdapter` (safe fallback; requires explicit profile or user confirmation before assuming KKL pass-through)
+   - Unknown devices → `UnverifiedAdapter` (never crashes)
 
 ---
 
-## 4. Safety Guardrails & Non-Destructive Policy
+## 4. Strict Zero-TX Policy & Safety Guardrails
 
-In `HexB03Adapter`, safety guardrails are strictly enforced by `assertReadOnlyGuardrails()`:
-- **Blocked Services**:
-  - `0x2E` (WriteDataByIdentifier)
-  - `0x3B` (WriteDataByLocalIdentifier)
-  - `0x34` (RequestDownload — ECU flashing)
-  - `0x35` (RequestUpload)
-  - `0x36` (TransferData — ECU flashing payload)
-  - `0x37` (RequestTransferExit)
-  - `0x28` (CommunicationControl)
-  - `0x31` (RoutineControl — actuation / destructive tests)
-- **Zero Guessed Bytes**:
-  - Any unverified command opcode immediately returns `AdapterResponse.Unsupported`.
-  - No synthetic packet formats or invented magic headers exist in the codebase.
+In `HexB03Adapter`, safety guardrails are strictly enforced:
+- **Normal Diagnostic Flow ([`transact`])**:
+  - **MANDATORY ZERO-TX**: Since PC ↔ MCU framing and opcodes are `UNKNOWN`, `transact()` immediately returns `AdapterResponse.Unsupported` without writing any bytes to the physical hardware (`writtenBytes == 0`).
+  - No guessed baud rate: Operating baud rate between FTDI and ATmega162 is `UNKNOWN` until live capture evidence. `open()` refuses to activate without evidence-derived baud.
+- **Developer Debug Interface ([`transactRawDebug`])**:
+  - Gated behind `@VisibleForTesting` and requires `enableUnsafeDeveloperRawTx = true`.
+  - Blocked Services: `assertReadOnlyGuardrails()` prevents destructive services (`0x2E`, `0x3B`, `0x34`, `0x35`, `0x36`, `0x37`, `0x28`, `0x31`).
 
 ---
 
@@ -128,26 +121,27 @@ The following tools have been added to `tools/usb/` and verified:
 3. `tools/usb/parse_usb_pcap.py`:
    - Pure-Python parser for USBPcap `.pcap` files. Decodes FTDI control transfers (baud rate divisor, latency timer, modem control), strips Bulk IN FTDI status headers, and exports JSON/CSV transcripts.
 4. `tools/usb/diff_usb_captures.py`:
-   - Differential analyzer comparing multi-phase captures (Options/Test vs Engine Connect vs Group 011 vs DTC read) to isolate invariant setups, phase-specific commands, and protocol correlations.
+   - Differential analyzer comparing multi-phase captures (Options/Test vs Engine Connect vs Group 011 vs DTC read) to isolate invariant setups, phase-specific commands, and protocol correlations. Includes prominent disclaimer banners on synthetic input.
 5. `tools/usb/generate_fixtures.py` & `tools/usb/test_pcap_tools.py`:
-   - Verified synthetic fixtures and automated test suite.
+   - Verified synthetic fixtures (`synthetic_test_*.pcap`) using neutral test payloads, quarantined with explicit disclaimers to prevent mistaking test vectors for protocol evidence.
 
 ---
 
-## 6. Real-Car Validation Status & Next Steps
+## 6. Milestone Status & Next Steps (Issue #3)
 
-### Completed:
+### Foundation & Tooling Milestone Completed:
 - [x] Full source & evidence matrix documented (`docs/research/hex_b03_source_matrix.md`).
 - [x] Windows hardware inspection tool and evidence ledger (`tools/usb/inspect_ross_tech_usb.ps1`).
 - [x] Android USB descriptor dumper and profile classifier (`AndroidUsbProbe.kt`).
-- [x] Modular two-stage adapter registry (`AdapterRegistry.kt`).
+- [x] Modular two-stage adapter registry (`AdapterRegistry.kt`) integrated into app UI (`MainActivity.kt`).
 - [x] Clean link-layer drivers (`HardwareDriver`, `UsbFtdiDriver`, `UsbCh34xDriver`, `UsbCdcDriver`).
-- [x] Experimental `HexB03Adapter` with read-only guardrails and raw trace listener.
+- [x] Safe zero-TX `HexB03Adapter` with dynamic serial and raw trace listener.
 - [x] Pure-Python USBPcap parser and differential analyzer (`tools/usb/parse_usb_pcap.py`, `tools/usb/diff_usb_captures.py`).
 - [x] Comprehensive unit test suites for adapter registry, guardrails, and capture parsers.
+- [x] Both `./gradlew lintDebug` and `./gradlew testDebugUnitTest` passing 100%.
 
-### Remaining for Future Vehicle Capture Iteration:
+### Pending Physical Vehicle Capture (Next Step for Issue #3):
 - [ ] Connect physical cable to vehicle OBD-II port.
 - [ ] Execute the 5-phase capture plan (`docs/research/hex_b03_capture_plan.md`) using `capture_vcds_traffic.ps1`.
-- [ ] Run `diff_usb_captures.py` on real `.pcap` files to identify proven coprocessor command IDs.
+- [ ] Run `diff_usb_captures.py` on real `.pcap` files to identify proven coprocessor command IDs and baud divisor.
 - [ ] Implement proven coprocessor command IDs in `HexB03Adapter.kt`.

@@ -5,6 +5,7 @@ import com.vag.vcdsandroid.hardware.HardwareDriver
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -68,137 +69,109 @@ class HexB03AdapterTest {
     }
 
     @Test
-    fun `identity exposes experimental status and hardware profile`() {
+    fun `identity exposes experimental status and dynamic serial without hardcoding`() {
         val driver = TestHardwareDriver()
-        val adapter = HexB03Adapter(driver)
+        val adapterWithSerial = HexB03Adapter(driver, serialNumber = "DYNAMIC_SERIAL_001")
+        assertEquals("DYNAMIC_SERIAL_001", adapterWithSerial.identity.serialNumber)
 
-        val id = adapter.identity
-        assertEquals("Ross-Tech HEX-USB+CAN (B03-V2 Clone)", id.modelName)
-        assertEquals("RT000001", id.serialNumber)
-        assertEquals(AdapterStatus.EXPERIMENTAL, id.status)
-        assertTrue(id.isClone)
-        assertTrue(id.capabilities.contains(AdapterCapability.RAW_PACKET_TRACE))
+        val adapterWithoutSerial = HexB03Adapter(driver)
+        assertNull(adapterWithoutSerial.identity.serialNumber)
+        assertEquals(AdapterStatus.EXPERIMENTAL, adapterWithoutSerial.identity.status)
+        assertTrue(adapterWithoutSerial.identity.capabilities.contains(AdapterCapability.RAW_PACKET_TRACE))
     }
 
     @Test
-    fun `guardrails permit safe read-only queries`() {
+    fun `open fails when baud rate is not derived from evidence`() = runBlocking {
         val driver = TestHardwareDriver()
-        val adapter = HexB03Adapter(driver)
+        val adapter = HexB03Adapter(driver, configuredBaudRate = null)
 
-        // KWP2000 StartCommunication
-        val startComm = byteArrayOf(0x81.toByte(), 0x01, 0xF1.toByte(), 0x81.toByte(), 0xF4.toByte())
-        assertNull(adapter.assertReadOnlyGuardrails(startComm))
-
-        // Read ECU ID (0x1A)
-        val readEcuId = byteArrayOf(0x02, 0x1A, 0x9A.toByte(), 0x00)
-        assertNull(adapter.assertReadOnlyGuardrails(readEcuId))
-
-        // Read Data By Local ID (0x21)
-        val readData = byteArrayOf(0x02, 0x21, 0x01, 0x00)
-        assertNull(adapter.assertReadOnlyGuardrails(readData))
-
-        // Read Fault Codes (0x18)
-        val readDtc = byteArrayOf(0x03, 0x18, 0x00, 0x00)
-        assertNull(adapter.assertReadOnlyGuardrails(readDtc))
+        val res = adapter.open()
+        assertTrue("Expected failure when baud is UNKNOWN", res.isFailure)
+        assertTrue(res.exceptionOrNull()?.message?.contains("UNKNOWN") == true)
     }
 
     @Test
-    fun `guardrails strictly block destructive write and flash services`() {
+    fun `open succeeds when evidence-derived baud rate is configured`() = runBlocking {
         val driver = TestHardwareDriver()
-        val adapter = HexB03Adapter(driver)
+        val adapter = HexB03Adapter(driver, configuredBaudRate = 115200)
 
-        // WriteDataByIdentifier (0x2E)
-        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x2E.toByte(), 0x01, 0x02)))
-
-        // WriteDataByLocalIdentifier (0x3B)
-        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x3B.toByte(), 0x01, 0x02)))
-
-        // RequestDownload / Flashing (0x34)
-        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x34.toByte(), 0x00)))
-
-        // RequestUpload (0x35)
-        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x35.toByte(), 0x00)))
-
-        // TransferData / Flashing (0x36)
-        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x36.toByte(), 0x01)))
-
-        // RequestTransferExit (0x37)
-        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x37.toByte())))
-
-        // CommunicationControl (0x28)
-        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x28.toByte(), 0x00)))
-
-        // RoutineControl (0x31)
-        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x31.toByte(), 0x01)))
+        val res = adapter.open()
+        assertTrue(res.isSuccess)
+        assertEquals(115200, driver.lastBaudRate)
     }
 
     @Test
-    fun `transact blocks security violation before writing to driver`() = runBlocking {
+    fun `transact strictly enforces ZERO-TX on normal diagnostic requests`() = runBlocking {
         val driver = TestHardwareDriver()
         val adapter = HexB03Adapter(driver)
 
-        val flashCommand = byteArrayOf(0x34.toByte(), 0x00, 0x10)
-        val response = adapter.transact(flashCommand, 1000)
+        // Attempting to send normal diagnostic payload
+        val kwpPayload = byteArrayOf(0x81.toByte(), 0x01, 0xF1.toByte(), 0x81.toByte(), 0xF4.toByte())
+        val response = adapter.transact(kwpPayload, 1000)
+
+        // Must return Unsupported
+        assertEquals(AdapterResponse.Unsupported, response)
+        // MUST NEVER write any bytes to the physical link
+        assertTrue("Zero-TX contract violated: driver received bytes!", driver.writtenBytes.isEmpty())
+    }
+
+    @Test
+    fun `transactRawDebug blocks transmission when developer flag is false`() = runBlocking {
+        val driver = TestHardwareDriver()
+        val adapter = HexB03Adapter(driver)
+
+        val response = adapter.transactRawDebug(
+            request = byteArrayOf(0x10, 0x20),
+            timeoutMs = 1000,
+            enableUnsafeDeveloperRawTx = false
+        )
 
         assertTrue(response is AdapterResponse.Error)
-        val errMsg = (response as AdapterResponse.Error).message
-        assertTrue(errMsg.contains("SECURITY VIOLATION"))
-        assertTrue("Driver must not have received any written bytes", driver.writtenBytes.isEmpty())
+        assertTrue(driver.writtenBytes.isEmpty())
     }
 
     @Test
-    fun `transact fails as Unsupported on empty request`() = runBlocking {
+    fun `transactRawDebug blocks destructive flash commands even in raw developer mode`() = runBlocking {
         val driver = TestHardwareDriver()
         val adapter = HexB03Adapter(driver)
 
-        val response = adapter.transact(byteArrayOf(), 1000)
-        assertTrue(response is AdapterResponse.Unsupported)
-    }
+        val flashCmd = byteArrayOf(0x34.toByte(), 0x00)
+        val response = adapter.transactRawDebug(
+            request = flashCmd,
+            timeoutMs = 1000,
+            enableUnsafeDeveloperRawTx = true
+        )
 
-    @Test
-    fun `transact fails as Error if driver is not connected`() = runBlocking {
-        val driver = TestHardwareDriver().apply { isConnected = false }
-        val adapter = HexB03Adapter(driver)
-
-        val response = adapter.transact(byteArrayOf(0x01, 0x02), 1000)
         assertTrue(response is AdapterResponse.Error)
+        val msg = (response as AdapterResponse.Error).message
+        assertTrue(msg.contains("SECURITY VIOLATION"))
+        assertTrue(driver.writtenBytes.isEmpty())
     }
 
     @Test
-    fun `transact triggers raw trace listener and returns Success`() = runBlocking {
+    fun `transactRawDebug transmits and logs traces when developer flag is explicitly true`() = runBlocking {
         val driver = TestHardwareDriver().apply {
-            mockReadData = byteArrayOf(0x55, 0xAA.toByte(), 0x01, 0x02)
+            mockReadData = byteArrayOf(0xDE.toByte(), 0xAD.toByte())
         }
         val adapter = HexB03Adapter(driver)
 
-        val traceEvents = mutableListOf<Pair<String, ByteArray>>()
-        adapter.setRawTraceListener { dir, data ->
-            traceEvents.add(Pair(dir, data))
-        }
+        val traces = mutableListOf<Pair<String, ByteArray>>()
+        adapter.setRawTraceListener { dir, data -> traces.add(Pair(dir, data)) }
 
-        val request = byteArrayOf(0x10, 0x20)
-        val response = adapter.transact(request, 1000)
+        val request = byteArrayOf(0x01, 0x02)
+        val response = adapter.transactRawDebug(
+            request = request,
+            timeoutMs = 1000,
+            enableUnsafeDeveloperRawTx = true
+        )
 
         assertTrue(response is AdapterResponse.Success)
         val success = response as AdapterResponse.Success
-        assertArrayEquals(byteArrayOf(0x55, 0xAA.toByte(), 0x01, 0x02), success.data)
-
-        // Verify traces
-        assertEquals(2, traceEvents.size)
-        assertEquals("TX", traceEvents[0].first)
-        assertArrayEquals(request, traceEvents[0].second)
-        assertEquals("RX", traceEvents[1].first)
-        assertArrayEquals(driver.mockReadData, traceEvents[1].second)
-    }
-
-    @Test
-    fun `transact returns Timeout when no response received`() = runBlocking {
-        val driver = TestHardwareDriver().apply {
-            mockReadData = byteArrayOf() // 0 bytes returned
-        }
-        val adapter = HexB03Adapter(driver)
-
-        val response = adapter.transact(byteArrayOf(0x10, 0x20), 100)
-        assertTrue(response is AdapterResponse.Timeout)
+        assertArrayEquals(driver.mockReadData, success.data)
+        assertEquals(2, traces.size)
+        assertEquals("TX", traces[0].first)
+        assertArrayEquals(request, traces[0].second)
+        assertEquals("RX", traces[1].first)
+        assertArrayEquals(driver.mockReadData, traces[1].second)
     }
 }

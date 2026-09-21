@@ -7,10 +7,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Dedicated FTDI hardware driver handling FT232R/BM/H silicon specifics:
- * - Proper active-low DTR polarity control for microcontroller reset management.
- * - Explicit latency timer control (default 1ms/2ms on FTDI for low latency OBD roundtrips).
- * - Hardware FIFO buffer purging.
+ * Hardware driver for FTDI USB-to-UART bridges (FT232R, FT232BM, FT2232, etc.).
+ * Provides standard serial port communication with DTR/RTS modem control and FIFO purging.
+ *
+ * Note: Downstream pin wiring (e.g. DTR tied to MCU reset or transceiver enable)
+ * is board-specific and must not be assumed for generic FTDI devices.
  */
 class UsbFtdiDriver(
     usbManager: UsbManager,
@@ -26,9 +27,6 @@ class UsbFtdiDriver(
         val res = super.open(parameters)
         if (res.isSuccess) {
             try {
-                // FTDI DTR# is active-low:
-                // dtr=false -> DTR# line HIGH (releases ATmega reset)
-                // dtr=true  -> DTR# line LOW (holds ATmega in reset)
                 port.dtr = parameters.dtr
                 port.rts = parameters.rts
             } catch (_: Exception) {}
@@ -37,14 +35,15 @@ class UsbFtdiDriver(
     }
 
     /**
-     * Pulses the DTR line to trigger hardware MCU reset (e.g. ATmega162 reboot).
+     * Utility to pulse the DTR modem line for hardware boards that wire DTR#
+     * to an external reset or control circuit.
      */
-    suspend fun pulseMcuReset(holdLowMs: Long = 50, recoveryMs: Long = 400) = withContext(Dispatchers.IO) {
+    suspend fun pulseDtr(assertDurationMs: Long = 50, recoveryMs: Long = 200) = withContext(Dispatchers.IO) {
         if (!isConnected) return@withContext
         try {
-            setDtr(true)  // DTR# active low -> RESET LOW
-            kotlinx.coroutines.delay(holdLowMs)
-            setDtr(false) // DTR# high -> RESET HIGH (running)
+            setDtr(true)
+            kotlinx.coroutines.delay(assertDurationMs)
+            setDtr(false)
             kotlinx.coroutines.delay(recoveryMs)
         } catch (_: Exception) {}
     }

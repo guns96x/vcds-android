@@ -129,3 +129,26 @@ class HexV2Adapter(override val driver: HardwareDriver) : AdapterTransport {
     override suspend fun transact(request: ByteArray, timeoutMs: Long) = AdapterResponse.Unsupported
     override fun setRawTraceListener(listener: ((direction: String, data: ByteArray) -> Unit)?) {}
 }
+
+/**
+ * Adapter transport representing a recognized physical link whose downstream adapter protocol
+ * is unverified or unknown. Refuses transmission until explicitly configured or profiled.
+ */
+class UnverifiedAdapter(
+    override val driver: HardwareDriver,
+    val description: String = "Unverified USB Adapter"
+) : AdapterTransport {
+    override val identity = AdapterIdentity(
+        modelName = description,
+        hardwareFamily = "Generic Serial Bridge (Downstream Protocol Unknown)",
+        status = AdapterStatus.UNVERIFIED
+    )
+    override suspend fun open(): Result<Unit> = Result.failure(
+        IllegalStateException("Cannot open unverified adapter: protocol must be confirmed by user or active probe.")
+    )
+    override suspend fun close() { driver.close() }
+    override suspend fun identify(): AdapterIdentity = identity
+    override suspend fun transact(request: ByteArray, timeoutMs: Long): AdapterResponse = AdapterResponse.Unsupported
+    override fun setRawTraceListener(listener: ((direction: String, data: ByteArray) -> Unit)?) {}
+}
+

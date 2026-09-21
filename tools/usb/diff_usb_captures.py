@@ -211,6 +211,11 @@ def generate_markdown_report(diff_report: Dict[str, Any]) -> str:
     md = []
     md.append("# Differential USB Capture Analysis Report")
     md.append("")
+    md.append("> [!NOTE]")
+    md.append("> **EVIDENCE STATUS NOTICE**: This report reflects comparative analysis of input capture transcripts.")
+    md.append("> If generated against synthetic/mock fixtures, all payloads represent unit-test vectors only and MUST NOT")
+    md.append("> be interpreted as confirmed Ross-Tech or B03-V2 protocol evidence.")
+    md.append("")
     md.append(f"**Analyzed Captures**: {', '.join(diff_report['captures_analyzed'])}")
     md.append("")
 

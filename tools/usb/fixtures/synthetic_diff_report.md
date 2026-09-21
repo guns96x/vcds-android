@@ -1,5 +1,10 @@
 # Differential USB Capture Analysis Report
 
+> [!NOTE]
+> **EVIDENCE STATUS NOTICE**: This report reflects comparative analysis of input capture transcripts.
+> If generated against synthetic/mock fixtures, all payloads represent unit-test vectors only and MUST NOT
+> be interpreted as confirmed Ross-Tech or B03-V2 protocol evidence.
+
 **Analyzed Captures**: Capture_A, Capture_B, Capture_C
 
 ## 1. FTDI Link Layer Setup Sequence
@@ -20,7 +25,7 @@ Commands observed across all captures represent adapter handshake, reset, or pro
 
 | Hex Payload | Length | Probable Role |
 |---|---|---|
-| `55aa0100fe` | 5 B | Handshake / Reset Invariant |
+| `53594e54485f50494e475f303031` | 14 B | Handshake / Reset Invariant |
 
 ## 3. Phase-Specific Unique Commands (Differential Analysis)
 

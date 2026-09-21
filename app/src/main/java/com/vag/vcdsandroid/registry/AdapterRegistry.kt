@@ -15,6 +15,7 @@ import com.vag.vcdsandroid.adapters.HexB03Adapter
 import com.vag.vcdsandroid.adapters.HexLegacyAdapter
 import com.vag.vcdsandroid.adapters.HexV2Adapter
 import com.vag.vcdsandroid.adapters.KklAdapter
+import com.vag.vcdsandroid.adapters.UnverifiedAdapter
 import com.vag.vcdsandroid.hardware.HardwareDriver
 import com.vag.vcdsandroid.hardware.UsbCdcDriver
 import com.vag.vcdsandroid.hardware.UsbCh34xDriver
@@ -69,21 +70,37 @@ object AdapterRegistry {
      * Crucial: FTDI link does NOT automatically mean KKL pass-through.
      * Ross-Tech PIDs bind to [HexB03Adapter], while standard FT232R binds to [KklAdapter].
      */
-    fun selectAdapter(driver: HardwareDriver, device: UsbDevice?): AdapterTransport {
+    fun selectAdapter(
+        driver: HardwareDriver,
+        device: UsbDevice?,
+        userSelectedKkl: Boolean = false
+    ): AdapterTransport {
         if (device == null) {
-            return KklAdapter(driver)
+            return UnverifiedAdapter(driver, "No USB Device Provided")
         }
-        return selectAdapter(driver, device.vendorId, device.productId)
+        return selectAdapter(
+            driver = driver,
+            vid = device.vendorId,
+            pid = device.productId,
+            serialNumber = device.serialNumber,
+            userSelectedKkl = userSelectedKkl
+        )
     }
 
-    fun selectAdapter(driver: HardwareDriver, vid: Int?, pid: Int?): AdapterTransport {
+    fun selectAdapter(
+        driver: HardwareDriver,
+        vid: Int?,
+        pid: Int?,
+        serialNumber: String? = null,
+        userSelectedKkl: Boolean = false
+    ): AdapterTransport {
         if (vid == null || pid == null) {
-            return KklAdapter(driver)
+            return UnverifiedAdapter(driver, "Unknown USB Device (Null IDs)")
         }
 
         return when {
             // Ross-Tech HEX-USB+CAN / B03-V2 FTDI clone
-            vid == 0x0403 && pid == 0xFA24 -> HexB03Adapter(driver)
+            vid == 0x0403 && pid == 0xFA24 -> HexB03Adapter(driver, serialNumber = serialNumber)
 
             // Ross-Tech legacy HEX-USB
             vid == 0x0403 && pid == 0xFA20 -> HexLegacyAdapter(driver)
@@ -91,19 +108,40 @@ object AdapterRegistry {
             // Ross-Tech HEX-V2 clone (ARM STM32) placeholder
             vid == 0x0403 && pid == 0xFA30 -> HexV2Adapter(driver)
 
-            // Standard FTDI FT232R / FT232BM KKL cables (transparent UART pass-through)
-            vid == 0x0403 && pid == 0x6001 -> KklAdapter(driver, baudRate = 10400)
+            // If user explicitly confirmed/selected KKL pass-through mode
+            userSelectedKkl -> KklAdapter(driver, baudRate = 10400)
 
-            // CH340 / CH341 KKL
-            vid == 0x1A86 -> KklAdapter(driver, baudRate = 10400)
-
-            // CP2102 / PL2303 KKL
-            vid == 0x10C4 || vid == 0x067B -> KklAdapter(driver, baudRate = 10400)
-
-            // Unknown FTDI device: fall back safely to KklAdapter without crashing
-            vid == 0x0403 -> KklAdapter(driver, baudRate = 10400)
-
-            else -> KklAdapter(driver)
+            // Generic FTDI / CH340 / CP2102 / PL2303 are USB-UART bridges:
+            // Do NOT assume they are KKL cables! They could be anything (ELM327, Arduino, GPS).
+            // Return UnverifiedAdapter requiring explicit profile or user confirmation.
+            vid == 0x0403 && pid == 0x6001 -> UnverifiedAdapter(
+                driver,
+                "FTDI FT232R Bridge (0403:6001) - Protocol Unverified"
+            )
+            vid == 0x1A86 && pid == 0x7523 -> UnverifiedAdapter(
+                driver,
+                "CH340 Bridge (1A86:7523) - Protocol Unverified"
+            )
+            vid == 0x0403 -> UnverifiedAdapter(
+                driver,
+                "Generic FTDI Bridge (%04X:%04X) - Protocol Unverified".format(vid, pid)
+            )
+            vid == 0x1A86 -> UnverifiedAdapter(
+                driver,
+                "Generic CH34x Bridge (%04X:%04X) - Protocol Unverified".format(vid, pid)
+            )
+            vid == 0x10C4 -> UnverifiedAdapter(
+                driver,
+                "CP210x Bridge (%04X:%04X) - Protocol Unverified".format(vid, pid)
+            )
+            vid == 0x067B -> UnverifiedAdapter(
+                driver,
+                "PL2303 Bridge (%04X:%04X) - Protocol Unverified".format(vid, pid)
+            )
+            else -> UnverifiedAdapter(
+                driver,
+                "Unknown USB Device (%04X:%04X)".format(vid, pid)
+            )
         }
     }
 

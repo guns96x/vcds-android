@@ -90,10 +90,10 @@
     - ATF16V8B or GAL16V8 PLD.
     - MCP2515 CAN controller + TJA1050 transceiver.
     - L9637D or SI9241A ISO 9141 / K-Line transceiver.
-  - Reset line of ATmega162 is tied to FT232R DTR# or DSR# pin, allowing software-controlled MCU reset. (`STRONGLY SUPPORTED`)
+  - Reset line of ATmega162 is hypothesized in community teardowns to be tied to FT232R DTR# (active-low pin). Setting `DTR=true` asserts DTR# LOW (holding RESET# low); setting `DTR=false` releases DTR# HIGH (allowing the MCU to run). However, this specific wiring remains `INFERRED` until confirmed on this user's cable PCB. (`INFERRED`)
 - **What it Does NOT Prove**:
-  - Exact baud rate used between FT232R and ATmega162 (clones vary between 57600, 115200, 250000, and 500000 baud depending on firmware build and 16MHz crystal prescaler).
-- **Confidence**: `STRONGLY SUPPORTED`
+  - Exact baud rate used between FT232R and ATmega162 (clones vary between 57600, 115200, 250000, and 500000 baud). Must be extracted from `FTDI_SIO_SET_BAUDRATE` in real capture.
+- **Confidence**: `STRONGLY SUPPORTED` for chip list; `INFERRED` for reset pinout; `UNKNOWN` for baud.
 
 ---
 

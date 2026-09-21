@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-test_pcap_tools.py — Unit tests for parse_usb_pcap.py and diff_usb_captures.py.
+test_pcap_tools.py — Unit tests for parse_usb_pcap.py and diff_usb_captures.py
+using synthetic mock fixtures.
 """
 
 import os
@@ -11,7 +12,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from parse_usb_pcap import parse_pcap
 from diff_usb_captures import compare_captures, correlate_payload
-from generate_fixtures import main as generate_fixtures_main
+from generate_fixtures import main as generate_fixtures_main, SYNTHETIC_MOCK_CMD_PING
 
 
 class TestPcapTools(unittest.TestCase):
@@ -19,11 +20,11 @@ class TestPcapTools(unittest.TestCase):
     def setUpClass(cls):
         cls.tools_dir = os.path.dirname(__file__)
         cls.fixtures_dir = os.path.join(cls.tools_dir, "fixtures")
-        # Ensure fixtures are generated
+        # Ensure synthetic test fixtures are generated
         generate_fixtures_main()
 
     def test_parse_options_test_fixture(self):
-        pcap_path = os.path.join(self.fixtures_dir, "fixture_options_test.pcap")
+        pcap_path = os.path.join(self.fixtures_dir, "synthetic_test_options.pcap")
         self.assertTrue(os.path.isfile(pcap_path))
         result = parse_pcap(pcap_path, is_ftdi=True)
 
@@ -42,7 +43,7 @@ class TestPcapTools(unittest.TestCase):
         self.assertIn("115384", baud_pkt["setup_packet"]["detail"])
 
     def test_parse_engine_connect_fixture(self):
-        pcap_path = os.path.join(self.fixtures_dir, "fixture_engine_connect.pcap")
+        pcap_path = os.path.join(self.fixtures_dir, "synthetic_test_engine.pcap")
         result = parse_pcap(pcap_path, is_ftdi=True)
 
         meta = result["metadata"]
@@ -60,9 +61,9 @@ class TestPcapTools(unittest.TestCase):
         self.assertTrue(any("ReadECUIdentification" in m for m in matches))
 
     def test_differential_comparison(self):
-        f1 = parse_pcap(os.path.join(self.fixtures_dir, "fixture_options_test.pcap"))
-        f2 = parse_pcap(os.path.join(self.fixtures_dir, "fixture_engine_connect.pcap"))
-        f3 = parse_pcap(os.path.join(self.fixtures_dir, "fixture_dtc_read.pcap"))
+        f1 = parse_pcap(os.path.join(self.fixtures_dir, "synthetic_test_options.pcap"))
+        f2 = parse_pcap(os.path.join(self.fixtures_dir, "synthetic_test_engine.pcap"))
+        f3 = parse_pcap(os.path.join(self.fixtures_dir, "synthetic_test_dtc.pcap"))
 
         diff = compare_captures({
             "Capture_A": f1,
@@ -70,13 +71,14 @@ class TestPcapTools(unittest.TestCase):
             "Capture_C": f3,
         })
 
-        # Invariant command present across all three
-        self.assertIn("55aa0100fe", diff["invariant_commands"])
+        # Synthetic invariant ping present across all three mock captures
+        expected_invariant_hex = SYNTHETIC_MOCK_CMD_PING.hex()
+        self.assertIn(expected_invariant_hex, diff["invariant_commands"])
 
-        # Capture B has unique KWP2000 start
+        # Capture B has unique synthetic KWP2000 start
         self.assertIn("8101f181f4", diff["unique_commands"]["Capture_B"])
 
-        # Capture C has unique DTC read
+        # Capture C has unique synthetic DTC read
         self.assertIn("031800001b", diff["unique_commands"]["Capture_C"])
 
 

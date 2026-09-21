@@ -42,10 +42,10 @@ data class UsbInterfaceReport(
 enum class HardwareProfile {
     ROSS_TECH_HEX_FA24_FTDI,   // VID 0403, PID FA24 (Candidate B03-V2 / HEX-USB+CAN clone)
     ROSS_TECH_HEX_FA20_FTDI,   // VID 0403, PID FA20 (HEX-USB)
-    GENERIC_FTDI_KKL,          // VID 0403, PID 6001 (FT232R / KKL line)
-    CH34X_KKL,                 // VID 1A86 (CH340/CH341)
-    CP210X_KKL,                // VID 10C4 (CP2102)
-    PL2303_KKL,                // VID 067B
+    FTDI_FT232R_BRIDGE,        // VID 0403, PID 6001 (FT232R USB-UART bridge; downstream protocol unverified)
+    CH34X_BRIDGE,              // VID 1A86 (CH340/CH341 USB-UART bridge; downstream protocol unverified)
+    CP210X_BRIDGE,             // VID 10C4 (CP2102 USB-UART bridge; downstream protocol unverified)
+    PL2303_BRIDGE,             // VID 067B (PL2303 USB-UART bridge; downstream protocol unverified)
     UNKNOWN_USB_DEVICE
 }
 
@@ -129,20 +129,20 @@ object AndroidUsbProbe {
                 "PROVEN: FTDI USB bridge with Ross-Tech HEX-USB PID. HYPOTHESIS: Legacy HEX coprocessor."
             )
             vid == 0x0403 && pid == 0x6001 -> Pair(
-                HardwareProfile.GENERIC_FTDI_KKL,
-                "PROVEN: FTDI FT232R/BM USB-UART. Direct K-Line pass-through (no secondary MCU presumed)."
+                HardwareProfile.FTDI_FT232R_BRIDGE,
+                "PROVEN: FTDI FT232R USB-UART bridge. ADAPTER PROTOCOL: UNVERIFIED (KKL pass-through requires user confirmation)."
             )
             vid == 0x1A86 -> Pair(
-                HardwareProfile.CH34X_KKL,
-                "PROVEN: WCH CH340/CH341 USB-UART. Direct K-Line pass-through."
+                HardwareProfile.CH34X_BRIDGE,
+                "PROVEN: WCH CH340/CH341 USB-UART bridge. ADAPTER PROTOCOL: UNVERIFIED."
             )
             vid == 0x10C4 -> Pair(
-                HardwareProfile.CP210X_KKL,
-                "PROVEN: Silicon Labs CP210x USB-UART. Direct K-Line pass-through."
+                HardwareProfile.CP210X_BRIDGE,
+                "PROVEN: Silicon Labs CP210x USB-UART bridge. ADAPTER PROTOCOL: UNVERIFIED."
             )
             vid == 0x067B -> Pair(
-                HardwareProfile.PL2303_KKL,
-                "PROVEN: Prolific PL2303 USB-UART. Direct K-Line pass-through."
+                HardwareProfile.PL2303_BRIDGE,
+                "PROVEN: Prolific PL2303 USB-UART bridge. ADAPTER PROTOCOL: UNVERIFIED."
             )
             else -> Pair(
                 HardwareProfile.UNKNOWN_USB_DEVICE,

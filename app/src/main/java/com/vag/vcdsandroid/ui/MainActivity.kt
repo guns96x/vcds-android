@@ -45,6 +45,11 @@ import com.vag.vcdsandroid.sensors.PhoneBarometerProvider
 import com.vag.vcdsandroid.sensors.PhoneBaroReading
 
 import com.vag.vcdsandroid.protocol.TransportMode
+import com.vag.vcdsandroid.adapters.HexB03Adapter
+import com.vag.vcdsandroid.diagnostics.DiagLog
+import com.vag.vcdsandroid.registry.AdapterRegistry
+import com.vag.vcdsandroid.usb.AndroidUsbProbe
+import com.vag.vcdsandroid.usb.HardwareProfile
 import com.vag.vcdsandroid.usb.UsbKwpTransport
 import com.vag.vcdsandroid.upload.GitHubSettings
 import com.vag.vcdsandroid.upload.GitHubUploader
@@ -468,6 +473,28 @@ class MainActivity : AppCompatActivity() {
                 updateStatusUI()
                 return
             }
+
+            val (profile, _) = AndroidUsbProbe.classifyProfile(dev.vendorId, dev.productId)
+            if (profile == HardwareProfile.ROSS_TECH_HEX_FA24_FTDI) {
+                // Ross-Tech / B03-V2 FTDI Clone: strictly ZERO-TX in discovery mode
+                val report = AndroidUsbProbe.inspectDevice(this, dev)
+                DiagLog.i("UsbProbe", "B03-V2 Device Inspection Report:\n${report.toJson().toString(2)}")
+                AlertDialog.Builder(this)
+                    .setTitle("Ross-Tech / B03-V2 Clone Detected")
+                    .setMessage(
+                        "Hardware: FTDI FT232R (VID 0403, PID FA24)\n" +
+                        "Profile: ROSS_TECH_HEX_FA24_FTDI\n" +
+                        "Coprocessor: ATmega162 Hypothesis (Unverified)\n\n" +
+                        "ZERO-TX GUARD ENFORCED: Normal communication is blocked until live vehicle capture " +
+                        "verifies the PC<->MCU protocol framing and baud rate.\n\n" +
+                        "USB descriptors logged to session diagnostics. Use tools/usb/capture_vcds_traffic.ps1 on Windows to capture traffic."
+                    )
+                    .setPositiveButton("OK", null)
+                    .show()
+                updateStatusUI()
+                return
+            }
+
             lifecycleScope.launch {
                 val ok = engine.connect(dev)
                 updateStatusUI()
@@ -2487,12 +2514,20 @@ private fun updateStatusUI() {
                             binding.btnConnect.text = "Connect"
                             binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
                         } else {
+                            val (profile, _) = AndroidUsbProbe.classifyProfile(dev.vendorId, dev.productId)
                             val info = UsbKwpTransport.identifyDevice(dev)
                             binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
-                            binding.tvStatus.text = "Ready: ${info.displayName}"
-                            binding.tvSubStatus.text = "Ignition ON -> Tap Connect"
-                            binding.btnConnect.text = "Connect"
-                            binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                            if (profile == HardwareProfile.ROSS_TECH_HEX_FA24_FTDI) {
+                                binding.tvStatus.text = "Ross-Tech B03-V2 Clone (0403:FA24)"
+                                binding.tvSubStatus.text = "Research Mode: [ZERO-TX] Tap Probe to inspect"
+                                binding.btnConnect.text = "Probe Device"
+                                binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#8957E5"))
+                            } else {
+                                binding.tvStatus.text = "Ready: ${info.displayName}"
+                                binding.tvSubStatus.text = "Ignition ON -> Tap Connect"
+                                binding.btnConnect.text = "Connect"
+                                binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
+                            }
                         }
                     }
                 }

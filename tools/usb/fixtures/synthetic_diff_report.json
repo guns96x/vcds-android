@@ -75,7 +75,7 @@
     "Capture_C": []
   },
   "invariant_commands": [
-    "55aa0100fe"
+    "53594e54485f50494e475f303031"
   ],
   "unique_commands": {
     "Capture_A": [],
@@ -132,10 +132,10 @@
         "req_ms": 25.0,
         "resp_ms": 40.0,
         "latency_ms": 15.0,
-        "request_hex": "55aa0100fe",
-        "response_hex": "55aa010100fd",
-        "request_len": 5,
-        "response_len": 6
+        "request_hex": "53594e54485f50494e475f303031",
+        "response_hex": "53594e54485f504f4e475f303031",
+        "request_len": 14,
+        "response_len": 14
       }
     ],
     "Capture_B": [
@@ -145,10 +145,10 @@
         "req_ms": 20.0,
         "resp_ms": 35.0,
         "latency_ms": 15.0,
-        "request_hex": "55aa0100fe",
-        "response_hex": "55aa010100fd",
-        "request_len": 5,
-        "response_len": 6
+        "request_hex": "53594e54485f50494e475f303031",
+        "response_hex": "53594e54485f504f4e475f303031",
+        "request_len": 14,
+        "response_len": 14
       },
       {
         "req_index": 6,
@@ -180,10 +180,10 @@
         "req_ms": 0.0,
         "resp_ms": 15.0,
         "latency_ms": 15.0,
-        "request_hex": "55aa0100fe",
-        "response_hex": "55aa010100fd",
-        "request_len": 5,
-        "response_len": 6
+        "request_hex": "53594e54485f50494e475f303031",
+        "response_hex": "53594e54485f504f4e475f303031",
+        "request_len": 14,
+        "response_len": 14
       },
       {
         "req_index": 3,

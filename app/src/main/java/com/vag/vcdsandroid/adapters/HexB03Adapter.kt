@@ -1,31 +1,34 @@
 package com.vag.vcdsandroid.adapters
 
+import androidx.annotation.VisibleForTesting
 import com.vag.vcdsandroid.hardware.ConnectionParameters
 import com.vag.vcdsandroid.hardware.HardwareDriver
-import com.vag.vcdsandroid.hardware.UsbFtdiDriver
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
  * Experimental adapter transport for Ross-Tech HEX-USB+CAN / B03-V2 FTDI clones (VID 0403, PID FA24).
  *
- * EVIDENCE INTEGRITY POLICY:
- * - Does NOT transmit guessed magic bytes or proprietary packet formats.
- * - Any unsupported operation explicitly returns [AdapterResponse.Unsupported].
- * - Strictly read-only in discovery/reverse-engineering mode: coding write, adaptation write,
- *   and ECU flashing are hard-blocked by [assertReadOnlyGuardrails].
+ * STRICT ZERO-TX EVIDENCE POLICY:
+ * 1. PC <-> MCU framing format and command opcodes are UNKNOWN until verified via real USBPcap captures.
+ * 2. MCU operating baud rate is UNKNOWN until derived from FTDI_SIO_SET_BAUDRATE control transfers in capture.
+ * 3. Normal [transact] is strictly ZERO-TX: it immediately returns [AdapterResponse.Unsupported]
+ *    without writing any bytes to the physical hardware.
+ * 4. Raw developer transmission is isolated under [transactRawDebug] behind an explicit safety flag,
+ *    and cannot be invoked by standard diagnostic flows.
  */
 class HexB03Adapter(
     override val driver: HardwareDriver,
-    val initialBaudRate: Int = 500000
+    val serialNumber: String? = null,
+    val configuredBaudRate: Int? = null
 ) : AdapterTransport {
 
     companion object {
         const val ROSS_TECH_VID = 0x0403
         const val ROSS_TECH_PID_FA24 = 0xFA24
 
-        // Service IDs classified as destructive/modifying under KWP2000/UDS
+        // Service IDs classified as destructive/modifying under KWP2000/UDS.
+        // Secondary defense layer for raw debug transmissions.
         private val FORBIDDEN_WRITE_SERVICES = setOf(
             0x2E.toByte(), // WriteDataByIdentifier
             0x3B.toByte(), // WriteDataByLocalIdentifier
@@ -34,7 +37,7 @@ class HexB03Adapter(
             0x36.toByte(), // TransferData (flashing)
             0x37.toByte(), // RequestTransferExit
             0x28.toByte(), // CommunicationControl
-            0x31.toByte()  // RoutineControl (destructive tests)
+            0x31.toByte()  // RoutineControl (actuator tests)
         )
     }
 
@@ -45,7 +48,7 @@ class HexB03Adapter(
         get() = AdapterIdentity(
             modelName = "Ross-Tech HEX-USB+CAN (B03-V2 Clone)",
             hardwareFamily = "FTDI FT232R + ATmega162 Candidate",
-            serialNumber = "RT000001",
+            serialNumber = serialNumber,
             firmwareVersion = detectedFirmwareVersion,
             isClone = true,
             capabilities = setOf(
@@ -55,20 +58,26 @@ class HexB03Adapter(
         )
 
     override suspend fun open(): Result<Unit> = withContext(Dispatchers.IO) {
+        if (configuredBaudRate == null) {
+            // Baud rate is UNKNOWN from physical capture evidence.
+            // Transport cannot be operated blindly without evidence-derived baud.
+            return@withContext Result.failure(
+                IllegalStateException(
+                    "B03-V2 MCU UART baud rate is UNKNOWN. " +
+                    "Must be extracted from USBPcap capture (FTDI_SIO_SET_BAUDRATE) before link activation."
+                )
+            )
+        }
+
         val params = ConnectionParameters(
-            baudRate = initialBaudRate,
+            baudRate = configuredBaudRate,
             dataBits = 8,
             stopBits = 1,
             parity = 0,
-            dtr = false, // DTR# line HIGH -> ATmega reset released
+            dtr = false,
             rts = false
         )
-        val res = driver.open(params)
-        if (res.isSuccess && driver is UsbFtdiDriver) {
-            // Allow coprocessor clock stabilization after reset release
-            delay(100)
-        }
-        res
+        driver.open(params)
     }
 
     override suspend fun close() = withContext(Dispatchers.IO) {
@@ -80,25 +89,44 @@ class HexB03Adapter(
     }
 
     /**
-     * Executes an adapter transaction with strict safety guardrails.
-     * Guaranteed: Any unknown command returns [AdapterResponse.Unsupported] rather than guessing.
+     * Standard diagnostic transaction method.
+     * MANDATORY SAFETY CONTRACT: Strictly ZERO-TX until live capture evidence proves
+     * host <-> MCU framing and command opcodes.
+     * Always returns [AdapterResponse.Unsupported] without writing any bytes to the physical driver.
      */
     override suspend fun transact(request: ByteArray, timeoutMs: Long): AdapterResponse = withContext(Dispatchers.IO) {
+        // Zero-TX guarantee: Never write unverified bytes to uncharacterized hardware
+        AdapterResponse.Unsupported
+    }
+
+    /**
+     * Explicit developer-only raw transaction interface for reverse-engineering exploration.
+     * Isolated from normal diagnostic flows. Requires [enableUnsafeDeveloperRawTx] = true.
+     */
+    @VisibleForTesting
+    suspend fun transactRawDebug(
+        request: ByteArray,
+        timeoutMs: Long,
+        enableUnsafeDeveloperRawTx: Boolean = false
+    ): AdapterResponse = withContext(Dispatchers.IO) {
+        if (!enableUnsafeDeveloperRawTx) {
+            return@withContext AdapterResponse.Error(
+                "Raw transmission blocked: enableUnsafeDeveloperRawTx must be explicitly set for developer probe mode."
+            )
+        }
+
         if (!driver.isConnected) {
             return@withContext AdapterResponse.Error("FTDI driver is not open")
         }
 
-        // Safety Guardrail: Block any write/adaptation/flashing requests in discovery mode
+        if (request.isEmpty()) {
+            return@withContext AdapterResponse.Unsupported
+        }
+
+        // Secondary Guardrail: Block any write/adaptation/flashing requests even in raw debug mode
         val violation = assertReadOnlyGuardrails(request)
         if (violation != null) {
             return@withContext AdapterResponse.Error("SECURITY VIOLATION: $violation")
-        }
-
-        // Currently, without verified captures of the PC<->ATmega framing,
-        // we do NOT inject unproven proprietary opcodes.
-        // If a command is not explicitly verified, fail-safe as Unsupported.
-        if (request.isEmpty()) {
-            return@withContext AdapterResponse.Unsupported
         }
 
         traceListener?.invoke("TX", request)
@@ -128,11 +156,12 @@ class HexB03Adapter(
     }
 
     /**
-     * Inspects a diagnostic payload to ensure it does not attempt writing or flashing in reverse-engineering mode.
+     * Inspects a diagnostic payload to ensure it does not attempt writing or flashing.
+     * Note: Once adapter framing is proven from USB capture, safety validation will be applied
+     * to decoded typed frame structures rather than raw byte scans.
      */
     fun assertReadOnlyGuardrails(payload: ByteArray): String? {
         if (payload.isEmpty()) return null
-        // Check KWP header / service byte (first byte or second byte depending on addressing)
         for (b in payload.take(3)) {
             if (FORBIDDEN_WRITE_SERVICES.contains(b)) {
                 return "Blocked potentially destructive diagnostic service: 0x%02X".format(b)

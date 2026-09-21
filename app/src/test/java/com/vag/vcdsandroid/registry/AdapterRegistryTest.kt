@@ -4,9 +4,11 @@ import com.vag.vcdsandroid.adapters.HexB03Adapter
 import com.vag.vcdsandroid.adapters.HexLegacyAdapter
 import com.vag.vcdsandroid.adapters.HexV2Adapter
 import com.vag.vcdsandroid.adapters.KklAdapter
+import com.vag.vcdsandroid.adapters.UnverifiedAdapter
 import com.vag.vcdsandroid.hardware.ConnectionParameters
 import com.vag.vcdsandroid.hardware.HardwareDriver
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -68,11 +70,16 @@ class AdapterRegistryTest {
     }
 
     @Test
-    fun `selectAdapter binds Ross-Tech FA24 to HexB03Adapter`() {
+    fun `selectAdapter binds Ross-Tech FA24 to HexB03Adapter with dynamic serial`() {
         val driver = FakeHardwareDriver()
-        val adapter = AdapterRegistry.selectAdapter(driver, 0x0403, 0xFA24)
+        val adapter = AdapterRegistry.selectAdapter(
+            driver = driver,
+            vid = 0x0403,
+            pid = 0xFA24,
+            serialNumber = "CABLE_SERIAL_123"
+        )
         assertTrue("Expected HexB03Adapter but got ${adapter::class.java.simpleName}", adapter is HexB03Adapter)
-        assertEquals("RT000001", adapter.identity.serialNumber)
+        assertEquals("CABLE_SERIAL_123", adapter.identity.serialNumber)
     }
 
     @Test
@@ -90,31 +97,38 @@ class AdapterRegistryTest {
     }
 
     @Test
-    fun `selectAdapter binds standard FTDI 6001 to KklAdapter with 10400 baud`() {
+    fun `selectAdapter binds generic FTDI 6001 to UnverifiedAdapter without explicit user selection`() {
         val driver = FakeHardwareDriver()
-        val adapter = AdapterRegistry.selectAdapter(driver, 0x0403, 0x6001)
+        val adapter = AdapterRegistry.selectAdapter(driver, 0x0403, 0x6001, userSelectedKkl = false)
+        assertTrue("Expected UnverifiedAdapter but got ${adapter::class.java.simpleName}", adapter is UnverifiedAdapter)
+    }
+
+    @Test
+    fun `selectAdapter binds to KklAdapter when user explicitly confirms KKL profile`() {
+        val driver = FakeHardwareDriver()
+        val adapter = AdapterRegistry.selectAdapter(driver, 0x0403, 0x6001, userSelectedKkl = true)
         assertTrue("Expected KklAdapter but got ${adapter::class.java.simpleName}", adapter is KklAdapter)
         assertEquals(10400, (adapter as KklAdapter).baudRate)
     }
 
     @Test
-    fun `selectAdapter binds CH340 to KklAdapter`() {
+    fun `selectAdapter binds CH340 to UnverifiedAdapter unless explicitly selected`() {
         val driver = FakeHardwareDriver()
         val adapter = AdapterRegistry.selectAdapter(driver, 0x1A86, 0x7523)
-        assertTrue("Expected KklAdapter but got ${adapter::class.java.simpleName}", adapter is KklAdapter)
+        assertTrue("Expected UnverifiedAdapter but got ${adapter::class.java.simpleName}", adapter is UnverifiedAdapter)
     }
 
     @Test
-    fun `selectAdapter safely falls back to KklAdapter on unknown FTDI device`() {
+    fun `selectAdapter safely falls back to UnverifiedAdapter on unknown FTDI device`() {
         val driver = FakeHardwareDriver()
         val adapter = AdapterRegistry.selectAdapter(driver, 0x0403, 0x9999)
-        assertTrue("Expected KklAdapter fallback but got ${adapter::class.java.simpleName}", adapter is KklAdapter)
+        assertTrue("Expected UnverifiedAdapter fallback but got ${adapter::class.java.simpleName}", adapter is UnverifiedAdapter)
     }
 
     @Test
-    fun `selectAdapter safely falls back when VID or PID is null`() {
+    fun `selectAdapter safely falls back to UnverifiedAdapter when IDs are null`() {
         val driver = FakeHardwareDriver()
         val adapter = AdapterRegistry.selectAdapter(driver, null, null)
-        assertTrue("Expected KklAdapter fallback but got ${adapter::class.java.simpleName}", adapter is KklAdapter)
+        assertTrue("Expected UnverifiedAdapter fallback but got ${adapter::class.java.simpleName}", adapter is UnverifiedAdapter)
     }
 }
