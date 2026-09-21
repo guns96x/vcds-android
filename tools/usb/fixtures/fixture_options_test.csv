@@ -1,0 +1,7 @@
+index,relative_ms,transfer_type,direction,endpoint,is_complete,summary,payload_len,payload_hex,ascii
+1,0.0,CONTROL,OUT,0,True,CTRL [FTDI_SIO_RESET] SIO_RESET (Purge buffers & reset UART),0,,
+2,5.0,CONTROL,OUT,0,True,CTRL [FTDI_SIO_SET_BAUDRATE] Div=0x001A (~115384 baud),0,,
+3,10.0,CONTROL,OUT,0,True,CTRL [FTDI_SIO_SET_LATENCY_TIMER] 1 ms,0,,
+4,15.0,CONTROL,OUT,0,True,"CTRL [FTDI_SIO_MODEM_CTRL] DTR=HIGH, RTS=HIGH",0,,
+5,25.0,BULK,OUT,2,False,BULK OUT (5 B): 55aa0100fe,5,55aa0100fe,U....
+6,40.0,BULK,IN,1,True,BULK IN (6 B): 55aa010100fd,6,55aa010100fd,U.....
