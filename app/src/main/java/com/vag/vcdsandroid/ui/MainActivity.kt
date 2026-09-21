@@ -124,7 +124,14 @@ class MainActivity : AppCompatActivity() {
      * 009/015 further limiters and actual torque, 001 the quantity that
      * survives every limiter.
      */
-    private val AUX_GROUP_ROTATION = intArrayOf(8, 3, 7, 10, 4, 9, 15, 1)
+    private val AUX_GROUP_ROTATION = intArrayOf(
+        // Fast-changing limiter/airflow channels are weighted more heavily.
+        8, 3, 7, 10,
+        8, 3, 4, 15,
+        8, 3, 7, 1,
+        9, 13, 23, 20,
+        62, 6, 2
+    )
 
     private var connectionMode = AppConnectionMode.TURBO_FAST_OBD
     private var isPermissionRequested = false
@@ -2181,6 +2188,50 @@ class MainActivity : AppCompatActivity() {
                             logGroupChannel("G001_INJECTION_QUANTITY", g.values[1].rawValue, g.values[1].unit, 1)
                             logGroupChannel("G001_SUPPLY_DURATION", g.values[2].rawValue, g.values[2].unit, 1)
                             logGroupChannel("G001_COOLANT_TEMP", g.values[3].rawValue, g.values[3].unit, 1)
+                        }
+                    }
+                    // Additional context groups retained from the expanded OEM logger.
+                    // Units always come from the scaler decoder; unsupported scalers stay "raw".
+                    13 -> readAuxGroup(13)?.let { g ->
+                        if (g.values.size >= 4) {
+                            for (i in 0..3) {
+                                logGroupChannel("G013_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 13)
+                            }
+                        }
+                    }
+                    23 -> readAuxGroup(23)?.let { g ->
+                        if (g.values.size >= 4) {
+                            for (i in 0..3) {
+                                logGroupChannel("G023_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 23)
+                            }
+                        }
+                    }
+                    20 -> readAuxGroup(20)?.let { g ->
+                        if (g.values.size >= 4) {
+                            for (i in 0..3) {
+                                logGroupChannel("G020_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 20)
+                            }
+                        }
+                    }
+                    62 -> readAuxGroup(62)?.let { g ->
+                        if (g.values.size >= 4) {
+                            for (i in 0..3) {
+                                logGroupChannel("G062_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 62)
+                            }
+                        }
+                    }
+                    6 -> readAuxGroup(6)?.let { g ->
+                        if (g.values.size >= 4) {
+                            for (i in 0..3) {
+                                logGroupChannel("G006_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 6)
+                            }
+                        }
+                    }
+                    2 -> readAuxGroup(2)?.let { g ->
+                        if (g.values.size >= 4) {
+                            for (i in 0..3) {
+                                logGroupChannel("G002_FIELD_${i + 1}", g.values[i].rawValue, g.values[i].unit, 2)
+                            }
                         }
                     }
                 }
