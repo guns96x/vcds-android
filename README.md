@@ -1,46 +1,54 @@
-# VCDS Mobile for Android — VAG KWP2000 Diagnostics & WOT Logger
+# VCDS Mobile for Android
 
-Мобільний діагностичний інструмент та логер для блоків керування двигуном Bosch EDC16 (Volkswagen Golf 5 1.9 TDI BLS та інші платформи VAG PQ35).
+Android diagnostic/logger project for VW Golf 5 1.9 TDI BLS / Bosch EDC16U34.
 
----
+## Transport modes
 
-## 🚀 Основні можливості
+The application intentionally keeps acquisition paths separate:
 
-1. **Пряме підключення через USB-OTG**:
-   - Підтримка адаптерів FTDI (FT232R/BM — використовується в оригінальних та клонах VCDS / HEX-CAN / KKL 409.1).
-   - Підтримка чіпів CH340, CP2102, Prolific.
-   - Протокол KWP2000 (ISO 14230-2) по K-Line на швидкості 10400 bps з Fast Init (25 ms Break / Mark).
+1. **Turbo Fast — ELM327 Bluetooth / generic OBD-II**
+   - Real-car validated path for 4th-gear WOT logging.
+   - Core pair: RPM `010C` followed by MAP `010B`.
+   - Auxiliary Mode 01 data: MAF, speed, load and slower temperature/voltage/BARO channels.
+   - Uses `Turbo_Pair_*.csv` plus `Event_RAW_*.csv`.
+   - WOT start is gated by its own pre-flight check.
 
-2. **Вимірювальні групи в реальному часі (Measuring Blocks)**:
-   - **Group 011 (Charge Pressure Control)**:
-     - Оберти двигуна (RPM)
-     - Заданий тиск наддуву (Specified Boost, mbar)
-     - Фактичний тиск наддуву (Actual Boost, mbar)
-     - Скважність клапана N75 (N75 Duty Cycle, %)
-   - **Group 008 (Injected Quantity Limitations)**:
-     - Оберти двигуна (RPM)
-     - Запит водія (Driver's Wish IQ, mg/str)
-     - Обмеження по моменту (Torque Limit IQ, mg/str)
-     - Димове обмеження (Smoke Limit IQ, mg/str)
-   - **Group 003 (EGR & MAF)**:
-     - Оберти двигуна (RPM)
-     - Заданий потік повітря (MAF Specified, mg/str)
-     - Фактичний потік повітря (MAF Actual, mg/str)
-     - Скважність EGR (%)
+2. **VAG OEM — ELM327 + VW TP 2.0 / KWP2000**
+   - Proprietary measuring blocks.
+   - Separate OEM pre-flight and RAW logger.
+   - Does not depend on generic Mode 01 PID readiness.
 
-3. **Вбудований осцилограф (Live Scope Graph)**:
-   - Апаратне відмалювання графіків на полотні Canvas (60 fps).
-   - Синхронне відображення кривих: Target Boost (Cyan), Actual Boost (Green), N75 % (Orange).
+3. **USB OEM — USB-OTG FTDI/CH340/CP210x/Prolific**
+   - KWP2000/K-Line experimental hardware path.
+   - Serial receive is accumulated until a complete checksum-valid ECU frame is available; tester echo is rejected.
+   - Hardware validation on the target car is still required. Do not treat a successful unit test as proof that a particular cable can reach the Golf 5 ECU through the vehicle DLC.
 
-4. **Високошвидкісний WOT CSV Logger**:
-   - Однокнопковий запис розгону на 4-й передачі (1400–4000 RPM) з частотою до 15-20 Гц.
-   - Збереження у `/sdcard/Android/data/com.vag.vcdsandroid/files/Documents/VCDS_Logs/`.
-   - Автоматичний розрахунок пікового наддуву, часу лагу (spool lag) та кількості точок.
+4. **Simulator**
+   - UI/protocol development without the car.
 
-5. **Зчитування та очищення кодів несправностей (DTC)**:
-   - KWP2000 Service 0x18 (Read DTC) та Service 0x14 (Clear DTC).
-   - Вбудована база несправностей VAG з перекладом українською та англійською мовами.
+## Measuring blocks
 
-6. **Режим симуляції (Offline Demo Mode)**:
-   - Можливість тестувати інтерфейс, графіки та запис CSV без підключення до авто.
-   - Симулює реалістичний розгін на 4-й передачі з лагом виходу на буст турбіни BV39 на двигуні BLS.
+Core OEM groups are **011 / 008 / 003**. The logger also rotates through context groups including 007, 010, 004, 015, 001, 009, 013, 023, 020, 062, 006 and 002.
+
+Measuring-block values are decoded from the KWP scaler byte. Important supported scalers include RPM, pressure, temperature, duty/ratio, air/fuel mass and torque. **Unknown scaler IDs remain `raw`** instead of being converted with guessed formulas.
+
+OEM `CHECK DATA` requires Groups 011/008/003 to return four decodable fields before enabling `START OEM RAW LOG`. Long-press `CHECK DATA` runs a 10-second Group 011 stress test and reports request count, valid rate, latency and RPM range.
+
+## Logging
+
+Logs are stored under:
+
+`Android/data/com.vag.vcdsandroid/files/Documents/VCDS_Logs/`
+
+- Turbo Fast: synchronized `Turbo_Pair_*.csv` is the primary road-pull artifact.
+- OEM modes: `Event_RAW_*.csv` is the primary artifact.
+- GitHub upload selects the meaningful file for the active pipeline instead of accidentally uploading an empty sibling CSV.
+- The asynchronous writer tracks rows actually written, queue depth and dropped records.
+
+## Validation status
+
+**Validated on the real car:** Turbo Fast ELM path, phone BARO integration, synchronized RPM/MAP logging and existing road-pull analyzer.
+
+**Not yet claimed as real-car validated:** USB KWP/KKL and direct Ross-Tech intelligent-interface probing. Those paths require a fresh stationary hardware test before road use.
+
+CI runs `testDebugUnitTest` and `assembleDebug` for pull requests.
