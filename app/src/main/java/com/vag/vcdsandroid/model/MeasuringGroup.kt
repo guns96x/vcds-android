@@ -79,59 +79,58 @@ data class MeasuringGroup(
         /**
          * Standard VAG measuring formula decoder (Formulas 1..70)
          */
+        /**
+         * Decode the VAG measuring-block scaler byte from a KWP 0x61 response.
+         *
+         * The scaler is a protocol byte (for example 0x12 pressure, 0x1A
+         * temperature, 0x31 air mass, 0x5E torque), not a group-specific guess.
+         * Unknown scalers deliberately stay raw so the app never invents a
+         * physically plausible-looking value from an unsupported formula.
+         */
         private fun decodeVagFormula(type: Int, a: Int, b: Int, group: Int, field: Int): Triple<Double, String, String> {
+            val raw16 = ((a shl 8) or b).toDouble()
             return when (type) {
-                1 -> Triple(0.2 * a * b, "RPM", "Engine Speed")
-                2 -> Triple(a * 0.002 * b, "%", "Load/Duty")
-                3 -> Triple(0.002 * a * b, "°", "Angle")
-                4 -> Triple(Math.abs(128 - a) * b * 0.01, "°", "Deviation")
-                5 -> Triple(a * (b - 100) * 0.1, "°C", "Temperature")
-                6 -> Triple(0.001 * a * b, "V", "Voltage")
-                7 -> Triple(0.01 * a * b, "km/h", "Speed")
-                8 -> Triple(0.1 * a * b, "mbar", "Pressure")
-                9 -> Triple((b - 127) * 0.02 * a, "°", "Angle Offset")
-                14 -> Triple(0.005 * a * b, "bar", "Pressure")
-                15 -> Triple(0.01 * a * b, "ms", "Time")
-                18 -> Triple(0.04 * a * b, "mbar", "Pressure")
-                19 -> Triple(a * b * 0.01, "l", "Volume")
-                20 -> Triple(a * (b - 128) / 128.0, "%", "Correction")
-                21 -> Triple(0.001 * a * b, "V", "Voltage")
-                22 -> Triple(0.001 * a * b, "ms", "Period")
-                23 -> Triple((b.toDouble() / 256.0) * a, "%", "Duty Cycle")
-                24 -> Triple(0.001 * a * b, "A", "Current")
-                25 -> Triple((b * 1.421) + (a / 182.0), "g/s", "Air Mass")
-                27 -> Triple(Math.abs(b - 128) * 0.01 * a, "°", "Angle")
-                28 -> Triple((b - 128) * 0.01 * a, "°", "Angle")
-                31 -> Triple((b / 2560.0) * a, "°C", "Temperature")
-                33 -> Triple(if (a != 0) 100.0 * b / a else 0.0, "%", "Ratio")
-                36 -> Triple(((a * 256) + b) * 10.0, "km", "Distance")
-                37 -> Triple(b.toDouble(), "", "Raw")
-                39 -> Triple((b / 256.0) * a, "mg/str", "Mass")
-                44 -> Triple(a.toDouble(), "h:m", "Time")
-                49 -> Triple((b / 4.0) * 0.1 * a, "mg/str", "Quantity")
-                50 -> Triple((b - 128) / (0.01 * a), "mbar", "Pressure")
-                51 -> Triple(((b - 128) / 255.0) * a, "mg/str", "Correction")
-                52 -> Triple(b * 0.02 * a - a, "Nm", "Torque")
-                54 -> Triple((a * 256 + b).toDouble(), "count", "Counter")
-                57 -> Triple((a * 256 + b).toDouble(), "°C", "Exhaust Temp")
-                60 -> Triple((a * 256 + b) * 0.01, "s", "Duration")
-                67 -> Triple((a * 256 + b) / 64.0, "°KW", "Synchro Angle")
-                68 -> Triple((256 * a + b) / 7.36, "°KW", "Duration")
-                69 -> Triple((256 * a + b) * 0.3254, "bar", "Rail Pressure")
-                else -> {
-                    // Fallback heuristics for EDC16
-                    if (group == 11) {
-                        when (field) {
-                            1 -> Triple(a * 256.0 + b, "RPM", "Engine Speed")
-                            2 -> Triple(a * 256.0 + b, "mbar", "Specified Boost")
-                            3 -> Triple(a * 256.0 + b, "mbar", "Actual Boost")
-                            4 -> Triple((b / 255.0) * 100.0, "%", "N75 Duty Cycle")
-                            else -> Triple(b.toDouble(), "", "Field $field")
-                        }
-                    } else {
-                        Triple(b.toDouble(), "", "Field $field")
-                    }
-                }
+                0x01 -> Triple(a * b / 5.0, "RPM", "Engine Speed")
+                0x04 -> Triple((b - 127) * 0.01 * a, "°ATDC", "Timing")
+                0x07 -> Triple(0.01 * a * b, "km/h", "Speed")
+                0x08, 0x10, 0x25 -> Triple(raw16, "raw", "Raw/Binary")
+                0x12 -> Triple(a * b / 25.0, "mbar", "Pressure")
+                0x14 -> Triple(a * b / 128.0 - 1.0, "%", "Percentage")
+                0x15 -> Triple(0.001 * a * b, "V", "Voltage")
+                0x16 -> Triple(0.001 * a * b, "ms", "Time")
+                0x17 -> Triple(a * b / 256.0, "%", "Duty Cycle")
+                0x19 -> Triple(if (a != 0) 100.0 * b / a else 0.0, "g/s", "Air Mass")
+                0x1A -> Triple((b - a).toDouble(), "°C", "Temperature")
+                0x21 -> Triple(if (a == 0) 100.0 * b else 100.0 * b / a, "%", "Ratio")
+                0x22 -> Triple((b - 128) * 0.01 * a, "kW", "Power")
+                0x23 -> Triple(a * b / 100.0, "l/h", "Consumption")
+                0x24 -> Triple(((a * 256) + b) * 10.0, "km", "Distance")
+                0x27 -> Triple(a * b / 256.0, "mg/str", "Fuel Quantity")
+                0x31 -> Triple(a * b / 40.0, "mg/str", "Air Mass")
+                0x33 -> Triple(((b - 128) / 255.0) * a, "mg/str", "Correction")
+                0x36 -> Triple(raw16, "count", "Counter")
+                0x37 -> Triple(a * b / 200.0, "s", "Time")
+                0x5E -> Triple(a * (b / 50.0 - 1.0), "Nm", "Torque")
+
+                // EDC-specific scalers retained from the existing implementation.
+                // They do not overlap the standard KWP scaler IDs above.
+                0x03 -> Triple(0.002 * a * b, "°", "Angle")
+                0x05 -> Triple(a * (b - 100) * 0.1, "°C", "Temperature")
+                0x06 -> Triple(0.001 * a * b, "V", "Voltage")
+                0x09 -> Triple((b - 127) * 0.02 * a, "°", "Angle Offset")
+                0x0E -> Triple(0.005 * a * b, "bar", "Pressure")
+                0x0F -> Triple(0.01 * a * b, "ms", "Time")
+                0x1B -> Triple(kotlin.math.abs(b - 128) * 0.01 * a, "°", "Angle")
+                0x1F -> Triple((b / 2560.0) * a, "°C", "Temperature")
+                0x2C -> Triple(a.toDouble(), "h:m", "Time")
+                0x32 -> Triple(if (a != 0) (b - 128) / (0.01 * a) else 0.0, "mbar", "Pressure")
+                0x39 -> Triple(raw16, "°C", "Exhaust Temp Raw")
+                0x3C -> Triple(raw16 * 0.01, "s", "Duration")
+                0x43 -> Triple(raw16 / 64.0, "°KW", "Synchro Angle")
+                0x44 -> Triple(raw16 / 7.36, "°KW", "Duration")
+                0x45 -> Triple(raw16 * 0.3254, "bar", "Rail Pressure")
+
+                else -> Triple(raw16, "raw", "Unsupported scaler 0x%02X".format(type))
             }
         }
 
@@ -141,7 +140,7 @@ data class MeasuringGroup(
                 3 -> "Group 003 — Exhaust Gas Recirculation (EGR & MAF)"
                 4 -> "Group 004 — Unit Injectors Timing & Synchro Angle"
                 7 -> "Group 007 — Temperature Senders (Fuel, Oil, Air, Coolant)"
-                8 -> "Group 008 — IQ Limitation (Drivers Wish, Torque, Smoke)"
+                8 -> "Group 008 — Torque / IQ Limitations"
                 10 -> "Group 010 — Air System (MAF, Baro, Boost, Throttle)"
                 11 -> "Group 011 — Charge Pressure Control (Turbo & N75)"
                 13 -> "Group 013 — Idle Stabilization (Cyl 1-4 Smoothness)"
@@ -179,10 +178,10 @@ data class MeasuringGroup(
                     else -> null
                 }
                 8 -> when (field) {
-                    1 -> "Engine Speed (RPM)"
-                    2 -> "Driver's Wish IQ (mg/str)"
-                    3 -> "Torque Limitation IQ (mg/str)"
-                    4 -> "Smoke Limitation IQ (mg/str)"
+                    1 -> "Engine Speed"
+                    2 -> "Driver Intention"
+                    3 -> "Torque Limitation"
+                    4 -> "Smoke Limitation"
                     else -> null
                 }
                 10 -> when (field) {
