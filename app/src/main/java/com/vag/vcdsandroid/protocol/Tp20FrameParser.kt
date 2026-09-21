@@ -95,6 +95,7 @@ object Tp20FrameParser {
         val payloadBytes = ArrayList<Byte>()
         var lastRxSeq = -1
         var needsAck = false
+        var previousDataSeq: Int? = null
 
         for (line in lines) {
             // Check standalone control frames (length exactly 2 hex characters)
@@ -120,6 +121,20 @@ object Tp20FrameParser {
             val opcodeByte = line.substring(0, 2).toIntOrNull(16) ?: continue
             val highNibble = (opcodeByte shr 4) and 0x0F
             val seq = opcodeByte and 0x0F
+
+            if (highNibble in 0x0..0x3) {
+                val previous = previousDataSeq
+                if (previous != null) {
+                    val expected = (previous + 1) and 0x0F
+                    if (seq != expected) {
+                        return Tp20Result.ProtocolError(
+                            "TP2 sequence mismatch: expected %X, got %X"
+                                .format(Locale.US, expected, seq)
+                        )
+                    }
+                }
+                previousDataSeq = seq
+            }
 
             when (highNibble) {
                 0x0 -> {
@@ -217,15 +232,36 @@ object Tp20FrameParser {
                     needsAck = true
                 }
                 0x3 -> {
-                    // Segmented frame requesting immediate ACK: 3x <payload...>
-                    val dataHex = line.substring(2)
-                    for (k in 0 until dataHex.length step 2) {
-                        if (k + 2 <= dataHex.length) {
-                            payloadBytes.add(dataHex.substring(k, k + 2).toInt(16).toByte())
+                    // Last data packet; no ACK is requested by opcode 0x3.
+                    // If this is also the first packet, it carries the total
+                    // two-byte KWP payload length like every other first frame.
+                    if (expectedPayloadLen < 0) {
+                        if (line.length < 6) {
+                            return Tp20Result.ProtocolError(
+                                "TP2 first 3x frame is missing the two-byte payload length"
+                            )
+                        }
+                        val lenHi = line.substring(2, 4).toIntOrNull(16)
+                            ?: return Tp20Result.ProtocolError("Invalid TP2 length high byte")
+                        val lenLo = line.substring(4, 6).toIntOrNull(16)
+                            ?: return Tp20Result.ProtocolError("Invalid TP2 length low byte")
+                        expectedPayloadLen = (lenHi shl 8) or lenLo
+                        val dataHex = line.substring(6)
+                        for (k in 0 until dataHex.length step 2) {
+                            if (k + 2 <= dataHex.length) {
+                                payloadBytes.add(dataHex.substring(k, k + 2).toInt(16).toByte())
+                            }
+                        }
+                    } else {
+                        val dataHex = line.substring(2)
+                        for (k in 0 until dataHex.length step 2) {
+                            if (k + 2 <= dataHex.length) {
+                                payloadBytes.add(dataHex.substring(k, k + 2).toInt(16).toByte())
+                            }
                         }
                     }
                     lastRxSeq = seq
-                    needsAck = true
+                    needsAck = false
                 }
                 0xA -> {
                     if (line == "A8") {
