@@ -31,7 +31,8 @@ data class B03InterfaceProbeResult(
 class HexB03Adapter(
     override val driver: HardwareDriver,
     val serialNumber: String? = null,
-    val configuredBaudRate: Int? = null
+    val configuredBaudRate: Int? = null,
+    private val isDebugBuild: Boolean = com.vag.vcdsandroid.BuildConfig.DEBUG
 ) : AdapterTransport {
 
     companion object {
@@ -310,7 +311,13 @@ class HexB03Adapter(
         timeoutMs: Long,
         enableUnsafeDeveloperRawTx: Boolean = false
     ): AdapterResponse = withContext(Dispatchers.IO) {
-        if (!com.vag.vcdsandroid.BuildConfig.DEBUG) {
+        // Secondary Guardrail: Block any write/adaptation/flashing requests even in raw debug mode
+        val violation = assertReadOnlyGuardrails(request)
+        if (violation != null) {
+            return@withContext AdapterResponse.Error("SECURITY VIOLATION: $violation")
+        }
+
+        if (!isDebugBuild) {
             return@withContext AdapterResponse.Error(
                 "Raw transmission blocked: transactRawDebug is strictly disabled in release builds."
             )
@@ -330,11 +337,6 @@ class HexB03Adapter(
             return@withContext AdapterResponse.Unsupported
         }
 
-        // Secondary Guardrail: Block any write/adaptation/flashing requests even in raw debug mode
-        val violation = assertReadOnlyGuardrails(request)
-        if (violation != null) {
-            return@withContext AdapterResponse.Error("SECURITY VIOLATION: $violation")
-        }
 
         traceListener?.invoke("TX", request)
         val startTime = System.currentTimeMillis()

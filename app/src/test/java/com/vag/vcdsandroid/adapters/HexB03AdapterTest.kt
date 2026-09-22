@@ -135,6 +135,22 @@ class HexB03AdapterTest {
         )
 
         assertTrue(response is AdapterResponse.Error)
+    }
+
+    @Test
+    fun `transactRawDebug blocks transmission in release builds even with developer flag`() = runBlocking {
+        val driver = TestHardwareDriver()
+        val adapter = HexB03Adapter(driver, isDebugBuild = false)
+
+        val response = adapter.transactRawDebug(
+            request = byteArrayOf(0x1A, 0x9B.toByte()),
+            timeoutMs = 1000,
+            enableUnsafeDeveloperRawTx = true
+        )
+
+        assertTrue(response is AdapterResponse.Error)
+        val msg = (response as AdapterResponse.Error).message
+        assertTrue(msg.contains("strictly disabled in release builds"))
         assertTrue(driver.writtenBytes.isEmpty())
     }
 
@@ -161,7 +177,7 @@ class HexB03AdapterTest {
         val driver = TestHardwareDriver().apply {
             mockReadData = byteArrayOf(0xDE.toByte(), 0xAD.toByte())
         }
-        val adapter = HexB03Adapter(driver)
+        val adapter = HexB03Adapter(driver, isDebugBuild = true)
 
         val traces = mutableListOf<Pair<String, ByteArray>>()
         adapter.setRawTraceListener { dir, data -> traces.add(Pair(dir, data)) }
