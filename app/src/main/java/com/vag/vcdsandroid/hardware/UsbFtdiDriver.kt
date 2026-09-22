@@ -2,6 +2,7 @@ package com.vag.vcdsandroid.hardware
 
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
+import com.hoho.android.usbserial.driver.FtdiSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -32,6 +33,20 @@ class UsbFtdiDriver(
             } catch (_: Exception) {}
         }
         res
+    }
+
+    /**
+     * FTDI latency timer control used by intelligent HEX interfaces.
+     * usb-serial-for-android exposes this on the concrete FTDI port.
+     */
+    suspend fun setLatencyTimerMs(latencyMs: Int): Boolean = withContext(Dispatchers.IO) {
+        val ftdiPort = port as? FtdiSerialDriver.FtdiSerialPort ?: return@withContext false
+        return@withContext try {
+            ftdiPort.setLatencyTimer(latencyMs)
+            true
+        } catch (_: Exception) {
+            false
+        }
     }
 
     /**
