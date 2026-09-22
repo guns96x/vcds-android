@@ -1,13 +1,11 @@
 package com.vag.vcdsandroid.ui
 
-import android.Manifest
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
 import android.hardware.usb.UsbDevice
@@ -21,7 +19,6 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.vag.vcdsandroid.R
@@ -370,37 +367,32 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-   private fun switchConnectionMode(newMode: AppConnectionMode) {
-        if (connectionMode != newMode) {
+    private fun switchConnectionMode(newMode: AppConnectionMode) {
+        val targetMode =
+            if (newMode == AppConnectionMode.SIMULATOR_DEMO && BuildConfig.DEBUG) {
+                AppConnectionMode.SIMULATOR_DEMO
+            } else {
+                AppConnectionMode.USB_HARDWARE
+            }
+
+        if (connectionMode != targetMode) {
             val oldMode = connectionMode
             performDisconnect(oldMode)
-            connectionMode = newMode
+            connectionMode = targetMode
             resetTurboSessionState()
         }
 
-        when (newMode) {
-            AppConnectionMode.TURBO_FAST_OBD -> {
-                binding.btnModeToggle.text = "Mode: A (Turbo Fast)"
-                binding.layoutTurboFast.visibility = View.VISIBLE
-                binding.layoutOemGroups.visibility = View.GONE
-            }
-            AppConnectionMode.VAG_OEM_TP20 -> {
-                binding.btnModeToggle.text = "Mode: B (VAG OEM)"
-                binding.layoutTurboFast.visibility = View.GONE
-                binding.layoutOemGroups.visibility = View.VISIBLE
-            }
-            AppConnectionMode.USB_HARDWARE -> {
-                binding.btnModeToggle.text = "Mode: USB K-Line"
-                binding.layoutTurboFast.visibility = View.GONE
-                binding.layoutOemGroups.visibility = View.VISIBLE
-                engine.setMode(TransportMode.USB_HARDWARE)
-            }
-            AppConnectionMode.SIMULATOR_DEMO -> {
-                binding.btnModeToggle.text = "Mode: Simulator"
-                binding.layoutTurboFast.visibility = View.GONE
-                binding.layoutOemGroups.visibility = View.VISIBLE
-                engine.setMode(TransportMode.SIMULATOR_DEMO)
-            }
+        if (targetMode == AppConnectionMode.SIMULATOR_DEMO) {
+            binding.btnModeToggle.text = "Simulator"
+            binding.layoutTurboFast.visibility = View.GONE
+            binding.layoutOemGroups.visibility = View.VISIBLE
+            engine.setMode(TransportMode.SIMULATOR_DEMO)
+        } else {
+            binding.btnModeToggle.text = "USB HEX Cable"
+            binding.btnModeToggle.isEnabled = false
+            binding.layoutTurboFast.visibility = View.GONE
+            binding.layoutOemGroups.visibility = View.VISIBLE
+            engine.setMode(TransportMode.USB_HARDWARE)
         }
         updateStatusUI()
     }
@@ -415,194 +407,59 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-            val dev = currentDevice ?: transport.findAvailableDevice()
-            if (dev == null) {
-                Toast.makeText(this, "No USB FTDI / KKL cable detected.", Toast.LENGTH_LONG).show()
-                updateStatusUI()
-                return
-            }
-            if (!transport.hasPermission(dev)) {
-                isPermissionRequested = true
-                transport.requestPermission(dev)
-                updateStatusUI()
-                return
-            }
-
-            val report = AndroidUsbProbe.inspectDevice(this, dev)
-            DiagLog.i("UsbProbe", "USB Device Inspection Report:\n${report.toJson().toString(2)}")
-
-            val driverResult = AdapterRegistry.createHardwareDriver(this, dev)
-            val driver = driverResult.getOrElse {
-                com.vag.vcdsandroid.hardware.NoOpHardwareDriver(dev.deviceName)
-            }
-            val adapter = AdapterRegistry.selectAdapter(
-                driver = driver,
-                device = dev,
-                hasPermission = transport.hasPermission(dev)
-            )
-            val identity = adapter.identity
-            DiagLog.i("AdapterRegistry", "Resolved Adapter via AdapterRegistry: ${identity.profileName} (zeroTx=${identity.isZeroTxEnforced}, serial=${identity.serialNumber})")
-
-            if (identity.isZeroTxEnforced) {
-                // Ross-Tech / B03-V2 FTDI Clone or unverified bridge: strictly ZERO-TX
-                AlertDialog.Builder(this)
-                    .setTitle(identity.profileName)
-                    .setMessage(
-                        "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
-                        "Adapter: ${adapter.javaClass.simpleName}\n" +
-                        "Profile: ${report.hardwareProfile.name}\n" +
-                        "Zero-TX Enforced: ${identity.isZeroTxEnforced}\n" +
-                        "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
-                        "ZERO-TX GUARD ENFORCED: Normal communication is blocked until live vehicle capture " +
-                        "verifies the PC<->MCU protocol framing and baud rate.\n\n" +
-                        "USB descriptors logged to session diagnostics. Use tools/usb/capture_vcds_traffic.ps1 on Windows to capture traffic."
-                    )
-                    .setPositiveButton("OK", null)
-                    .show()
-                updateStatusUI()
-                return
-            }
-
-            lifecycleScope.launch {
-                val ok = engine.connect(dev)
-                updateStatusUI()
-                if (ok) startOemPolling()
-            }
+        val dev = currentDevice ?: transport.findAvailableDevice()
+        if (dev == null) {
+            Toast.makeText(this, "No USB HEX / FTDI cable detected.", Toast.LENGTH_LONG).show()
+            updateStatusUI()
+            return
         }
-    }
-
-    private fun connectElmBluetooth() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val missing = mutableListOf<String>()
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                missing.add(Manifest.permission.BLUETOOTH_CONNECT)
-            }
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED) {
-                missing.add(Manifest.permission.BLUETOOTH_SCAN)
-            }
-            if (missing.isNotEmpty()) {
-                ActivityCompat.requestPermissions(this, missing.toTypedArray(), 101)
-                return
-            }
-        }
-        val paired = elmEngine.transport.getBondedDevices()
-        if (paired.isEmpty()) {
-            Toast.makeText(this, "No paired Bluetooth devices found! Pair ELM327 in Android Settings.", Toast.LENGTH_LONG).show()
+        if (!transport.hasPermission(dev)) {
+            isPermissionRequested = true
+            transport.requestPermission(dev)
+            updateStatusUI()
             return
         }
 
-        val deviceNames: Array<CharSequence> = paired.map { device ->
-            try {
-                ("${device.name ?: "Unknown"} (${device.address})") as CharSequence
-            } catch (_: SecurityException) {
-                "Unknown Device" as CharSequence
-            }
-        }.toTypedArray()
+        val report = AndroidUsbProbe.inspectDevice(this, dev)
+        DiagLog.i("UsbProbe", "USB Device Inspection Report:\n${report.toJson().toString(2)}")
 
-        AlertDialog.Builder(this)
-            .setTitle("Select ELM327 / V-LINK Adapter")
-            .setItems(deviceNames) { _, idx ->
-                val chosenDevice = paired[idx]
-                startElmConnection(chosenDevice)
-            }
-            .show()
-    }
-
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 101) {
-            val allGranted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
-            if (allGranted) {
-                Toast.makeText(this, "Bluetooth permissions granted", Toast.LENGTH_SHORT).show()
-                connectElmBluetooth()
-            } else {
-                Toast.makeText(this, "Bluetooth permissions are required to connect to ELM327", Toast.LENGTH_LONG).show()
-            }
+        val driverResult = AdapterRegistry.createHardwareDriver(this, dev)
+        val driver = driverResult.getOrElse {
+            com.vag.vcdsandroid.hardware.NoOpHardwareDriver(dev.deviceName)
         }
-    }
+        val adapter = AdapterRegistry.selectAdapter(
+            driver = driver,
+            device = dev,
+            hasPermission = transport.hasPermission(dev)
+        )
+        val identity = adapter.identity
+        DiagLog.i(
+            "AdapterRegistry",
+            "Resolved Adapter via AdapterRegistry: ${identity.profileName} " +
+                "(zeroTx=${identity.isZeroTxEnforced}, serial=${identity.serialNumber})"
+        )
 
-    @SuppressLint("MissingPermission")
-    private fun startElmConnection(device: BluetoothDevice) {
-        elmConnectJob?.cancel()
-        resetTurboSessionState()
-        lastElmDevice = device
-        val myGeneration = sessionGeneration
-        val myMode = connectionMode
-
-        binding.tvStatus.text = "Connecting..."
-        binding.tvSubStatus.text = "Opening RFCOMM to ${device.name ?: "ELM327"}..."
-        binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
-        binding.btnConnect.isEnabled = false
-        binding.btnModeToggle.isEnabled = false
-        binding.btnCheckData.isEnabled = false
-        binding.btnToggleLog.isEnabled = false
-
-        elmConnectJob = lifecycleScope.launch {
-            val isTurboFast = (myMode == AppConnectionMode.TURBO_FAST_OBD)
-            val success = elmEngine.connect(device, forceGeneric = isTurboFast)
-
-            if (!isActive || myGeneration != sessionGeneration || myMode != connectionMode) {
-                if (success) {
-                    try { elmEngine.disconnect() } catch (_: Exception) {}
-                }
-                return@launch
-            }
-
-            binding.btnConnect.isEnabled = true
-            binding.btnModeToggle.isEnabled = true
-            binding.btnCheckData.isEnabled = success
+        if (identity.isZeroTxEnforced) {
+            AlertDialog.Builder(this)
+                .setTitle(identity.profileName)
+                .setMessage(
+                    "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
+                        "Adapter: ${adapter.javaClass.simpleName}\n" +
+                        "Profile: ${report.hardwareProfile.name}\n" +
+                        "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
+                        "USB cable detected. Diagnostic TX is blocked until the HEX host↔MCU " +
+                        "framing and baud rate are confirmed from a real USB capture."
+                )
+                .setPositiveButton("OK", null)
+                .show()
             updateStatusUI()
-            renderLoggingState()
+            return
+        }
 
-            if (success) {
-                if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
-                    // P1: Auto-probe BARO immediately after connect
-                    withContext(Dispatchers.IO) {
-                        try {
-                            val baroResp = elmEngine.transport.sendCommand("0133", 800L)
-                            val baroDec = PidDecoder.decodeBaro(baroResp.raw, baroResp.txNanos, baroResp.rxNanos, baroResp.elapsedMs, baroResp.timedOut)
-                            if (baroDec.status == PidStatus.VALID) {
-                                sessionBaroResolver.onSample("0133", baroDec.status, baroDec.value, baroResp.rxNanos)
-                            }
-                            Unit
-                        } catch (e: Exception) {
-                            Log.w("MainActivity", "Initial BARO probe failed: ${e.message}")
-                        }
-                    }
-                    val phoneRead = phoneBarometerProvider.getReading()
-                    sessionBaroResolver.onPhoneBaro(phoneRead.valueMbar, phoneRead.monoNs, phoneRead.fresh)
-                    val resolvedBaro = sessionBaroResolver.resolve(SystemClock.elapsedRealtimeNanos())
-                    elmEngine.saveConnectionTrace(
-                        isSuccess = true,
-                        stage = elmEngine.lastConnectStage,
-                        deviceName = device.name ?: device.address,
-                        baroSource = resolvedBaro.source,
-                        baroValueMbar = resolvedBaro.valueMbar,
-                        phoneBaroAvailable = phoneBarometerProvider.isSensorAvailable,
-                        phoneBaroValueMbar = phoneRead.valueMbar,
-                        phoneBaroAgeMs = phoneRead.ageMs
-                    )
-                    updateBaroUi()
-                    renderLoggingState()
-                    startTurboFastPolling()
-                } else {
-                    startOemPolling()
-                }
-            } else {
-                val err = elmEngine.lastError ?: "Failed to connect to ELM327"
-                val trace = elmEngine.lastConnectTrace
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle("CONNECTION DEBUG")
-                    .setMessage("$err\n\n=== RAW TRACE ===\n$trace")
-                    .setPositiveButton("OK", null)
-                    .setNeutralButton("Copy Trace") { _, _ ->
-                        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                        val clip = android.content.ClipData.newPlainText("ELM Connect Trace", "$err\n\n$trace")
-                        clipboard.setPrimaryClip(clip)
-                        Toast.makeText(this@MainActivity, "Trace copied to clipboard", Toast.LENGTH_SHORT).show()
-                    }
-                    .show()
-            }
+        lifecycleScope.launch {
+            val ok = engine.connect(dev)
+            updateStatusUI()
+            if (ok) startOemPolling()
         }
     }
 
@@ -730,7 +587,7 @@ class MainActivity : AppCompatActivity() {
                     binding.btnToggleLog.alpha = if (isConnected) 0.7f else 0.4f
                 }
                 binding.btnCheckData.isEnabled = isConnected
-                binding.btnModeToggle.isEnabled = true
+                binding.btnModeToggle.isEnabled = false
                 binding.btnConnect.isEnabled = true
 
                 if (isConnected && !canStart) {
