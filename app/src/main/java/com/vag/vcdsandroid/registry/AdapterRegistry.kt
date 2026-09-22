@@ -66,23 +66,49 @@ object AdapterRegistry {
     }
 
     /**
+     * Defensively extracts the serial number from a device, gracefully returning null
+     * if permission has not been granted, or if Android throws a [SecurityException].
+     */
+    fun safeGetSerialNumber(
+        serialProvider: () -> String?,
+        hasPermission: Boolean? = null
+    ): String? {
+        if (hasPermission == false) return null
+        return try {
+            serialProvider()
+        } catch (_: SecurityException) {
+            null
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun safeGetSerialNumber(device: UsbDevice?, hasPermission: Boolean? = null): String? {
+        if (device == null) return null
+        return safeGetSerialNumber({ device.serialNumber }, hasPermission)
+    }
+
+    /**
      * Stage 2: Selects the appropriate [AdapterTransport] protocol profile for the driver and device.
      * Crucial: FTDI link does NOT automatically mean KKL pass-through.
-     * Ross-Tech PIDs bind to [HexB03Adapter], while standard FT232R binds to [KklAdapter].
+     * Ross-Tech PIDs bind to [HexB03Adapter], while standard FTDI USB-UART bridge binds to [UnverifiedAdapter]
+     * unless explicitly selected by the user.
      */
     fun selectAdapter(
         driver: HardwareDriver,
         device: UsbDevice?,
-        userSelectedKkl: Boolean = false
+        userSelectedKkl: Boolean = false,
+        hasPermission: Boolean? = null
     ): AdapterTransport {
         if (device == null) {
             return UnverifiedAdapter(driver, "No USB Device Provided")
         }
+        val safeSerial = safeGetSerialNumber(device, hasPermission)
         return selectAdapter(
             driver = driver,
             vid = device.vendorId,
             pid = device.productId,
-            serialNumber = device.serialNumber,
+            serialNumber = safeSerial,
             userSelectedKkl = userSelectedKkl
         )
     }
@@ -116,7 +142,7 @@ object AdapterRegistry {
             // Return UnverifiedAdapter requiring explicit profile or user confirmation.
             vid == 0x0403 && pid == 0x6001 -> UnverifiedAdapter(
                 driver,
-                "FTDI FT232R Bridge (0403:6001) - Protocol Unverified"
+                "FTDI USB-UART bridge (0403:6001) - Protocol Unverified"
             )
             vid == 0x1A86 && pid == 0x7523 -> UnverifiedAdapter(
                 driver,

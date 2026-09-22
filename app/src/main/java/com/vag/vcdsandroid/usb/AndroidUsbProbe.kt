@@ -42,11 +42,16 @@ data class UsbInterfaceReport(
 enum class HardwareProfile {
     ROSS_TECH_HEX_FA24_FTDI,   // VID 0403, PID FA24 (Candidate B03-V2 / HEX-USB+CAN clone)
     ROSS_TECH_HEX_FA20_FTDI,   // VID 0403, PID FA20 (HEX-USB)
-    FTDI_FT232R_BRIDGE,        // VID 0403, PID 6001 (FT232R USB-UART bridge; downstream protocol unverified)
+    FTDI_6001_BRIDGE,          // VID 0403, PID 6001 (FTDI USB-UART bridge; downstream protocol unverified)
     CH34X_BRIDGE,              // VID 1A86 (CH340/CH341 USB-UART bridge; downstream protocol unverified)
     CP210X_BRIDGE,             // VID 10C4 (CP2102 USB-UART bridge; downstream protocol unverified)
     PL2303_BRIDGE,             // VID 067B (PL2303 USB-UART bridge; downstream protocol unverified)
-    UNKNOWN_USB_DEVICE
+    UNKNOWN_USB_DEVICE;
+
+    companion object {
+        @Deprecated("Use FTDI_6001_BRIDGE", ReplaceWith("FTDI_6001_BRIDGE"))
+        val FTDI_FT232R_BRIDGE = FTDI_6001_BRIDGE
+    }
 }
 
 /**
@@ -129,8 +134,8 @@ object AndroidUsbProbe {
                 "PROVEN: FTDI USB bridge with Ross-Tech HEX-USB PID. HYPOTHESIS: Legacy HEX coprocessor."
             )
             vid == 0x0403 && pid == 0x6001 -> Pair(
-                HardwareProfile.FTDI_FT232R_BRIDGE,
-                "PROVEN: FTDI FT232R USB-UART bridge. ADAPTER PROTOCOL: UNVERIFIED (KKL pass-through requires user confirmation)."
+                HardwareProfile.FTDI_6001_BRIDGE,
+                "PROVEN: FTDI USB-UART bridge (0403:6001). ADAPTER PROTOCOL: UNVERIFIED (KKL pass-through requires user confirmation)."
             )
             vid == 0x1A86 -> Pair(
                 HardwareProfile.CH34X_BRIDGE,

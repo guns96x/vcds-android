@@ -262,6 +262,7 @@ class BluetoothElmTransport(private val context: Context) {
      * Connects with timeout in a background thread; explicitly calls socket.close()
      * if the timeout occurs to unblock the native socket.connect() call.
      */
+    @SuppressLint("MissingPermission")
     private fun connectWithTimeout(sock: BluetoothSocket, timeoutMs: Long) {
         val completed = AtomicBoolean(false)
         var exception: Exception? = null

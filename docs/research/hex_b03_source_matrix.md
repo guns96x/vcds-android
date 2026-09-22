@@ -129,11 +129,12 @@
 | **USB VID 0x0403** | `PROVEN` | Windows SetupAPI log | FTDI chip present |
 | **USB PID 0xFA24** | `PROVEN` | Windows SetupAPI log | Ross-Tech Direct USB Interface VID/PID burned into EEPROM |
 | **Silicon Rev 0x0600** | `PROVEN` | Windows SetupAPI log | Specifically FT232R generation (FT232RL or FT232RQ) |
-| **Serial RT000001** | `PROVEN` | Windows SetupAPI log | Standard clone serial string in FTDI EEPROM |
+| **Serial RT000001** | `PROVEN` (Sample) | Windows SetupAPI log | Clone serial string in this specific sample's FTDI EEPROM (dynamic in code) |
+| **Generic VID 0403, PID 6001** | `PROVEN` | USB Standard | FTDI USB-UART bridge (0403:6001); protocol unverified unless selected |
 | **Driver RT-USB64.SYS** | `PROVEN` | `C:\Ross-Tech\VCDS\RT-USB64.inf` | Rebranded FTDI D2XX kernel driver |
 | **Library RT-USB.DLL** | `PROVEN` | PE exports in `C:\Ross-Tech\VCDS\RT-USB.DLL` | 100% FTDI D2XX v2.10.00 API surface |
 | **Coprocessor ATmega162** | `STRONGLY SUPPORTED` | `pabloaul/vag157-adapter`, B03-V2 teardown | Typical MCU on FA24 boards, but unverified on user's PCB |
 | **CAN Controller MCP2515** | `STRONGLY SUPPORTED` | Hardware teardowns | SPI CAN controller used across VCDS clone hardware |
 | **Logic ATF16V8B / GAL16V8**| `INFERRED` | Hardware teardowns | Logic device for K/L line multiplexing |
-| **PC↔MCU Command Protocol**| `UNKNOWN` | Requires differential USB capture | Zero guessing allowed in code |
+| **PC↔MCU Command Protocol**| `UNKNOWN` | Requires differential USB capture | Zero guessing allowed in code; strictly ZERO-TX |
 | **MCU Baud Rate** | `UNKNOWN` | Clones vary (57.6k to 500k) | Must be probed safely or extracted from capture |

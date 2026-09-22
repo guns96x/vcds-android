@@ -35,10 +35,11 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 
     lint {
-        abortOnError = false
+        abortOnError = true
         checkReleaseBuilds = false
     }
 }

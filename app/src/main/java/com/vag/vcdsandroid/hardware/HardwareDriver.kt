@@ -32,3 +32,19 @@ interface HardwareDriver {
     suspend fun read(buffer: ByteArray, timeoutMs: Long): Int
     suspend fun purge()
 }
+
+/**
+ * Safe no-op hardware driver used for discovery, probing, or offline identity inspection
+ * where no physical transmission is permitted or driver is not yet opened.
+ */
+class NoOpHardwareDriver(override val name: String = "NoOpDriver") : HardwareDriver {
+    override val isConnected: Boolean get() = false
+    override suspend fun open(parameters: ConnectionParameters): Result<Unit> = Result.success(Unit)
+    override suspend fun close() {}
+    override suspend fun setBaudRate(baudRate: Int): Boolean = true
+    override suspend fun setDtr(dtr: Boolean): Boolean = true
+    override suspend fun setRts(rts: Boolean): Boolean = true
+    override suspend fun write(data: ByteArray): Int = 0
+    override suspend fun read(buffer: ByteArray, timeoutMs: Long): Int = 0
+    override suspend fun purge() {}
+}

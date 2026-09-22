@@ -109,6 +109,12 @@ class HexB03Adapter(
         timeoutMs: Long,
         enableUnsafeDeveloperRawTx: Boolean = false
     ): AdapterResponse = withContext(Dispatchers.IO) {
+        if (!com.vag.vcdsandroid.BuildConfig.DEBUG) {
+            return@withContext AdapterResponse.Error(
+                "Raw transmission blocked: transactRawDebug is strictly disabled in release builds."
+            )
+        }
+
         if (!enableUnsafeDeveloperRawTx) {
             return@withContext AdapterResponse.Error(
                 "Raw transmission blocked: enableUnsafeDeveloperRawTx must be explicitly set for developer probe mode."

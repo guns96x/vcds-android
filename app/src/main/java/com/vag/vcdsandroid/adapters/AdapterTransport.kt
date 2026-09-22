@@ -37,7 +37,15 @@ data class AdapterIdentity(
     val isClone: Boolean = false,
     val capabilities: Set<AdapterCapability> = emptySet(),
     val status: AdapterStatus = AdapterStatus.UNVERIFIED
-)
+) {
+    val profileName: String
+        get() = modelName
+
+    val isZeroTxEnforced: Boolean
+        get() = status == AdapterStatus.EXPERIMENTAL ||
+                status == AdapterStatus.UNVERIFIED ||
+                status == AdapterStatus.UNSUPPORTED
+}
 
 /**
  * Result of an atomic request/response transaction through the adapter transport.

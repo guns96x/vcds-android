@@ -101,6 +101,36 @@ class AdapterRegistryTest {
         val driver = FakeHardwareDriver()
         val adapter = AdapterRegistry.selectAdapter(driver, 0x0403, 0x6001, userSelectedKkl = false)
         assertTrue("Expected UnverifiedAdapter but got ${adapter::class.java.simpleName}", adapter is UnverifiedAdapter)
+        assertTrue(adapter.identity.profileName.contains("FTDI USB-UART bridge (0403:6001)"))
+    }
+
+    @Test
+    fun `safeGetSerialNumber returns null gracefully when SecurityException is thrown`() {
+        val serial = AdapterRegistry.safeGetSerialNumber(
+            serialProvider = { throw SecurityException("USB permission denied") },
+            hasPermission = true
+        )
+        assertNull("Expected null serial on SecurityException", serial)
+    }
+
+    @Test
+    fun `safeGetSerialNumber does not call provider and returns null when hasPermission is false`() {
+        var called = false
+        val serial = AdapterRegistry.safeGetSerialNumber(
+            serialProvider = { called = true; "UNREACHABLE" },
+            hasPermission = false
+        )
+        assertNull(serial)
+        assertTrue("Provider should not be called when hasPermission is false", !called)
+    }
+
+    @Test
+    fun `safeGetSerialNumber returns serial string when permission is granted`() {
+        val serial = AdapterRegistry.safeGetSerialNumber(
+            serialProvider = { "FTDI_RT_12345" },
+            hasPermission = true
+        )
+        assertEquals("FTDI_RT_12345", serial)
     }
 
     @Test

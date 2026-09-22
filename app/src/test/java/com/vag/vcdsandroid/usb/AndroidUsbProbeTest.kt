@@ -24,8 +24,8 @@ class AndroidUsbProbeTest {
     @Test
     fun `classifyProfile identifies generic FTDI 6001 as bridge with unverified protocol`() {
         val (profile, hypothesis) = AndroidUsbProbe.classifyProfile(0x0403, 0x6001)
-        assertEquals(HardwareProfile.FTDI_FT232R_BRIDGE, profile)
-        assertTrue(hypothesis.contains("FTDI FT232R USB-UART bridge"))
+        assertEquals(HardwareProfile.FTDI_6001_BRIDGE, profile)
+        assertTrue(hypothesis.contains("FTDI USB-UART bridge (0403:6001)"))
         assertTrue(hypothesis.contains("UNVERIFIED"))
     }
 

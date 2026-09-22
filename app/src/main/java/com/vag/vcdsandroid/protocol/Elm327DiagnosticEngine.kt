@@ -1,5 +1,6 @@
 package com.vag.vcdsandroid.protocol
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.content.Context
 import android.util.Log
@@ -145,6 +146,7 @@ class Elm327DiagnosticEngine(private val context: Context) {
         onLogListener?.invoke(sanitized)
     }
 
+    @SuppressLint("MissingPermission")
     suspend fun connect(targetDevice: BluetoothDevice? = null, forceGeneric: Boolean = forceGenericObd): Boolean = withContext(Dispatchers.IO) {
         this@Elm327DiagnosticEngine.forceGenericObd = forceGeneric
         commMutex.withLock {

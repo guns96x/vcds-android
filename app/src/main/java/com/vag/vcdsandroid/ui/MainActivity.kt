@@ -229,13 +229,18 @@ class MainActivity : AppCompatActivity() {
 
         val permFilter = IntentFilter(UsbKwpTransport.ACTION_USB_PERMISSION)
         val detachFilter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(usbPermissionReceiver, permFilter, Context.RECEIVER_NOT_EXPORTED)
-            registerReceiver(usbDetachedReceiver, detachFilter, Context.RECEIVER_NOT_EXPORTED)
-        } else {
-            registerReceiver(usbPermissionReceiver, permFilter)
-            registerReceiver(usbDetachedReceiver, detachFilter)
-        }
+        ContextCompat.registerReceiver(
+            this,
+            usbPermissionReceiver,
+            permFilter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        ContextCompat.registerReceiver(
+            this,
+            usbDetachedReceiver,
+            detachFilter,
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
 
         phoneBarometerProvider = PhoneBarometerProvider(this)
         phoneBarometerProvider.onReadingChanged = { reading ->
@@ -474,17 +479,31 @@ class MainActivity : AppCompatActivity() {
                 return
             }
 
-            val (profile, _) = AndroidUsbProbe.classifyProfile(dev.vendorId, dev.productId)
-            if (profile == HardwareProfile.ROSS_TECH_HEX_FA24_FTDI) {
-                // Ross-Tech / B03-V2 FTDI Clone: strictly ZERO-TX in discovery mode
-                val report = AndroidUsbProbe.inspectDevice(this, dev)
-                DiagLog.i("UsbProbe", "B03-V2 Device Inspection Report:\n${report.toJson().toString(2)}")
+            val report = AndroidUsbProbe.inspectDevice(this, dev)
+            DiagLog.i("UsbProbe", "USB Device Inspection Report:\n${report.toJson().toString(2)}")
+
+            val driverResult = AdapterRegistry.createHardwareDriver(this, dev)
+            val driver = driverResult.getOrElse {
+                com.vag.vcdsandroid.hardware.NoOpHardwareDriver(dev.deviceName)
+            }
+            val adapter = AdapterRegistry.selectAdapter(
+                driver = driver,
+                device = dev,
+                hasPermission = transport.hasPermission(dev)
+            )
+            val identity = adapter.identity
+            DiagLog.i("AdapterRegistry", "Resolved Adapter via AdapterRegistry: ${identity.profileName} (zeroTx=${identity.isZeroTxEnforced}, serial=${identity.serialNumber})")
+
+            if (identity.isZeroTxEnforced) {
+                // Ross-Tech / B03-V2 FTDI Clone or unverified bridge: strictly ZERO-TX
                 AlertDialog.Builder(this)
-                    .setTitle("Ross-Tech / B03-V2 Clone Detected")
+                    .setTitle(identity.profileName)
                     .setMessage(
-                        "Hardware: FTDI FT232R (VID 0403, PID FA24)\n" +
-                        "Profile: ROSS_TECH_HEX_FA24_FTDI\n" +
-                        "Coprocessor: ATmega162 Hypothesis (Unverified)\n\n" +
+                        "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
+                        "Adapter: ${adapter.javaClass.simpleName}\n" +
+                        "Profile: ${report.hardwareProfile.name}\n" +
+                        "Zero-TX Enforced: ${identity.isZeroTxEnforced}\n" +
+                        "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
                         "ZERO-TX GUARD ENFORCED: Normal communication is blocked until live vehicle capture " +
                         "verifies the PC<->MCU protocol framing and baud rate.\n\n" +
                         "USB descriptors logged to session diagnostics. Use tools/usb/capture_vcds_traffic.ps1 on Windows to capture traffic."
@@ -553,6 +572,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun startElmConnection(device: BluetoothDevice) {
         elmConnectJob?.cancel()
         resetTurboSessionState()
@@ -2514,16 +2534,24 @@ private fun updateStatusUI() {
                             binding.btnConnect.text = "Connect"
                             binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
                         } else {
-                            val (profile, _) = AndroidUsbProbe.classifyProfile(dev.vendorId, dev.productId)
-                            val info = UsbKwpTransport.identifyDevice(dev)
+                            val driverResult = AdapterRegistry.createHardwareDriver(this, dev)
+                            val driver = driverResult.getOrElse {
+                                com.vag.vcdsandroid.hardware.NoOpHardwareDriver(dev.deviceName)
+                            }
+                            val adapter = AdapterRegistry.selectAdapter(
+                                driver = driver,
+                                device = dev,
+                                hasPermission = transport.hasPermission(dev)
+                            )
+                            val identity = adapter.identity
                             binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
-                            if (profile == HardwareProfile.ROSS_TECH_HEX_FA24_FTDI) {
-                                binding.tvStatus.text = "Ross-Tech B03-V2 Clone (0403:FA24)"
+                            if (identity.isZeroTxEnforced) {
+                                binding.tvStatus.text = identity.profileName
                                 binding.tvSubStatus.text = "Research Mode: [ZERO-TX] Tap Probe to inspect"
                                 binding.btnConnect.text = "Probe Device"
                                 binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#8957E5"))
                             } else {
-                                binding.tvStatus.text = "Ready: ${info.displayName}"
+                                binding.tvStatus.text = "Ready: ${identity.profileName}"
                                 binding.tvSubStatus.text = "Ignition ON -> Tap Connect"
                                 binding.btnConnect.text = "Connect"
                                 binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))

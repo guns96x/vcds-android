@@ -16,7 +16,8 @@ All claims regarding the adapter hardware, physical link, and protocol framing a
 | **USB Vendor ID `0x0403`** | `PROVEN` | Windows SetupAPI logs (`setupapi.dev.*.log`), `RT-USB64.inf` | Authentic or cloned FTDI silicon is present on the board. |
 | **USB Product ID `0xFA24`** | `PROVEN` | Windows SetupAPI logs, `RT-USB64.inf` | Interface identifies as "Ross-Tech Direct USB Interface" (HEX-USB+CAN). |
 | **Silicon Revision `0x0600`** | `PROVEN` | Windows SetupAPI logs (`REV_0600`) | FTDI factory bcdDevice specifically denoting **FT232R generation** (FT232RL/FT232RQ). |
-| **Serial String `RT000001`** | `PROVEN` | Windows SetupAPI logs | Factory-programmed clone serial string in FTDI EEPROM. |
+| **Serial String `RT000001`** | `PROVEN` (Sample) | Windows SetupAPI logs | Factory-programmed clone serial string in this sample's FTDI EEPROM (dynamic in code). |
+| **Generic VID `0x0403`, PID `0x6001`** | `PROVEN` | USB Standard | FTDI USB-UART bridge (0403:6001); downstream protocol unverified unless user explicitly selects KKL. |
 | **Driver `RT-USB64.SYS` / `RT-USB.DLL`** | `PROVEN` | PE Export Analysis (`dumpbin` / python PE export scan) | 100% binary match with FTDI D2XX library v2.10.00.1 API surface. |
 | **Direct USB (Non-VCP)** | `PROVEN` | Ross-Tech Public Technical FAQ & Driver INF | Driver bypasses Windows `ftser2k.sys` COM port emulation; uses direct Bulk transfers. |
 | **Bulk Endpoint Layout (64B)** | `STRONGLY SUPPORTED` | FT232R silicon datasheet & USB descriptor standards | Full-Speed USB 2.0 (12 Mbps); EP 0x02 OUT (Host→MCU), EP 0x81 IN (MCU→Host). |
