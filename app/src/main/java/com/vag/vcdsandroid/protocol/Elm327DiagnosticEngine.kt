@@ -33,6 +33,7 @@ enum class ElmDiagnosticState {
     ERROR
 }
 
+@SuppressLint("MissingPermission")
 class Elm327DiagnosticEngine(private val context: Context) {
 
     companion object {
