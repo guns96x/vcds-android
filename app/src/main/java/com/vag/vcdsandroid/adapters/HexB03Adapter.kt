@@ -155,40 +155,46 @@ class HexB03Adapter(
                 )
             }
 
-            try {
-                val probeFrame = sendInterfaceCommand(
-                    opcode = 0x02.toByte(),
-                    timeoutMs = timeoutMs
-                ) ?: return@withContext Result.failure(
+            val probeFrame = sendInterfaceCommand(
+                opcode = 0x02.toByte(),
+                timeoutMs = timeoutMs
+            ) ?: run {
+                close()
+                return@withContext Result.failure(
                     IllegalStateException("FA24 probe timed out: no valid 0x02 reply")
                 )
+            }
 
-                val identifyFrame = sendInterfaceCommand(
-                    opcode = 0x04.toByte(),
-                    timeoutMs = timeoutMs
-                ) ?: return@withContext Result.failure(
+            val identifyFrame = sendInterfaceCommand(
+                opcode = 0x04.toByte(),
+                timeoutMs = timeoutMs
+            ) ?: run {
+                close()
+                return@withContext Result.failure(
                     IllegalStateException("FA24 identify timed out: no valid 0x04 reply")
                 )
+            }
 
-                val identityText = parseInterfaceIdentity(identifyFrame.payload)
-                    ?: return@withContext Result.failure(
+            val identityText = parseInterfaceIdentity(identifyFrame.payload)
+                ?: run {
+                    close()
+                    return@withContext Result.failure(
                         IllegalStateException(
                             "FA24 identify replied, but the ROSSTECH identity string was not present"
                         )
                     )
+                }
 
-                Result.success(
-                    B03InterfaceProbeResult(
-                        identityText = identityText,
-                        probePayload = probeFrame.payload,
-                        identifyPayload = identifyFrame.payload,
-                        elapsedMs = System.currentTimeMillis() - started
-                    )
+            // Success is intentionally left OPEN. This is the M1 acceptance state:
+            // Android has a live bidirectional link to the physical interface.
+            Result.success(
+                B03InterfaceProbeResult(
+                    identityText = identityText,
+                    probePayload = probeFrame.payload,
+                    identifyPayload = identifyFrame.payload,
+                    elapsedMs = System.currentTimeMillis() - started
                 )
-            } finally {
-                // M1 probe is self-contained and repeatable; release USB cleanly after each run.
-                close()
-            }
+            )
         }
 
     private suspend fun sendInterfaceCommand(opcode: Byte, timeoutMs: Long): HexB03Frame? {
