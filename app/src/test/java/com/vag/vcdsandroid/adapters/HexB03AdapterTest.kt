@@ -204,6 +204,20 @@ class HexB03AdapterTest {
                     )
                 )
             )
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = 0x82.toByte(),
+                    payload = byteArrayOf(0x00, 0x00)
+                )
+            )
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = 0x0D,
+                    payload = byteArrayOf(0x02)
+                )
+            )
         }
         val adapter = HexB03Adapter(driver, serialNumber = "RT000001")
 
@@ -216,9 +230,14 @@ class HexB03AdapterTest {
         assertEquals(115200, driver.lastBaudRate)
         assertFalse(driver.isConnected)
 
+        assertArrayEquals(byteArrayOf(0x00, 0x00), probe.statusPayload)
+        assertArrayEquals(byteArrayOf(0x02), probe.modePayload)
+
         val expectedTx = byteArrayOf(
             0x53, 0x04, 0x02, 0x55,
-            0x53, 0x04, 0x04, 0x53
+            0x53, 0x04, 0x04, 0x53,
+            0x53, 0x04, 0x82.toByte(), 0xD5.toByte(),
+            0x53, 0x04, 0x0D, 0x5A
         )
         assertArrayEquals(expectedTx, driver.writtenBytes.toByteArray())
     }
