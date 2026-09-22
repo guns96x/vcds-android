@@ -47,8 +47,9 @@
                 style="@style/Widget.Material3.Button.TonalButton"
                 android:layout_width="wrap_content"
                 android:layout_height="36dp"
-                android:text="Mode: USB"
+                android:text="USB HEX Cable"
                 android:textSize="11sp"
+                android:visibility="gone"
                 app:cornerRadius="18dp" />
         </LinearLayout>
 
@@ -105,7 +106,7 @@
                     android:id="@+id/btnConnect"
                     android:layout_width="wrap_content"
                     android:layout_height="38dp"
-                    android:text="Connect"
+                    android:text="Connect USB"
                     android:textSize="12sp"
                     app:backgroundTint="@color/accent_blue"
                     app:cornerRadius="8dp" />
@@ -119,7 +120,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:visibility="visible">
+            android:visibility="gone">
 
             <com.google.android.material.card.MaterialCardView
                 android:layout_width="match_parent"
@@ -663,7 +664,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:visibility="gone">
+            android:visibility="visible">
         <!-- Hero Telemetry: Group 011 Turbo & Spool -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
