@@ -1,0 +1,54 @@
+name: VCDS Knowledge Base CI (KB-1R Gate)
+
+on:
+  push:
+    branches:
+      - master
+      - reverse/*
+      - audit/*
+  pull_request:
+    branches:
+      - master
+      - reverse/*
+
+jobs:
+  kb-integrity-audit:
+    runs-on: windows-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pefile
+
+      - name: Ensure canonical SQLite DB is untracked in Git
+        shell: bash
+        run: |
+          if git ls-files --error-unmatch vcds-kb/vcds_kb.db >/dev/null 2>&1; then
+            echo "ERROR: Canonical SQLite DB vcds_kb.db must remain local and untracked."
+            exit 1
+          fi
+
+      - name: Run KB canonical ingestion pipeline
+        run: |
+          python vcds-kb/ingest_all.py
+
+      - name: Generate strict evidence-backed coverage
+        run: |
+          python vcds-kb/export_coverage.py
+
+      - name: Run KB integrity unit test suite
+        run: |
+          python -m unittest discover -s vcds-kb/tests -p "test_*.py" -v
+
+      - name: Run 12-gate KB check
+        run: |
+          python vcds-kb/kb.py check
