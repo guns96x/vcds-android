@@ -452,8 +452,62 @@ class MainActivity : AppCompatActivity() {
 
             lifecycleScope.launch {
                 binding.btnConnect.isEnabled = false
-                binding.tvSubStatus.text = "Opening FA24 interface..."
+                binding.tvSubStatus.text = "Checking legacy HEX K-Line mode..."
 
+                // First choice for the user's Golf 5 BLS: use the legacy HEX-USB+CAN
+                // as a plain K-Line pass-through. This avoids the intelligent-mode
+                // per-ECU encrypted session and lets the existing KWP2000 engine talk
+                // directly to address 01.
+                val dumbModeConfirmed = withContext(Dispatchers.IO) {
+                    transport.connectDumbRossTech(dev)
+                }
+
+                if (dumbModeConfirmed) {
+                    DiagLog.i("B03_M2", "DUMB K-LINE PASS-THROUGH CONFIRMED; opening 01-Engine")
+                    binding.tvSubStatus.text = "K-Line passthrough OK -> 01-Engine..."
+
+                    val ecuConnected = engine.connect(
+                        targetDevice = dev,
+                        targetAddress = 0x01,
+                        allowRossTechDumbMode = true
+                    )
+
+                    binding.btnConnect.isEnabled = true
+                    updateStatusUI()
+
+                    if (ecuConnected) {
+                        val idHex = engine.lastEcuIdentityPayload?.joinToString(" ") {
+                            "%02X".format(it.toInt() and 0xFF)
+                        } ?: "(StartCommunication OK; 1A 9B identity not returned)"
+
+                        DiagLog.i("B03_M2", "01-ENGINE RESPONDED identity=[$idHex]")
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("01-ENGINE RESPONDED")
+                            .setMessage(
+                                "HEX dumb K-Line: OK\n" +
+                                    "ECU address: 01\n" +
+                                    "KWP2000 link: CONNECTED\n" +
+                                    "Identity reply: $idHex"
+                            )
+                            .setPositiveButton("OK", null)
+                            .show()
+                    } else {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("K-LINE OK / 01-ENGINE NO REPLY")
+                            .setMessage(
+                                "The cable passed the 0xF0 dumb-mode echo test, but the ECU " +
+                                    "did not complete KWP2000 initialization.\n\n" +
+                                    (engine.lastError ?: "No ECU response")
+                            )
+                            .setPositiveButton("OK", null)
+                            .show()
+                    }
+                    return@launch
+                }
+
+                // If the cable is still booting in intelligent mode, retain the
+                // proven smart-interface handshake as a fallback/diagnostic.
+                binding.tvSubStatus.text = "Dumb mode not active; checking smart interface..."
                 val probeResult = adapter.probeInterface()
 
                 binding.btnConnect.isEnabled = true
@@ -471,7 +525,7 @@ class MainActivity : AppCompatActivity() {
                         activeB03Adapter = adapter
                         activeB03Identity = probe.identityText
                         currentDevice = dev
-                        binding.tvSubStatus.text = "Interface responded: ${probe.identityText}"
+                        binding.tvSubStatus.text = "Smart mode: ${probe.identityText}"
                         DiagLog.i(
                             "B03_M1",
                             "INTERFACE RESPONDED identity=${probe.identityText}, " +
@@ -480,13 +534,12 @@ class MainActivity : AppCompatActivity() {
                         )
                         updateStatusUI()
                         AlertDialog.Builder(this@MainActivity)
-                            .setTitle("INTERFACE RESPONDED")
+                            .setTitle("SMART MODE ACTIVE")
                             .setMessage(
-                                "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
-                                    "Serial: ${identity.serialNumber ?: "N/A"}\n" +
-                                    "Identity: ${probe.identityText}\n" +
-                                    "Probe reply: $probeHex\n" +
-                                    "Time: ${probe.elapsedMs} ms"
+                                "Interface responds normally: ${probe.identityText}\n\n" +
+                                    "For direct 01-Engine K-Line, disable 'Boot in intelligent mode' " +
+                                    "(or enable 'Force Dumb Mode') in VCDS Options, run Test again, " +
+                                    "then reconnect the cable to the phone."
                             )
                             .setPositiveButton("OK", null)
                             .show()
