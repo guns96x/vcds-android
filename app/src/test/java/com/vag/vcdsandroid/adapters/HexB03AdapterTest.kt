@@ -184,7 +184,7 @@ class HexB03AdapterTest {
     }
 
     @Test
-    fun `interface probe sends only capture-grounded probe and identify`() = runBlocking {
+    fun `interface probe completes plaintext open and keeps link alive`() = runBlocking {
         val driver = TestHardwareDriver().apply {
             mockReadQueue.add(
                 HexB03FrameCodec.encode(
@@ -228,7 +228,7 @@ class HexB03AdapterTest {
         assertTrue(probe.identityText.startsWith("ROSSTECH"))
         assertArrayEquals(byteArrayOf(0x01, 0x60, 0x44), probe.probePayload)
         assertEquals(115200, driver.lastBaudRate)
-        assertFalse(driver.isConnected)
+        assertTrue(driver.isConnected)
 
         assertArrayEquals(byteArrayOf(0x00, 0x00), probe.statusPayload)
         assertArrayEquals(byteArrayOf(0x02), probe.modePayload)
