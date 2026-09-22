@@ -6,6 +6,7 @@ import com.hoho.android.usbserial.driver.FtdiSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 
 /**
  * Hardware driver for FTDI USB-to-UART bridges (FT232R, FT232BM, FT2232, etc.).
@@ -33,6 +34,53 @@ class UsbFtdiDriver(
             } catch (_: Exception) {}
         }
         res
+    }
+
+    /**
+     * Opens Ross-Tech-style 0403:FA24 interfaces using the transport setup recovered
+     * from public live USB captures of the same interface family:
+     * reset/open -> purge -> latency 1 ms -> 8N1 -> 9600 -> 19200 -> 115200 -> DTR/RTS clear.
+     *
+     * This only prepares the FTDI/cable link. It does not send ECU diagnostic traffic.
+     */
+    suspend fun openRossTechFa24(): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            if (!usbManager.hasPermission(usbDevice)) {
+                return@withContext Result.failure(
+                    SecurityException("Missing USB permission for ${usbDevice.deviceName}")
+                )
+            }
+
+            val conn = usbManager.openDevice(usbDevice)
+                ?: return@withContext Result.failure(IOException("usbManager.openDevice returned null"))
+            connection = conn
+
+            port.open(conn) // FTDI driver performs RESET_ALL and clears DTR/RTS on open.
+            port.purgeHwBuffers(true, true)
+
+            val ftdiPort = port as? FtdiSerialDriver.FtdiSerialPort
+                ?: throw IOException("Expected FTDI serial port for 0403:FA24")
+            ftdiPort.setLatencyTimer(1)
+
+            for (baud in intArrayOf(9_600, 19_200, 115_200)) {
+                port.setParameters(
+                    baud,
+                    8,
+                    UsbSerialPort.STOPBITS_1,
+                    UsbSerialPort.PARITY_NONE
+                )
+            }
+
+            // Equivalent to FT_ClrDtr / FT_ClrRts.
+            port.dtr = false
+            port.rts = false
+
+            isOpen = true
+            Result.success(Unit)
+        } catch (e: Exception) {
+            close()
+            Result.failure(e)
+        }
     }
 
     /**
