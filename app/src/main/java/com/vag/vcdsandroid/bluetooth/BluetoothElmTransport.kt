@@ -27,6 +27,7 @@ data class ElmResponse(
     val rxNanos: Long = 0L
 )
 
+@SuppressLint("MissingPermission")
 class BluetoothElmTransport(private val context: Context) {
 
     companion object {
