@@ -5,8 +5,14 @@ import android.hardware.usb.UsbDevice
 import android.util.Log
 import com.vag.vcdsandroid.model.FaultCode
 import com.vag.vcdsandroid.model.MeasuringGroup
+import com.vag.vcdsandroid.usb.FiveBaudSlowInitResult
 import com.vag.vcdsandroid.usb.UsbKwpTransport
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -41,10 +47,15 @@ class Kwp2000DiagnosticEngine(
         private set
     var lastEcuIdentityPayload: ByteArray? = null
         private set
+    var lastSlowInitResult: FiveBaudSlowInitResult? = null
+        private set
 
     private var targetEcuAddress: Byte = 0x01
     private val commMutex = Mutex()
     private val dtcLookup = HashMap<String, Pair<String, String>>()
+    private val engineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var keepAliveJob: Job? = null
+    @Volatile private var lastDiagnosticActivityNs: Long = 0L
 
     private companion object {
         /**
@@ -102,6 +113,8 @@ class Kwp2000DiagnosticEngine(
             state = DiagState.CONNECTING
             lastError = null
             lastEcuIdentityPayload = null
+            lastSlowInitResult = null
+            stopKeepAlive()
 
             if (mode == TransportMode.SIMULATOR_DEMO) {
                 delay(400) // Emulate fast init delay
@@ -118,9 +131,16 @@ class Kwp2000DiagnosticEngine(
                     val effectiveDevice = targetDevice ?: transport.findAvailableDevice()
                     val targetInfo = effectiveDevice?.let { UsbKwpTransport.identifyDevice(it) }
                     val isTargetRossTech = targetInfo?.isRossTechIntelligent == true
-                    val initialBaud =
-                        if (isTargetRossTech && !allowRossTechDumbMode) 500000
-                        else UsbKwpTransport.KLINE_BAUD_RATE
+                    val initialBaud = UsbKwpTransport.KLINE_BAUD_RATE
+
+                    // Smart FA24 traffic has its own proven S/M transport and must not be
+                    // opened here with guessed UART settings. MainActivity handles that path
+                    // through HexB03Adapter. This engine is used only after dumb K-Line is requested.
+                    if (isTargetRossTech && !allowRossTechDumbMode) {
+                        lastError = "Ross-Tech smart mode active; direct K-Line was not requested."
+                        state = DiagState.ERROR
+                        return@withContext false
+                    }
 
                     // Reconnect if port died
                     if (!transport.isConnected()) {
@@ -137,7 +157,7 @@ class Kwp2000DiagnosticEngine(
                         }
                         if (!opened) {
                             lastError = if (isTargetRossTech && allowRossTechDumbMode) {
-                                "Legacy HEX dumb K-Line mode was not confirmed (0xF0 echo failed)."
+                                "Legacy HEX raw K-Line echo was not detected (0xF0 echo failed)."
                             } else {
                                 "Cannot open USB Serial Port. Check OTG cable & permission."
                             }
@@ -153,66 +173,104 @@ class Kwp2000DiagnosticEngine(
                     val connectedInfo = transport.getActiveAdapterInfo()
                     val isRossTech = isTargetRossTech || connectedInfo?.isRossTechIntelligent == true
 
-                    transport.purge()
-                    delay(60)
+                    if (isRossTech && allowRossTechDumbMode) {
+                        // Ground truth from this exact car says ISO 14230-4 / KWP 5BAUD.
+                        // Do not try direct StartCommunication or fast-init first: those can
+                        // disturb the ECU timing state and make the known-good slow init fail.
+                        if (attempt > 1) {
+                            Log.i(
+                                "VCDS_SLOW_INIT",
+                                "Quiet gap before slow-init retry: ${KwpSlowInit.RETRY_QUIET_MS} ms"
+                            )
+                            delay(KwpSlowInit.RETRY_QUIET_MS)
+                        }
 
-                    var ok = false
+                        val slow = transport.performFiveBaudSlowInit(targetEcuAddress.toInt() and 0xFF)
+                        lastSlowInitResult = slow
 
-                    if (isRossTech && !allowRossTechDumbMode) {
-                        Log.w("VCDS_PROBE", "Ross-Tech B03 smart mode: direct ECU TX remains blocked")
-                        lastError = "Ross-Tech smart mode active. Put legacy HEX interface into dumb mode for direct K-Line."
+                        val ignoredHex = slow.ignoredBeforeSync.joinToString(" ") {
+                            "%02X".format(it.toInt() and 0xFF)
+                        }
+                        Log.i(
+                            "VCDS_SLOW_INIT",
+                            "attempt=$attempt success=${slow.success} stage=${slow.failureStage ?: "OK"} " +
+                                "sync=${slow.syncByte?.let { "%02X".format(it) } ?: "--"} " +
+                                "kb1=${slow.keyByte1?.let { "%02X".format(it) } ?: "--"} " +
+                                "kb2=${slow.keyByte2?.let { "%02X".format(it) } ?: "--"} " +
+                                "addrComp=${slow.addressComplement?.let { "%02X".format(it) } ?: "--"} " +
+                                "w4=${slow.w4SendDelayMs ?: -1}ms elapsed=${slow.elapsedMs}ms " +
+                                "ignored=[$ignoredHex]"
+                        )
+
+                        if (slow.success) {
+                            // Slow-init itself establishes the ISO14230 session. Do NOT send
+                            // another 0x81 StartCommunication here; some ECUs reject that.
+                            delay(55) // P3 minimum before first tester request.
+
+                            lastEcuIdentityPayload = readEcuIdentificationRaw(targetEcuAddress)
+                            noteDiagnosticActivity()
+                            state = DiagState.CONNECTED
+                            startIdleKeepAlive()
+
+                            Log.i(
+                                "VCDS_PROBE",
+                                "01-Engine five-baud KWP connected; identity=" +
+                                    (lastEcuIdentityPayload?.joinToString(" ") {
+                                        "%02X".format(it.toInt() and 0xFF)
+                                    } ?: "(slow-init valid; no 1A 9B payload)")
+                            )
+                            return@withContext true
+                        }
+
+                        lastError =
+                            "01-Engine slow init failed at ${slow.failureStage ?: "UNKNOWN"} " +
+                                "(sync=${slow.syncByte?.let { "%02X".format(it) } ?: "--"}, " +
+                                "KB1=${slow.keyByte1?.let { "%02X".format(it) } ?: "--"}, " +
+                                "KB2=${slow.keyByte2?.let { "%02X".format(it) } ?: "--"})."
+
+                        if (attempt < 3) {
+                            // Keep the same USB handle/OBD power. The next iteration waits
+                            // the required quiet interval before trying 0x01 again.
+                            continue
+                        }
+
                         state = DiagState.ERROR
                         return@withContext false
                     }
 
-                    if (!ok && (!isRossTech || allowRossTechDumbMode)) {
-                        // Fallback to K-Line strategies
-                        if (transport.isConnected()) {
-                            transport.setBaudRate(UsbKwpTransport.KLINE_BAUD_RATE)
-                            delay(50)
-                            ok = tryInitDirect(targetEcuAddress)
-                            if (!ok) {
-                                delay(80)
-                                ok = tryInitDirectId(targetEcuAddress)
-                            }
-                            if (!ok) {
-                                delay(80)
-                                ok = tryInitFastPulse(targetEcuAddress)
-                            }
-                            if (!ok) {
-                                delay(80)
-                                ok = tryInitDirect(0x33.toByte())
-                            }
+                    // Generic K-Line adapters keep the older fallback sequence.
+                    transport.purge()
+                    delay(60)
+                    var ok = false
+                    if (transport.isConnected()) {
+                        transport.setBaudRate(UsbKwpTransport.KLINE_BAUD_RATE)
+                        delay(50)
+                        ok = tryInitDirect(targetEcuAddress)
+                        if (!ok) {
+                            delay(80)
+                            ok = tryInitDirectId(targetEcuAddress)
+                        }
+                        if (!ok) {
+                            delay(80)
+                            ok = tryInitFastPulse(targetEcuAddress)
                         }
                     }
 
                     if (ok) {
-                        // For M2 dumb-mode acceptance, stop after a read-only ECU identity query.
-                        // Do not start a different diagnostic session until this path is proven live.
-                        if (allowRossTechDumbMode) {
-                            lastEcuIdentityPayload = readEcuIdentificationRaw(targetEcuAddress)
-                            Log.i(
-                                "VCDS_PROBE",
-                                "01-Engine K-Line connected; identity=" +
-                                    (lastEcuIdentityPayload?.joinToString(" ") {
-                                        "%02X".format(it.toInt() and 0xFF)
-                                    } ?: "(no 1A 9B reply)")
+                        try {
+                            val sessionReq = buildMessage(
+                                targetEcuAddress,
+                                0xF1.toByte(),
+                                byteArrayOf(0x10.toByte(), 0x89.toByte())
                             )
-                        } else {
-                            // Existing non-B03 path retains its optional session setup.
-                            try {
-                                val sessionReq = buildMessage(
-                                    targetEcuAddress,
-                                    0xF1.toByte(),
-                                    byteArrayOf(0x10.toByte(), 0x89.toByte())
-                                )
-                                transport.write(sessionReq)
-                                val respBuffer = ByteArray(64)
-                                transport.read(respBuffer, 200)
-                            } catch (_: Exception) {}
-                        }
+                            transport.write(sessionReq)
+                            val respBuffer = ByteArray(64)
+                            transport.read(respBuffer, 200)
+                        } catch (_: Exception) {}
 
                         state = DiagState.CONNECTED
+                        noteDiagnosticActivity()
+                        startIdleKeepAlive()
                         return@withContext true
                     }
 
@@ -319,6 +377,64 @@ class Kwp2000DiagnosticEngine(
         return@withContext sb.toString()
     }
 
+    private fun noteDiagnosticActivity() {
+        lastDiagnosticActivityNs = System.nanoTime()
+    }
+
+    /**
+     * Keeps an established KWP session alive only while it is otherwise idle.
+     * Active measuring-group traffic naturally refreshes P3, so no extra packet
+     * is injected during polling.
+     */
+    private fun startIdleKeepAlive() {
+        keepAliveJob?.cancel()
+        noteDiagnosticActivity()
+
+        keepAliveJob = engineScope.launch {
+            while (isActive) {
+                delay(1_000)
+                if (state != DiagState.CONNECTED && state != DiagState.POLLING) continue
+                if (!transport.isConnected() || transport.isBridgeActive()) continue
+
+                val idleMs = (System.nanoTime() - lastDiagnosticActivityNs) / 1_000_000L
+                if (idleMs < 2_000L) continue
+
+                commMutex.withLock {
+                    try {
+                        val request = buildMessage(
+                            targetEcuAddress,
+                            TESTER_ADDRESS.toByte(),
+                            byteArrayOf(0x3E.toByte(), 0x00)
+                        )
+                        transport.write(request)
+                        val payload = readKwpPayload(350)
+
+                        // Positive 0x7E, negative 0x7F, or another valid ECU frame all
+                        // prove the link is alive and reset the session inactivity timer.
+                        if (payload != null) {
+                            noteDiagnosticActivity()
+                            Log.d(
+                                "VCDS_KEEPALIVE",
+                                "RX " + payload.joinToString(" ") {
+                                    "%02X".format(it.toInt() and 0xFF)
+                                }
+                            )
+                        } else {
+                            Log.w("VCDS_KEEPALIVE", "TesterPresent timeout; keeping USB open")
+                        }
+                    } catch (e: Exception) {
+                        Log.w("VCDS_KEEPALIVE", "Keepalive error: ${e.message}")
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stopKeepAlive() {
+        keepAliveJob?.cancel()
+        keepAliveJob = null
+    }
+
     /**
      * Optional read-only identity confirmation after StartCommunication succeeds.
      * A missing 1A 9B reply does not invalidate the already-established KWP session.
@@ -336,6 +452,7 @@ class Kwp2000DiagnosticEngine(
             if (payload.isNotEmpty() &&
                 (payload[0] == 0x5A.toByte() || payload[0] == 0x61.toByte())
             ) {
+                noteDiagnosticActivity()
                 payload
             } else {
                 null
@@ -412,6 +529,7 @@ class Kwp2000DiagnosticEngine(
     }
 
     fun disconnect() {
+        stopKeepAlive()
         if (mode == TransportMode.USB_HARDWARE) {
             transport.disconnect()
         }
@@ -449,6 +567,7 @@ class Kwp2000DiagnosticEngine(
                     lastError = "Unexpected reply while reading Group $groupNumber"
                     return@withContext null
                 }
+                noteDiagnosticActivity()
                 return@withContext MeasuringGroup.decode(payload)
             } catch (e: Exception) {
                 lastError = "Read Group $groupNumber failed: ${e.message}"
@@ -489,6 +608,7 @@ class Kwp2000DiagnosticEngine(
                 if (payload.isEmpty() || payload[0] != 0x58.toByte()) {
                     return@withContext emptyList()
                 }
+                noteDiagnosticActivity()
 
                 val dtcList = ArrayList<FaultCode>()
 
