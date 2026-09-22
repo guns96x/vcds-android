@@ -1,0 +1,904 @@
+{
+  "RTUS64.dll": {
+    "file_name": "RTUS64.dll",
+    "path": "C:\\Ross-Tech\\VCDS\\RTUS64.dll",
+    "size_bytes": 260864,
+    "sha256": "b2a261c16355bc3c1313f5a2f86591ac430ec5ddc7d1ddf24b517a5fb97b48f2",
+    "machine": "x64",
+    "is_64bit": true,
+    "num_sections": 6,
+    "version_info": {
+      "CompanyName": "Ross-Tech LLC",
+      "FileDescription": "RT-USB library",
+      "FileVersion": "3.02.08",
+      "InternalName": "RTUS64.DLL",
+      "LegalCopyright": "Copyright  2001-2014",
+      "OriginalFilename": "RTUS64.DLL",
+      "ProductName": "RossTech USB Drivers",
+      "ProductVersion": "2.10.00.1"
+    },
+    "imported_dlls": [
+      "SETUPAPI.dll",
+      "KERNEL32.dll",
+      "USER32.dll",
+      "ADVAPI32.dll"
+    ],
+    "d2xx_imports": [],
+    "exports": [
+      {
+        "ordinal": 1,
+        "name": "FT_Open"
+      },
+      {
+        "ordinal": 2,
+        "name": "FT_Close"
+      },
+      {
+        "ordinal": 3,
+        "name": "FT_Read"
+      },
+      {
+        "ordinal": 4,
+        "name": "FT_Write"
+      },
+      {
+        "ordinal": 5,
+        "name": "FT_IoCtl"
+      },
+      {
+        "ordinal": 6,
+        "name": "FT_ResetDevice"
+      },
+      {
+        "ordinal": 7,
+        "name": "FT_SetBaudRate"
+      },
+      {
+        "ordinal": 8,
+        "name": "FT_SetDataCharacteristics"
+      },
+      {
+        "ordinal": 9,
+        "name": "FT_SetFlowControl"
+      },
+      {
+        "ordinal": 10,
+        "name": "FT_SetDtr"
+      },
+      {
+        "ordinal": 11,
+        "name": "FT_ClrDtr"
+      },
+      {
+        "ordinal": 12,
+        "name": "FT_SetRts"
+      },
+      {
+        "ordinal": 13,
+        "name": "FT_ClrRts"
+      },
+      {
+        "ordinal": 14,
+        "name": "FT_GetModemStatus"
+      },
+      {
+        "ordinal": 15,
+        "name": "FT_SetChars"
+      },
+      {
+        "ordinal": 16,
+        "name": "FT_Purge"
+      },
+      {
+        "ordinal": 17,
+        "name": "FT_SetTimeouts"
+      },
+      {
+        "ordinal": 18,
+        "name": "FT_GetQueueStatus"
+      },
+      {
+        "ordinal": 19,
+        "name": "FT_SetEventNotification"
+      },
+      {
+        "ordinal": 20,
+        "name": "FT_GetEventStatus"
+      },
+      {
+        "ordinal": 21,
+        "name": "FT_GetStatus"
+      },
+      {
+        "ordinal": 22,
+        "name": "FT_SetBreakOn"
+      },
+      {
+        "ordinal": 23,
+        "name": "FT_SetBreakOff"
+      },
+      {
+        "ordinal": 24,
+        "name": "FT_SetWaitMask"
+      },
+      {
+        "ordinal": 25,
+        "name": "FT_WaitOnMask"
+      },
+      {
+        "ordinal": 26,
+        "name": "FT_SetDivisor"
+      },
+      {
+        "ordinal": 27,
+        "name": "FT_OpenEx"
+      },
+      {
+        "ordinal": 28,
+        "name": "FT_ListDevices"
+      },
+      {
+        "ordinal": 29,
+        "name": "FT_SetLatencyTimer"
+      },
+      {
+        "ordinal": 30,
+        "name": "FT_GetLatencyTimer"
+      },
+      {
+        "ordinal": 31,
+        "name": "FT_SetBitMode"
+      },
+      {
+        "ordinal": 32,
+        "name": "FT_GetBitMode"
+      },
+      {
+        "ordinal": 33,
+        "name": "FT_SetUSBParameters"
+      },
+      {
+        "ordinal": 34,
+        "name": "FT_EraseEE"
+      },
+      {
+        "ordinal": 35,
+        "name": "FT_ReadEE"
+      },
+      {
+        "ordinal": 36,
+        "name": "FT_WriteEE"
+      },
+      {
+        "ordinal": 37,
+        "name": "FT_EE_Program"
+      },
+      {
+        "ordinal": 38,
+        "name": "FT_EE_Read"
+      },
+      {
+        "ordinal": 39,
+        "name": "FT_EE_UARead"
+      },
+      {
+        "ordinal": 40,
+        "name": "FT_EE_UASize"
+      },
+      {
+        "ordinal": 41,
+        "name": "FT_EE_UAWrite"
+      },
+      {
+        "ordinal": 42,
+        "name": "FT_W32_CreateFile"
+      },
+      {
+        "ordinal": 43,
+        "name": "FT_W32_CloseHandle"
+      },
+      {
+        "ordinal": 44,
+        "name": "FT_W32_ReadFile"
+      },
+      {
+        "ordinal": 45,
+        "name": "FT_W32_WriteFile"
+      },
+      {
+        "ordinal": 46,
+        "name": "FT_W32_GetOverlappedResult"
+      },
+      {
+        "ordinal": 47,
+        "name": "FT_W32_ClearCommBreak"
+      },
+      {
+        "ordinal": 48,
+        "name": "FT_W32_ClearCommError"
+      },
+      {
+        "ordinal": 49,
+        "name": "FT_W32_EscapeCommFunction"
+      },
+      {
+        "ordinal": 50,
+        "name": "FT_W32_GetCommModemStatus"
+      },
+      {
+        "ordinal": 51,
+        "name": "FT_W32_GetCommState"
+      },
+      {
+        "ordinal": 52,
+        "name": "FT_W32_GetCommTimeouts"
+      },
+      {
+        "ordinal": 53,
+        "name": "FT_W32_GetLastError"
+      },
+      {
+        "ordinal": 54,
+        "name": "FT_W32_PurgeComm"
+      },
+      {
+        "ordinal": 55,
+        "name": "FT_W32_SetCommBreak"
+      },
+      {
+        "ordinal": 56,
+        "name": "FT_W32_SetCommMask"
+      },
+      {
+        "ordinal": 57,
+        "name": "FT_W32_SetCommState"
+      },
+      {
+        "ordinal": 58,
+        "name": "FT_W32_SetCommTimeouts"
+      },
+      {
+        "ordinal": 59,
+        "name": "FT_W32_SetupComm"
+      },
+      {
+        "ordinal": 60,
+        "name": "FT_W32_WaitCommEvent"
+      },
+      {
+        "ordinal": 61,
+        "name": "FT_GetDeviceInfo"
+      },
+      {
+        "ordinal": 62,
+        "name": "FT_W32_CancelIo"
+      },
+      {
+        "ordinal": 63,
+        "name": "FT_StopInTask"
+      },
+      {
+        "ordinal": 64,
+        "name": "FT_RestartInTask"
+      },
+      {
+        "ordinal": 65,
+        "name": "FT_SetResetPipeRetryCount"
+      },
+      {
+        "ordinal": 66,
+        "name": "FT_ResetPort"
+      },
+      {
+        "ordinal": 67,
+        "name": "FT_EE_ProgramEx"
+      },
+      {
+        "ordinal": 68,
+        "name": "FT_EE_ReadEx"
+      },
+      {
+        "ordinal": 69,
+        "name": "FT_CyclePort"
+      },
+      {
+        "ordinal": 70,
+        "name": "FT_CreateDeviceInfoList"
+      },
+      {
+        "ordinal": 71,
+        "name": "FT_GetDeviceInfoList"
+      },
+      {
+        "ordinal": 72,
+        "name": "FT_GetDeviceInfoDetail"
+      },
+      {
+        "ordinal": 73,
+        "name": "FT_SetDeadmanTimeout"
+      },
+      {
+        "ordinal": 75,
+        "name": "FT_GetDriverVersion"
+      },
+      {
+        "ordinal": 76,
+        "name": "FT_GetLibraryVersion"
+      },
+      {
+        "ordinal": 77,
+        "name": "FT_W32_GetCommMask"
+      },
+      {
+        "ordinal": 78,
+        "name": "FT_Rescan"
+      },
+      {
+        "ordinal": 79,
+        "name": "FT_Reload"
+      },
+      {
+        "ordinal": 80,
+        "name": "FT_GetComPortNumber"
+      },
+      {
+        "ordinal": 81,
+        "name": "FT_EE_ReadConfig"
+      },
+      {
+        "ordinal": 82,
+        "name": "FT_EE_WriteConfig"
+      },
+      {
+        "ordinal": 83,
+        "name": "FT_EE_ReadECC"
+      },
+      {
+        "ordinal": 84,
+        "name": "FT_GetQueueStatusEx"
+      },
+      {
+        "ordinal": 85,
+        "name": "FT_EEPROM_Read"
+      },
+      {
+        "ordinal": 86,
+        "name": "FT_EEPROM_Program"
+      },
+      {
+        "ordinal": 87,
+        "name": "FT_ComPortIdle"
+      },
+      {
+        "ordinal": 88,
+        "name": "FT_ComPortCancelIdle"
+      }
+    ],
+    "export_count": 87
+  },
+  "RT-USB.dll": {
+    "file_name": "RT-USB.dll",
+    "path": "C:\\Ross-Tech\\VCDS\\RT-USB.dll",
+    "size_bytes": 222464,
+    "sha256": "5a42313f5b7e4380e1a7b0fb8d1abc97f9321ce383c2cade85199892c550a9eb",
+    "machine": "x86",
+    "is_64bit": false,
+    "num_sections": 5,
+    "version_info": {
+      "CompanyName": "Ross-Tech LLC",
+      "FileDescription": "RT-USB library",
+      "FileVersion": "3.02.08",
+      "InternalName": "RT-USB.DLL",
+      "LegalCopyright": "Copyright  2001-2014",
+      "OriginalFilename": "RT-USB.DLL",
+      "ProductName": "RossTech USB Drivers",
+      "ProductVersion": "2.10.00.1"
+    },
+    "imported_dlls": [
+      "SETUPAPI.dll",
+      "KERNEL32.dll",
+      "USER32.dll",
+      "ADVAPI32.dll"
+    ],
+    "d2xx_imports": [],
+    "exports": [
+      {
+        "ordinal": 1,
+        "name": "FT_Open"
+      },
+      {
+        "ordinal": 2,
+        "name": "FT_Close"
+      },
+      {
+        "ordinal": 3,
+        "name": "FT_Read"
+      },
+      {
+        "ordinal": 4,
+        "name": "FT_Write"
+      },
+      {
+        "ordinal": 5,
+        "name": "FT_IoCtl"
+      },
+      {
+        "ordinal": 6,
+        "name": "FT_ResetDevice"
+      },
+      {
+        "ordinal": 7,
+        "name": "FT_SetBaudRate"
+      },
+      {
+        "ordinal": 8,
+        "name": "FT_SetDataCharacteristics"
+      },
+      {
+        "ordinal": 9,
+        "name": "FT_SetFlowControl"
+      },
+      {
+        "ordinal": 10,
+        "name": "FT_SetDtr"
+      },
+      {
+        "ordinal": 11,
+        "name": "FT_ClrDtr"
+      },
+      {
+        "ordinal": 12,
+        "name": "FT_SetRts"
+      },
+      {
+        "ordinal": 13,
+        "name": "FT_ClrRts"
+      },
+      {
+        "ordinal": 14,
+        "name": "FT_GetModemStatus"
+      },
+      {
+        "ordinal": 15,
+        "name": "FT_SetChars"
+      },
+      {
+        "ordinal": 16,
+        "name": "FT_Purge"
+      },
+      {
+        "ordinal": 17,
+        "name": "FT_SetTimeouts"
+      },
+      {
+        "ordinal": 18,
+        "name": "FT_GetQueueStatus"
+      },
+      {
+        "ordinal": 19,
+        "name": "FT_SetEventNotification"
+      },
+      {
+        "ordinal": 20,
+        "name": "FT_GetEventStatus"
+      },
+      {
+        "ordinal": 21,
+        "name": "FT_GetStatus"
+      },
+      {
+        "ordinal": 22,
+        "name": "FT_SetBreakOn"
+      },
+      {
+        "ordinal": 23,
+        "name": "FT_SetBreakOff"
+      },
+      {
+        "ordinal": 24,
+        "name": "FT_SetWaitMask"
+      },
+      {
+        "ordinal": 25,
+        "name": "FT_WaitOnMask"
+      },
+      {
+        "ordinal": 26,
+        "name": "FT_SetDivisor"
+      },
+      {
+        "ordinal": 27,
+        "name": "FT_OpenEx"
+      },
+      {
+        "ordinal": 28,
+        "name": "FT_ListDevices"
+      },
+      {
+        "ordinal": 29,
+        "name": "FT_SetLatencyTimer"
+      },
+      {
+        "ordinal": 30,
+        "name": "FT_GetLatencyTimer"
+      },
+      {
+        "ordinal": 31,
+        "name": "FT_SetBitMode"
+      },
+      {
+        "ordinal": 32,
+        "name": "FT_GetBitMode"
+      },
+      {
+        "ordinal": 33,
+        "name": "FT_SetUSBParameters"
+      },
+      {
+        "ordinal": 34,
+        "name": "FT_EraseEE"
+      },
+      {
+        "ordinal": 35,
+        "name": "FT_ReadEE"
+      },
+      {
+        "ordinal": 36,
+        "name": "FT_WriteEE"
+      },
+      {
+        "ordinal": 37,
+        "name": "FT_EE_Program"
+      },
+      {
+        "ordinal": 38,
+        "name": "FT_EE_Read"
+      },
+      {
+        "ordinal": 39,
+        "name": "FT_EE_UARead"
+      },
+      {
+        "ordinal": 40,
+        "name": "FT_EE_UASize"
+      },
+      {
+        "ordinal": 41,
+        "name": "FT_EE_UAWrite"
+      },
+      {
+        "ordinal": 42,
+        "name": "FT_W32_CreateFile"
+      },
+      {
+        "ordinal": 43,
+        "name": "FT_W32_CloseHandle"
+      },
+      {
+        "ordinal": 44,
+        "name": "FT_W32_ReadFile"
+      },
+      {
+        "ordinal": 45,
+        "name": "FT_W32_WriteFile"
+      },
+      {
+        "ordinal": 46,
+        "name": "FT_W32_GetOverlappedResult"
+      },
+      {
+        "ordinal": 47,
+        "name": "FT_W32_ClearCommBreak"
+      },
+      {
+        "ordinal": 48,
+        "name": "FT_W32_ClearCommError"
+      },
+      {
+        "ordinal": 49,
+        "name": "FT_W32_EscapeCommFunction"
+      },
+      {
+        "ordinal": 50,
+        "name": "FT_W32_GetCommModemStatus"
+      },
+      {
+        "ordinal": 51,
+        "name": "FT_W32_GetCommState"
+      },
+      {
+        "ordinal": 52,
+        "name": "FT_W32_GetCommTimeouts"
+      },
+      {
+        "ordinal": 53,
+        "name": "FT_W32_GetLastError"
+      },
+      {
+        "ordinal": 54,
+        "name": "FT_W32_PurgeComm"
+      },
+      {
+        "ordinal": 55,
+        "name": "FT_W32_SetCommBreak"
+      },
+      {
+        "ordinal": 56,
+        "name": "FT_W32_SetCommMask"
+      },
+      {
+        "ordinal": 57,
+        "name": "FT_W32_SetCommState"
+      },
+      {
+        "ordinal": 58,
+        "name": "FT_W32_SetCommTimeouts"
+      },
+      {
+        "ordinal": 59,
+        "name": "FT_W32_SetupComm"
+      },
+      {
+        "ordinal": 60,
+        "name": "FT_W32_WaitCommEvent"
+      },
+      {
+        "ordinal": 61,
+        "name": "FT_GetDeviceInfo"
+      },
+      {
+        "ordinal": 62,
+        "name": "FT_W32_CancelIo"
+      },
+      {
+        "ordinal": 63,
+        "name": "FT_StopInTask"
+      },
+      {
+        "ordinal": 64,
+        "name": "FT_RestartInTask"
+      },
+      {
+        "ordinal": 65,
+        "name": "FT_SetResetPipeRetryCount"
+      },
+      {
+        "ordinal": 66,
+        "name": "FT_ResetPort"
+      },
+      {
+        "ordinal": 67,
+        "name": "FT_EE_ProgramEx"
+      },
+      {
+        "ordinal": 68,
+        "name": "FT_EE_ReadEx"
+      },
+      {
+        "ordinal": 69,
+        "name": "FT_CyclePort"
+      },
+      {
+        "ordinal": 70,
+        "name": "FT_CreateDeviceInfoList"
+      },
+      {
+        "ordinal": 71,
+        "name": "FT_GetDeviceInfoList"
+      },
+      {
+        "ordinal": 72,
+        "name": "FT_GetDeviceInfoDetail"
+      },
+      {
+        "ordinal": 73,
+        "name": "FT_SetDeadmanTimeout"
+      },
+      {
+        "ordinal": 75,
+        "name": "FT_GetDriverVersion"
+      },
+      {
+        "ordinal": 76,
+        "name": "FT_GetLibraryVersion"
+      },
+      {
+        "ordinal": 77,
+        "name": "FT_W32_GetCommMask"
+      },
+      {
+        "ordinal": 78,
+        "name": "FT_Rescan"
+      },
+      {
+        "ordinal": 79,
+        "name": "FT_Reload"
+      },
+      {
+        "ordinal": 80,
+        "name": "FT_GetComPortNumber"
+      },
+      {
+        "ordinal": 81,
+        "name": "FT_EE_ReadConfig"
+      },
+      {
+        "ordinal": 82,
+        "name": "FT_EE_WriteConfig"
+      },
+      {
+        "ordinal": 83,
+        "name": "FT_EE_ReadECC"
+      },
+      {
+        "ordinal": 84,
+        "name": "FT_GetQueueStatusEx"
+      },
+      {
+        "ordinal": 85,
+        "name": "FT_EEPROM_Read"
+      },
+      {
+        "ordinal": 86,
+        "name": "FT_EEPROM_Program"
+      },
+      {
+        "ordinal": 87,
+        "name": "FT_ComPortIdle"
+      },
+      {
+        "ordinal": 88,
+        "name": "FT_ComPortCancelIdle"
+      }
+    ],
+    "export_count": 87
+  },
+  "VCDS.exeL": {
+    "file_name": "VCDS.exeL",
+    "path": "C:\\Ross-Tech\\VCDS\\VCDS.exeL",
+    "size_bytes": 3783000,
+    "sha256": "cc7f81cc08222a14a6317abf5ebdf059e5a8853ea885524c562e0602b19733e3",
+    "machine": "x64",
+    "is_64bit": true,
+    "num_sections": 8,
+    "version_info": {
+      "Comments": "VAG-COM Diagnostic System",
+      "CompanyName": "Ross-Tech, LLC",
+      "FileDescription": "VCDS",
+      "FileVersion": "26.3.0.0",
+      "InternalName": "VCDS",
+      "LegalCopyright": "Copyright (C) 2000-2026 Ross-Tech LLC/Uwe Ross",
+      "OriginalFilename": "VCDS.EXE",
+      "ProductName": "VCDS",
+      "ProductVersion": "26.3.0.0"
+    },
+    "imported_dlls": [
+      "kernel32.dll",
+      "user32.dll",
+      "advapi32.dll",
+      "oleaut32.dll",
+      "gdi32.dll",
+      "shell32.dll",
+      "version.dll",
+      "ole32.dll",
+      "RTUS64.DLL",
+      "WINMM.dll",
+      "HID.DLL",
+      "SETUPAPI.dll",
+      "COMDLG32.dll",
+      "WINSPOOL.DRV",
+      "COMCTL32.dll",
+      "SHLWAPI.dll",
+      "WINTRUST.dll",
+      "IPHLPAPI.DLL",
+      "WS2_32.dll",
+      "WININET.dll"
+    ],
+    "d2xx_imports": [
+      {
+        "dll": "RTUS64.DLL",
+        "functions": [
+          {
+            "name": null,
+            "ordinal": 6
+          }
+        ]
+      }
+    ],
+    "exports": [],
+    "export_count": 0
+  },
+  "VCDSLoader.exe": {
+    "file_name": "VCDSLoader.exe",
+    "path": "C:\\Ross-Tech\\VCDS\\VCDSLoader.exe",
+    "size_bytes": 2681344,
+    "sha256": "8f661f16c87169fefc4dc7e612521ad8498c016a0153c51dae67af0b984adaac",
+    "machine": "x86",
+    "is_64bit": false,
+    "num_sections": 3,
+    "version_info": {},
+    "imported_dlls": [
+      "advapi32.dll",
+      "comctl32.dll",
+      "gdi32.dll",
+      "KERNEL32.DLL",
+      "netapi32.dll",
+      "ole32.dll",
+      "oleaut32.dll",
+      "shell32.dll",
+      "user32.dll",
+      "version.dll",
+      "winspool.drv"
+    ],
+    "d2xx_imports": [],
+    "exports": [],
+    "export_count": 0
+  },
+  "VCDSScan.exe": {
+    "file_name": "VCDSScan.exe",
+    "path": "C:\\Ross-Tech\\VCDS\\VCDSScan.exe",
+    "size_bytes": 5512280,
+    "sha256": "6e28bce88bd024fd203ee34471c315ac0840b448f0bc8183f99e175e471823f8",
+    "machine": "x86",
+    "is_64bit": false,
+    "num_sections": 10,
+    "version_info": {
+      "CompanyName": "NEtech ApS",
+      "FileDescription": "VCDSScan",
+      "FileVersion": "25.7.0.0",
+      "LegalCopyright": "NEtech ApS",
+      "LegalTrademarks": "VCDS",
+      "ProductName": "VCDSToolbox",
+      "ProductVersion": "25.7.0",
+      "Comments": "For VCDS",
+      "ProgramID": "com.embarcadero.VCDSScan"
+    },
+    "imported_dlls": [
+      "oleaut32.dll",
+      "advapi32.dll",
+      "user32.dll",
+      "kernel32.dll",
+      "gdi32.dll",
+      "version.dll",
+      "netapi32.dll",
+      "ole32.dll",
+      "comctl32.dll",
+      "msvcrt.dll",
+      "shell32.dll",
+      "wininet.dll",
+      "comdlg32.dll",
+      "winspool.drv",
+      "winmm.dll"
+    ],
+    "d2xx_imports": [
+      {
+        "dll": "msvcrt.dll",
+        "functions": [
+          {
+            "name": "memset",
+            "ordinal": null
+          },
+          {
+            "name": "memcpy",
+            "ordinal": null
+          }
+        ]
+      }
+    ],
+    "exports": [
+      {
+        "ordinal": 1,
+        "name": "dbkFCallWrapperAddr"
+      },
+      {
+        "ordinal": 2,
+        "name": "__dbk_fcall_wrapper"
+      },
+      {
+        "ordinal": 3,
+        "name": "TMethodImplementationIntercept"
+      }
+    ],
+    "export_count": 3
+  }
+}

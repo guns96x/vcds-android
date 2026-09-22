@@ -10,3 +10,15 @@ app/build/
 /sample_log.csv
 __pycache__/
 *.pyc
+
+# Research traces, captures, and logs
+*.pcap
+*.pcapng
+*.log
+vcds_d2xx_trace.*
+B03_*.zip
+capture_output/
+
+# Rust build artifacts
+tools/vcds/d2xx_trace/target/
+target/

@@ -7,15 +7,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Experimental adapter transport for Ross-Tech HEX-USB+CAN / B03-V2 FTDI clones (VID 0403, PID FA24).
+ * Adapter transport for Ross-Tech HEX-USB+CAN / B03-V2 FTDI clones (VID 0403, PID FA24).
  *
- * STRICT ZERO-TX EVIDENCE POLICY:
- * 1. PC <-> MCU framing format and command opcodes are UNKNOWN until verified via real USBPcap captures.
- * 2. MCU operating baud rate is UNKNOWN until derived from FTDI_SIO_SET_BAUDRATE control transfers in capture.
- * 3. Normal [transact] is strictly ZERO-TX: it immediately returns [AdapterResponse.Unsupported]
- *    without writing any bytes to the physical hardware.
- * 4. Raw developer transmission is isolated under [transactRawDebug] behind an explicit safety flag,
- *    and cannot be invoked by standard diagnostic flows.
+ * SAFETY & ZERO-TX POLICY:
+ * 1. Diagnostic ECU communication (01-Engine, DTC, measuring blocks) remains strictly **ZERO-TX**
+ *    via [transact], which unconditionally returns [AdapterResponse.Unsupported].
+ * 2. Only typed, read-only adapter commands ([VerifiedB03Command]) can be executed via [executeVerifiedCommand].
+ * 3. Link parameters are configured to proven values (115200 baud, 8N1, DTR/RTS low).
+ * 4. Raw developer transmission is isolated under [transactRawDebug] behind an explicit debug flag.
  */
 class HexB03Adapter(
     override val driver: HardwareDriver,
@@ -26,6 +25,11 @@ class HexB03Adapter(
     companion object {
         const val ROSS_TECH_VID = 0x0403
         const val ROSS_TECH_PID_FA24 = 0xFA24
+
+        /**
+         * Proven MCU transport baud rate derived from VCDS D2XX reverse engineering.
+         */
+        const val PROVEN_BAUD_RATE = 115200
 
         // Service IDs classified as destructive/modifying under KWP2000/UDS.
         // Secondary defense layer for raw debug transmissions.
@@ -43,11 +47,12 @@ class HexB03Adapter(
 
     private var traceListener: ((direction: String, data: ByteArray) -> Unit)? = null
     private var detectedFirmwareVersion: String? = null
+    private val streamDecoder = HexB03StreamDecoder(expectedMarker = HexB03Constants.MARKER_CABLE)
 
     override val identity: AdapterIdentity
         get() = AdapterIdentity(
             modelName = "Ross-Tech HEX-USB+CAN (B03-V2 Clone)",
-            hardwareFamily = "FTDI FT232R + ATmega162 Candidate",
+            hardwareFamily = "FTDI + ATmega162",
             serialNumber = serialNumber,
             firmwareVersion = detectedFirmwareVersion,
             isClone = true,
@@ -58,29 +63,29 @@ class HexB03Adapter(
         )
 
     override suspend fun open(): Result<Unit> = withContext(Dispatchers.IO) {
-        if (configuredBaudRate == null) {
-            // Baud rate is UNKNOWN from physical capture evidence.
-            // Transport cannot be operated blindly without evidence-derived baud.
-            return@withContext Result.failure(
-                IllegalStateException(
-                    "B03-V2 MCU UART baud rate is UNKNOWN. " +
-                    "Must be extracted from USBPcap capture (FTDI_SIO_SET_BAUDRATE) before link activation."
-                )
+        val baud = configuredBaudRate ?: return@withContext Result.failure(
+            IllegalStateException(
+                "B03-V2 MCU UART baud rate is UNKNOWN. " +
+                "Must be extracted from USBPcap capture or D2XX trace before link activation."
             )
-        }
+        )
 
+        // FTDI configuration matching verified VCDS D2XX parameters:
+        // 8N1, 115200 baud, DTR/RTS driven LOW to ungate ATmega162 MCU.
         val params = ConnectionParameters(
-            baudRate = configuredBaudRate,
+            baudRate = baud,
             dataBits = 8,
             stopBits = 1,
             parity = 0,
             dtr = false,
             rts = false
         )
+        streamDecoder.reset()
         driver.open(params)
     }
 
     override suspend fun close() = withContext(Dispatchers.IO) {
+        streamDecoder.reset()
         driver.close()
     }
 
@@ -90,13 +95,62 @@ class HexB03Adapter(
 
     /**
      * Standard diagnostic transaction method.
-     * MANDATORY SAFETY CONTRACT: Strictly ZERO-TX until live capture evidence proves
-     * host <-> MCU framing and command opcodes.
+     * MANDATORY SAFETY CONTRACT: Strictly ZERO-TX for vehicle diagnostic requests.
      * Always returns [AdapterResponse.Unsupported] without writing any bytes to the physical driver.
      */
     override suspend fun transact(request: ByteArray, timeoutMs: Long): AdapterResponse = withContext(Dispatchers.IO) {
-        // Zero-TX guarantee: Never write unverified bytes to uncharacterized hardware
+        // Zero-TX guarantee: Never write unverified diagnostic requests to physical hardware
         AdapterResponse.Unsupported
+    }
+
+    /**
+     * Executes a typed, proven read-only adapter command (e.g. ProbePing, Identify).
+     * Enforces typed safety so callers cannot construct arbitrary byte streams.
+     */
+    suspend fun executeVerifiedCommand(
+        command: VerifiedB03Command,
+        timeoutMs: Long = 1000
+    ): AdapterResponse = withContext(Dispatchers.IO) {
+        if (!driver.isConnected) {
+            return@withContext AdapterResponse.Error("FTDI driver is not open")
+        }
+
+        val frameBytes = command.encodeFrame()
+        traceListener?.invoke("TX", frameBytes)
+        val startTime = System.currentTimeMillis()
+
+        driver.purge()
+        val written = driver.write(frameBytes)
+        if (written < 0) {
+            return@withContext AdapterResponse.Error("Failed to write command frame to FTDI")
+        }
+
+        val readBuffer = ByteArray(512)
+        val deadline = System.currentTimeMillis() + timeoutMs
+
+        while (System.currentTimeMillis() < deadline) {
+            val remaining = (deadline - System.currentTimeMillis()).coerceAtLeast(10L)
+            val readCount = driver.read(readBuffer, remaining)
+            if (readCount > 0) {
+                val rxData = readBuffer.copyOf(readCount)
+                traceListener?.invoke("RX", rxData)
+
+                val frames = streamDecoder.feed(rxData)
+                val matchingFrame = frames.firstOrNull { it.opcode == command.opcode }
+                if (matchingFrame != null) {
+                    val elapsed = System.currentTimeMillis() - startTime
+                    if (command == VerifiedB03Command.Identify && matchingFrame.payload.isNotEmpty()) {
+                        val banner = String(matchingFrame.payload, Charsets.US_ASCII)
+                        detectedFirmwareVersion = banner.trim()
+                    }
+                    return@withContext AdapterResponse.Success(matchingFrame.payload, elapsed)
+                }
+            } else {
+                kotlinx.coroutines.delay(5)
+            }
+        }
+
+        AdapterResponse.Timeout
     }
 
     /**
@@ -163,8 +217,6 @@ class HexB03Adapter(
 
     /**
      * Inspects a diagnostic payload to ensure it does not attempt writing or flashing.
-     * Note: Once adapter framing is proven from USB capture, safety validation will be applied
-     * to decoded typed frame structures rather than raw byte scans.
      */
     fun assertReadOnlyGuardrails(payload: ByteArray): String? {
         if (payload.isEmpty()) return null

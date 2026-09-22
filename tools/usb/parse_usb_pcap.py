@@ -222,10 +222,15 @@ def parse_pcap(pcap_path: str, is_ftdi: bool = True) -> Dict[str, Any]:
 
                 elif transfer == 3:  # BULK
                     if direction == "IN" and is_complete:
-                        # For FTDI Bulk IN, first 2 bytes are modem & line status
+                        # For FTDI Bulk IN, every 64-byte USB packet starts with 2 modem/line status bytes
                         if is_ftdi and len(raw_payload) >= 2:
                             status_bytes = raw_payload[:2]
-                            uart_payload = raw_payload[2:]
+                            uart_payload = bytearray()
+                            for block_idx in range(0, len(raw_payload), 64):
+                                block = raw_payload[block_idx:block_idx + 64]
+                                if len(block) >= 2:
+                                    uart_payload.extend(block[2:])
+                            uart_payload = bytes(uart_payload)
                             is_heartbeat = len(uart_payload) == 0
                             record["ftdi_status_hex"] = status_bytes.hex()
                             record["is_heartbeat"] = is_heartbeat

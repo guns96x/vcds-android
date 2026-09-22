@@ -56,7 +56,15 @@ class HexB03AdapterTest {
             return data.size
         }
 
+        var mockReadQueue = mutableListOf<ByteArray>()
+
         override suspend fun read(buffer: ByteArray, timeoutMs: Long): Int {
+            if (mockReadQueue.isNotEmpty()) {
+                val next = mockReadQueue.removeAt(0)
+                val len = minOf(buffer.size, next.size)
+                System.arraycopy(next, 0, buffer, 0, len)
+                return len
+            }
             if (mockReadData.isEmpty()) return 0
             val len = minOf(buffer.size, mockReadData.size)
             System.arraycopy(mockReadData, 0, buffer, 0, len)
@@ -173,5 +181,47 @@ class HexB03AdapterTest {
         assertArrayEquals(request, traces[0].second)
         assertEquals("RX", traces[1].first)
         assertArrayEquals(driver.mockReadData, traces[1].second)
+    }
+
+    @Test
+    fun `executeVerifiedCommand handles fragmented response across multiple driver reads`() = runBlocking {
+        val driver = TestHardwareDriver().apply {
+            // Fragmented response for ProbePing: [4D 07 02] then [01 60 44 6D]
+            mockReadQueue.add(byteArrayOf(0x4D, 0x07, 0x02))
+            mockReadQueue.add(byteArrayOf(0x01, 0x60, 0x44, 0x6D))
+        }
+        val adapter = HexB03Adapter(driver)
+
+        val response = adapter.executeVerifiedCommand(VerifiedB03Command.ProbePing, timeoutMs = 500)
+        assertTrue("Expected Success on fragmented read", response is AdapterResponse.Success)
+        val success = response as AdapterResponse.Success
+        assertArrayEquals(byteArrayOf(0x01, 0x60, 0x44), success.data)
+    }
+
+    @Test
+    fun `executeVerifiedCommand ignores unrelated frame and waits for matching opcode`() = runBlocking {
+        val driver = TestHardwareDriver().apply {
+            // First send unrelated ACK frame [4D 04 FE B7], then matching ping response
+            mockReadQueue.add(byteArrayOf(0x4D, 0x04, 0xFE.toByte(), 0xB7.toByte()))
+            mockReadQueue.add(byteArrayOf(0x4D, 0x07, 0x02, 0x01, 0x60, 0x44, 0x6D))
+        }
+        val adapter = HexB03Adapter(driver)
+
+        val response = adapter.executeVerifiedCommand(VerifiedB03Command.ProbePing, timeoutMs = 500)
+        assertTrue("Expected Success matching ping opcode", response is AdapterResponse.Success)
+        val success = response as AdapterResponse.Success
+        assertArrayEquals(byteArrayOf(0x01, 0x60, 0x44), success.data)
+    }
+
+    @Test
+    fun `executeVerifiedCommand times out when matching opcode never arrives`() = runBlocking {
+        val driver = TestHardwareDriver().apply {
+            // Only unrelated frame arrives
+            mockReadQueue.add(byteArrayOf(0x4D, 0x04, 0xFE.toByte(), 0xB7.toByte()))
+        }
+        val adapter = HexB03Adapter(driver)
+
+        val response = adapter.executeVerifiedCommand(VerifiedB03Command.ProbePing, timeoutMs = 50)
+        assertTrue("Expected Timeout when matching opcode does not arrive", response is AdapterResponse.Timeout)
     }
 }
