@@ -462,6 +462,12 @@ class MainActivity : AppCompatActivity() {
                         val probeHex = probe.probePayload.joinToString(" ") {
                             "%02X".format(it.toInt() and 0xFF)
                         }
+                        val statusHex = probe.statusPayload.joinToString(" ") {
+                            "%02X".format(it.toInt() and 0xFF)
+                        }
+                        val modeHex = probe.modePayload.joinToString(" ") {
+                            "%02X".format(it.toInt() and 0xFF)
+                        }
                         activeB03Adapter = adapter
                         activeB03Identity = probe.identityText
                         currentDevice = dev
@@ -469,7 +475,8 @@ class MainActivity : AppCompatActivity() {
                         DiagLog.i(
                             "B03_M1",
                             "INTERFACE RESPONDED identity=${probe.identityText}, " +
-                                "probePayload=[$probeHex], elapsedMs=${probe.elapsedMs}"
+                                "probePayload=[$probeHex], status=[$statusHex], mode=[$modeHex], " +
+                                "elapsedMs=${probe.elapsedMs}"
                         )
                         updateStatusUI()
                         AlertDialog.Builder(this@MainActivity)
