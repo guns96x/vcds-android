@@ -59,7 +59,9 @@ jobs:
       working-directory: tools/vcds/d2xx_trace
 
     - name: Run Trace Analyzer Unit Tests
-      run: python tools/vcds/d2xx_trace/test_analyze_trace.py
+      run: |
+        python tools/vcds/d2xx_trace/test_analyze_trace.py
+        python tools/vcds/d2xx_trace/test_extract_engine01_fixture.py
 
     - name: Run USB PCAP Parser Unit Tests
       run: python tools/usb/test_pcap_tools.py
