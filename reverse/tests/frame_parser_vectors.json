@@ -1,0 +1,103 @@
+[
+  {
+    "test_name": "VALID_VERSION_RESPONSE",
+    "wire_hex": "4D07020160446D",
+    "wire_bytes_count": 7,
+    "parser_result": {
+      "status": "SUCCESS",
+      "code": 0,
+      "total_length": 7,
+      "payload_length": 4,
+      "payload_hex": "02016044",
+      "opcode_hex": "0x02",
+      "checksum_byte": "0x6D"
+    },
+    "source_function": "FUN_14007e824",
+    "source_address": "0x14007E824"
+  },
+  {
+    "test_name": "VALID_CONFIRM_ACK",
+    "wire_hex": "4D04FEB7",
+    "wire_bytes_count": 4,
+    "parser_result": {
+      "status": "SUCCESS",
+      "code": 0,
+      "total_length": 4,
+      "payload_length": 1,
+      "payload_hex": "FE",
+      "opcode_hex": "0xFE",
+      "checksum_byte": "0xB7"
+    },
+    "source_function": "FUN_14007e824",
+    "source_address": "0x14007E824"
+  },
+  {
+    "test_name": "VALID_READY_RESP",
+    "wire_hex": "4D04FDB4",
+    "wire_bytes_count": 4,
+    "parser_result": {
+      "status": "SUCCESS",
+      "code": 0,
+      "total_length": 4,
+      "payload_length": 1,
+      "payload_hex": "FD",
+      "opcode_hex": "0xFD",
+      "checksum_byte": "0xB4"
+    },
+    "source_function": "FUN_14007e824",
+    "source_address": "0x14007E824"
+  },
+  {
+    "test_name": "INVALID_SYNC_BYTE",
+    "wire_hex": "5304FEA9",
+    "wire_bytes_count": 4,
+    "parser_result": {
+      "status": "ERROR",
+      "code": -1,
+      "error": "INVALID_SYNC",
+      "actual_sync": "0x53"
+    },
+    "source_function": "FUN_14007e824",
+    "source_address": "0x14007E824"
+  },
+  {
+    "test_name": "INVALID_LENGTH_EXCEEDS_MAX",
+    "wire_hex": "4D3500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "wire_bytes_count": 54,
+    "parser_result": {
+      "status": "ERROR",
+      "code": -3,
+      "error": "LENGTH_EXCEEDS_MAX_0x30",
+      "length_byte": 53
+    },
+    "source_function": "FUN_14007e824",
+    "source_address": "0x14007E824"
+  },
+  {
+    "test_name": "INVALID_CHECKSUM",
+    "wire_hex": "4D070201604472",
+    "wire_bytes_count": 7,
+    "parser_result": {
+      "status": "ERROR",
+      "code": -5,
+      "error": "CHECKSUM_MISMATCH",
+      "xor_sum": "0x1F"
+    },
+    "source_function": "FUN_14007e824",
+    "source_address": "0x14007E824"
+  },
+  {
+    "test_name": "TRUNCATED_FRAME",
+    "wire_hex": "4D07020160",
+    "wire_bytes_count": 5,
+    "parser_result": {
+      "status": "ERROR",
+      "code": -4,
+      "error": "TRUNCATED_FRAME",
+      "expected_len": 7,
+      "actual_len": 5
+    },
+    "source_function": "FUN_14007e824",
+    "source_address": "0x14007E824"
+  }
+]

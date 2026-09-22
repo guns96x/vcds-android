@@ -1,0 +1,86 @@
+[
+  {
+    "test_name": "GET_VERSION (Opcode 0x02)",
+    "payload_hex": "02",
+    "payload_len": 1,
+    "wire_hex": "53040255",
+    "wire_physical_bytes": 4,
+    "length_byte_value": 4,
+    "checksum_byte": "0x55",
+    "source_function": "FUN_14007e988",
+    "source_address": "0x14007E988",
+    "status": "PROVEN_STATIC"
+  },
+  {
+    "test_name": "SET_COM_BAUD_115200 (Opcode 0x03)",
+    "payload_hex": "0300C20100",
+    "payload_len": 5,
+    "wire_hex": "53080300C201009B",
+    "wire_physical_bytes": 8,
+    "length_byte_value": 8,
+    "checksum_byte": "0x9B",
+    "source_function": "FUN_14007ec2c",
+    "source_address": "0x14007EC2C",
+    "status": "PROVEN_STATIC"
+  },
+  {
+    "test_name": "5BAUD_INIT_ECU01 (Opcode 0x84)",
+    "payload_hex": "84030100",
+    "payload_len": 4,
+    "wire_hex": "530784030100D2",
+    "wire_physical_bytes": 7,
+    "length_byte_value": 7,
+    "checksum_byte": "0xD2",
+    "source_function": "FUN_14007e3b4",
+    "source_address": "0x14007E3B4",
+    "status": "PROVEN_STATIC"
+  },
+  {
+    "test_name": "5BAUD_INIT_ECU03_ABS (Opcode 0x84)",
+    "payload_hex": "84038300",
+    "payload_len": 4,
+    "wire_hex": "53078403830050",
+    "wire_physical_bytes": 7,
+    "length_byte_value": 7,
+    "checksum_byte": "0x50",
+    "source_function": "FUN_14007e3b4",
+    "source_address": "0x14007E3B4",
+    "status": "PROVEN_STATIC"
+  },
+  {
+    "test_name": "KLINE_TEST (Opcode 0x82)",
+    "payload_hex": "82",
+    "payload_len": 1,
+    "wire_hex": "530482D5",
+    "wire_physical_bytes": 4,
+    "length_byte_value": 4,
+    "checksum_byte": "0xD5",
+    "source_function": "FUN_14007ed84",
+    "source_address": "0x14007ED84",
+    "status": "PROVEN_STATIC"
+  },
+  {
+    "test_name": "RESET (Opcode 0x08)",
+    "payload_hex": "08",
+    "payload_len": 1,
+    "wire_hex": "5304085F",
+    "wire_physical_bytes": 4,
+    "length_byte_value": 4,
+    "checksum_byte": "0x5F",
+    "source_function": "FUN_14007f758",
+    "source_address": "0x14007F758",
+    "status": "PROVEN_STATIC"
+  },
+  {
+    "test_name": "CONFIRM_ACK (Opcode 0xFE)",
+    "payload_hex": "FE",
+    "payload_len": 1,
+    "wire_hex": "5304FEA9",
+    "wire_physical_bytes": 4,
+    "length_byte_value": 4,
+    "checksum_byte": "0xA9",
+    "source_function": "FUN_14007ec2c",
+    "source_address": "0x14007EC2C",
+    "status": "PROVEN_STATIC"
+  }
+]
