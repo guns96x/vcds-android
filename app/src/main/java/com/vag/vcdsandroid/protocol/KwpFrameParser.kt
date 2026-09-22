@@ -46,13 +46,28 @@ object KwpFrameParser {
      *
      * @return the payload bytes, or null when the buffer holds no ECU frame.
      */
-    fun extractPayload(buffer: ByteArray, count: Int): ByteArray? {
+    fun extractPayload(buffer: ByteArray, count: Int): ByteArray? =
+        extractPayload(buffer, count, expectedSource = null)
+
+    /**
+     * Extracts a payload from one specific ECU address.
+     *
+     * For a real controller session this is stricter than merely rejecting tester
+     * echo: a checksum-valid frame from another controller must not prove that the
+     * requested ECU answered.
+     */
+    fun extractPayload(buffer: ByteArray, count: Int, expectedSource: Int?): ByteArray? {
         if (count < HEADER_LEN + 1) return null
-        return scan(buffer, count, requireAddressedToTester = true)
-            ?: scan(buffer, count, requireAddressedToTester = false)
+        return scan(buffer, count, requireAddressedToTester = true, expectedSource = expectedSource)
+            ?: scan(buffer, count, requireAddressedToTester = false, expectedSource = expectedSource)
     }
 
-    private fun scan(buffer: ByteArray, count: Int, requireAddressedToTester: Boolean): ByteArray? {
+    private fun scan(
+        buffer: ByteArray,
+        count: Int,
+        requireAddressedToTester: Boolean,
+        expectedSource: Int?
+    ): ByteArray? {
         for (i in 0..count - (HEADER_LEN + 1)) {
             val fmt = buffer[i].toInt() and 0xFF
             if ((fmt and 0xC0) != 0x80) continue
@@ -60,6 +75,7 @@ object KwpFrameParser {
             val source = buffer[i + 2].toInt() and 0xFF
             // Our own transmission echoed back. Never a reply, in either pass.
             if (source == TESTER_ADDRESS) continue
+            if (expectedSource != null && source != (expectedSource and 0xFF)) continue
 
             if (requireAddressedToTester) {
                 val target = buffer[i + 1].toInt() and 0xFF
