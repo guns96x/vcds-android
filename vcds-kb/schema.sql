@@ -1,22 +1,54 @@
--- VCDS Reverse Engineering Knowledge Base — Schema v2.0
--- Epistemic Evidence System for VCDS 26.3 Transport & Protocol Architecture
+-- VCDS Reverse Engineering Knowledge Base — Schema v2.1 (KB-1R Complete Edition)
+-- Epistemic Evidence System for VCDS 26.3 Architecture & Installation Ecosystem
 
 PRAGMA journal_mode = WAL;
 PRAGMA foreign_keys = ON;
 
--- ── 1. BINARIES ─────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS reverse_binaries (
+-- ── 1. INSTALLATION INVENTORY (ENTIRE C:\Ross-Tech\VCDS\) ────────────────────
+CREATE TABLE IF NOT EXISTS installation_inventory (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    path                TEXT NOT NULL,
-    sha256              TEXT NOT NULL UNIQUE,
+    relative_path       TEXT NOT NULL UNIQUE,
+    filename            TEXT NOT NULL,
+    extension           TEXT,
+    size                INTEGER NOT NULL,
+    sha256              TEXT NOT NULL,
+    mime_type           TEXT,
+    is_pe               BOOLEAN NOT NULL,
+    architecture        TEXT,
     version             TEXT,
-    architecture        TEXT DEFAULT 'x64',
-    image_base          TEXT,
-    ghidra_project      TEXT,
-    analysis_timestamp  TEXT DEFAULT (datetime('now'))
+    role                TEXT NOT NULL,
+    analysis_status     TEXT NOT NULL,
+    referenced_by       TEXT,
+    opened_by_runtime   BOOLEAN DEFAULT 0,
+    notes               TEXT,
+    created_at          TEXT DEFAULT (datetime('now'))
 );
+CREATE INDEX IF NOT EXISTS idx_inv_sha ON installation_inventory(sha256);
+CREATE INDEX IF NOT EXISTS idx_inv_rel ON installation_inventory(relative_path);
+CREATE INDEX IF NOT EXISTS idx_inv_pe ON installation_inventory(is_pe);
 
--- ── 2. FUNCTIONS ────────────────────────────────────────────────────────────
+-- ── 2. BINARIES (EXACT PROVENANCE & LINEAGE) ─────────────────────────────────
+CREATE TABLE IF NOT EXISTS reverse_binaries (
+    id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+    path                        TEXT NOT NULL,
+    sha256                      TEXT NOT NULL UNIQUE,
+    version                     TEXT,
+    architecture                TEXT DEFAULT 'x64',
+    image_base                  TEXT,
+    ghidra_project              TEXT,
+    analysis_timestamp          TEXT DEFAULT (datetime('now')),
+    artifact_type               TEXT NOT NULL CHECK (artifact_type IN (
+                                    'ORIGINAL_INSTALLATION', 'DERIVED_UNPACKED', 
+                                    'SUPPORT_MODULE', 'RUNTIME_SHIM')),
+    parent_sha256               TEXT,
+    extraction_method           TEXT,
+    address_equivalence_status  TEXT NOT NULL CHECK (address_equivalence_status IN (
+                                    'PROVEN_EQUIVALENT', 'PENDING_RANGE_EQUIVALENCE', 
+                                    'NOT_APPLICABLE', 'UNKNOWN'))
+);
+CREATE INDEX IF NOT EXISTS idx_bin_sha ON reverse_binaries(sha256);
+
+-- ── 3. FUNCTIONS & ACCOUNTING ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reverse_functions (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     binary_id           INTEGER NOT NULL REFERENCES reverse_binaries(id),
@@ -28,7 +60,12 @@ CREATE TABLE IF NOT EXISTS reverse_functions (
     namespace           TEXT,
     calling_convention  TEXT,
     signature           TEXT,
-    decompiler_status   TEXT,                      -- 'DECOMPILED', 'FAILED', 'MANUAL_BOUNDS'
+    decompiler_status   TEXT,                      -- 'DECOMPILED', 'FAILED', 'SKIPPED'
+    accounting_status   TEXT NOT NULL DEFAULT 'UNKNOWN' CHECK (accounting_status IN (
+                            'DECOMPILED', 'DECOMPILER_FAILED', 'SKIPPED_WITH_REASON',
+                            'NON_CODE_THUNK', 'EXTERNAL', 'OUT_OF_SCOPE_SECURITY', 'UNKNOWN')),
+    skip_reason         TEXT,
+    failure_reason      TEXT,
     semantic_category   TEXT,                      -- 'TRANSPORT', 'SESSION', 'SECURITY', 'UI', 'DIAGNOSTIC'
     semantic_status     TEXT DEFAULT 'UNKNOWN',    -- 'PROVEN_STATIC', 'INFERRED', 'UNKNOWN'
     pcode_hash          TEXT,
@@ -39,8 +76,23 @@ CREATE TABLE IF NOT EXISTS reverse_functions (
 CREATE INDEX IF NOT EXISTS idx_func_addr ON reverse_functions(address);
 CREATE INDEX IF NOT EXISTS idx_func_assigned ON reverse_functions(assigned_name);
 CREATE INDEX IF NOT EXISTS idx_func_orig ON reverse_functions(original_name);
+CREATE INDEX IF NOT EXISTS idx_func_account ON reverse_functions(accounting_status);
 
--- ── 3. STRINGS ──────────────────────────────────────────────────────────────
+-- ── 4. FUNCTIONS FAILED / REASON TABLE ───────────────────────────────────────
+CREATE TABLE IF NOT EXISTS functions_failed (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    binary_sha256       TEXT NOT NULL,
+    function_address    TEXT NOT NULL,
+    section             TEXT,
+    status              TEXT NOT NULL,
+    failure_reason      TEXT NOT NULL,
+    attempt_count       INTEGER DEFAULT 1,
+    ghidra_version      TEXT,
+    created_at          TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_ff_addr ON functions_failed(function_address);
+
+-- ── 5. STRINGS ──────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reverse_strings (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     binary_id           INTEGER NOT NULL REFERENCES reverse_binaries(id),
@@ -52,7 +104,7 @@ CREATE TABLE IF NOT EXISTS reverse_strings (
 CREATE INDEX IF NOT EXISTS idx_str_addr ON reverse_strings(address);
 CREATE INDEX IF NOT EXISTS idx_str_val ON reverse_strings(value);
 
--- ── 4. XREFS ────────────────────────────────────────────────────────────────
+-- ── 6. XREFS ────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reverse_xrefs (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     source_address      TEXT NOT NULL,
@@ -62,22 +114,29 @@ CREATE TABLE IF NOT EXISTS reverse_xrefs (
 CREATE INDEX IF NOT EXISTS idx_xref_src ON reverse_xrefs(source_address);
 CREATE INDEX IF NOT EXISTS idx_xref_dst ON reverse_xrefs(target_address);
 
--- ── 5. CALL EDGES ───────────────────────────────────────────────────────────
+-- ── 7. CALL EDGES & INDIRECT RESOLUTION ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reverse_call_edges (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     caller              TEXT NOT NULL,             -- Caller function VA
     callsite            TEXT NOT NULL,             -- Instruction VA
-    callee              TEXT NOT NULL,             -- Target function VA or semantic target
+    callee              TEXT NOT NULL,             -- Target function VA or 'UNKNOWN'
     dispatch_type       TEXT NOT NULL CHECK (dispatch_type IN ('DIRECT', 'INDIRECT', 'VTABLE', 'FUNCTION_POINTER', 'UNKNOWN')),
     vtable_address      TEXT,
     vtable_slot         TEXT,
+    resolution_method   TEXT NOT NULL DEFAULT 'UNRESOLVED' CHECK (resolution_method IN (
+                            'DIRECT_INSTRUCTION', 'VTABLE_CONSTRUCTOR_PROOF', 
+                            'FUNCTION_POINTER_ASSIGNMENT', 'IMPORT_SLOT', 
+                            'SWITCH_TABLE', 'RUNTIME_TARGET', 'OTHER_PROVEN', 'UNRESOLVED')),
+    resolution_evidence TEXT,
+    is_resolved         BOOLEAN NOT NULL DEFAULT 0,
     confidence          TEXT DEFAULT 'HIGH'
 );
 CREATE INDEX IF NOT EXISTS idx_call_caller ON reverse_call_edges(caller);
 CREATE INDEX IF NOT EXISTS idx_call_callee ON reverse_call_edges(callee);
 CREATE INDEX IF NOT EXISTS idx_call_site ON reverse_call_edges(callsite);
+CREATE INDEX IF NOT EXISTS idx_call_resolved ON reverse_call_edges(is_resolved);
 
--- ── 6. CONSTANTS ────────────────────────────────────────────────────────────
+-- ── 8. CONSTANTS ────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reverse_constants (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     function_id         INTEGER REFERENCES reverse_functions(id),
@@ -93,20 +152,22 @@ CREATE TABLE IF NOT EXISTS reverse_constants (
 CREATE INDEX IF NOT EXISTS idx_const_val ON reverse_constants(value);
 CREATE INDEX IF NOT EXISTS idx_const_class ON reverse_constants(classification);
 
--- ── 7. VTABLES ──────────────────────────────────────────────────────────────
+-- ── 9. VTABLES ──────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reverse_vtables (
-    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    address             TEXT NOT NULL,             -- VTable address in memory
-    slot                INTEGER NOT NULL,          -- Offset in bytes (e.g. 0x108)
-    target_function     TEXT NOT NULL,             -- Target function VA
-    class_candidate     TEXT,
-    confidence          TEXT DEFAULT 'HIGH',
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    address                 TEXT NOT NULL,             -- VTable address in memory
+    slot                    INTEGER NOT NULL,          -- Offset in bytes (e.g. 0x108)
+    target_function         TEXT NOT NULL,             -- Target function VA
+    class_candidate         TEXT,
+    constructor_evidence    TEXT,
+    usage_evidence          TEXT,
+    confidence              TEXT DEFAULT 'HIGH',
     UNIQUE (address, slot)
 );
 CREATE INDEX IF NOT EXISTS idx_vtable_addr ON reverse_vtables(address);
 CREATE INDEX IF NOT EXISTS idx_vtable_tgt ON reverse_vtables(target_function);
 
--- ── 8. DECOMPILER CHUNKS ────────────────────────────────────────────────────
+-- ── 10. DECOMPILER CHUNKS ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reverse_decompiler_chunks (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     function_id         INTEGER NOT NULL REFERENCES reverse_functions(id) UNIQUE,
@@ -117,7 +178,36 @@ CREATE TABLE IF NOT EXISTS reverse_decompiler_chunks (
     analysis_sha256     TEXT
 );
 
--- ── 9. RUNTIME EVENTS ───────────────────────────────────────────────────────
+-- ── 11. CROSS-MODULE DEPENDENCY GRAPH ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS cross_module_edges (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_module         TEXT NOT NULL,
+    import_or_call      TEXT NOT NULL,
+    to_module           TEXT NOT NULL,
+    symbol_name         TEXT,
+    dispatch_type       TEXT NOT NULL CHECK (dispatch_type IN (
+                            'STATIC_IMPORT', 'DYNAMIC_LOADLIBRARY', 'GETPROCADDRESS', 'EXPORT', 'IPC_PIPE')),
+    evidence_status     TEXT NOT NULL CHECK (evidence_status IN (
+                            'RAW', 'PROVEN_STATIC', 'PROVEN_DYNAMIC', 'PROVEN_BOTH',
+                            'INFERRED', 'UNKNOWN', 'CONFLICT', 'RETRACTED', 'OUT_OF_SCOPE_SECURITY')),
+    details             TEXT,
+    created_at          TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_cross_from ON cross_module_edges(from_module);
+CREATE INDEX IF NOT EXISTS idx_cross_to ON cross_module_edges(to_module);
+
+-- ── 12. NON-PE RESOURCES & FILE-I/O GRAPH ───────────────────────────────────
+CREATE TABLE IF NOT EXISTS non_pe_resources (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    resource_path       TEXT NOT NULL UNIQUE,
+    resource_type       TEXT NOT NULL,
+    consumer_module     TEXT,
+    consumer_function   TEXT,
+    diagnostic_role     TEXT,
+    xref_evidence       TEXT
+);
+
+-- ── 13. RUNTIME EVENTS ──────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reverse_runtime_events (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp           TEXT NOT NULL,
@@ -134,7 +224,7 @@ CREATE TABLE IF NOT EXISTS reverse_runtime_events (
 CREATE INDEX IF NOT EXISTS idx_runtime_trace ON reverse_runtime_events(trace_id);
 CREATE INDEX IF NOT EXISTS idx_runtime_api ON reverse_runtime_events(api);
 
--- ── 10. PROTOCOL FRAMES ─────────────────────────────────────────────────────
+-- ── 14. PROTOCOL FRAMES ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reverse_protocol_frames (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     layer               TEXT NOT NULL CHECK (layer IN ('ECU_PROTOCOL', 'ADAPTER_PROTOCOL', 'FTDI_TRANSPORT')),
@@ -149,7 +239,7 @@ CREATE TABLE IF NOT EXISTS reverse_protocol_frames (
                             'INFERRED', 'UNKNOWN', 'CONFLICT', 'RETRACTED', 'OUT_OF_SCOPE_SECURITY'))
 );
 
--- ── 11. TRANSFORM EDGES ─────────────────────────────────────────────────────
+-- ── 15. TRANSFORM EDGES ─────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS reverse_transform_edges (
     id                      INTEGER PRIMARY KEY AUTOINCREMENT,
     from_function           TEXT NOT NULL,
@@ -162,7 +252,7 @@ CREATE TABLE IF NOT EXISTS reverse_transform_edges (
                                 'INFERRED', 'UNKNOWN', 'CONFLICT', 'RETRACTED', 'OUT_OF_SCOPE_SECURITY'))
 );
 
--- ── 12. EPISTEMIC MODEL: CLAIMS ─────────────────────────────────────────────
+-- ── 16. EPISTEMIC MODEL: CLAIMS ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS claims (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     claim_key           TEXT NOT NULL UNIQUE,
@@ -181,7 +271,7 @@ CREATE TABLE IF NOT EXISTS claims (
 CREATE INDEX IF NOT EXISTS idx_claim_key ON claims(claim_key);
 CREATE INDEX IF NOT EXISTS idx_claim_status ON claims(evidence_status);
 
--- ── 13. RETRACTIONS ─────────────────────────────────────────────────────────
+-- ── 17. RETRACTIONS ─────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS retractions (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     claim_key           TEXT NOT NULL,
@@ -192,7 +282,7 @@ CREATE TABLE IF NOT EXISTS retractions (
 );
 CREATE INDEX IF NOT EXISTS idx_retract_key ON retractions(claim_key);
 
--- ── 14. GAPS (MISSING EVIDENCE / EDGES) ─────────────────────────────────────
+-- ── 18. GAPS (MISSING EVIDENCE / EDGES) ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS gaps (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     priority            TEXT NOT NULL CHECK (priority IN ('P0', 'P1', 'P2')),
@@ -204,7 +294,7 @@ CREATE TABLE IF NOT EXISTS gaps (
 );
 CREATE INDEX IF NOT EXISTS idx_gap_prio ON gaps(priority);
 
--- ── 15. CONFLICTS ───────────────────────────────────────────────────────────
+-- ── 19. CONFLICTS ───────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS conflicts (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     topic               TEXT NOT NULL,
@@ -214,7 +304,7 @@ CREATE TABLE IF NOT EXISTS conflicts (
     created_at          TEXT DEFAULT (datetime('now'))
 );
 
--- ── 16. FULL-TEXT SEARCH (FTS5) ─────────────────────────────────────────────
+-- ── 20. FULL-TEXT SEARCH (FTS5) ─────────────────────────────────────────────
 CREATE VIRTUAL TABLE IF NOT EXISTS functions_fts USING fts5(
     address, assigned_name, original_name, namespace, signature, semantic_category,
     content='reverse_functions', content_rowid='id', tokenize='unicode61'

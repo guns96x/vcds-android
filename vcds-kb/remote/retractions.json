@@ -4,34 +4,34 @@
     "prior_statement": "ECU 0x01 parity encoded as 0x81",
     "reason": "Mathematical error in previous draft. VCDS uses odd parity; address 0x01 has 1 set bit (already odd) so bit 7 is not set.",
     "corrected_statement": "ECU 0x01 parity encoded as 0x01",
-    "retracted_at": "2026-09-22 22:10:51"
+    "retracted_at": "2026-09-22 22:31:05"
   },
   {
     "claim_key": "CLAIM_GROUP_011_RAW_OPCODE_0x21",
     "prior_statement": "Group 011 raw Ross-Tech adapter opcode = 0x21",
     "reason": "Unproven conflation of ISO 14230 KWP service with adapter framing. Wire encapsulation path between BlockDlg and adapter send-frame is mediated by vtable dispatch and remains unproven.",
     "corrected_statement": "Group 011 request encapsulation is UNKNOWN",
-    "retracted_at": "2026-09-22 22:10:51"
+    "retracted_at": "2026-09-22 22:31:05"
   },
   {
     "claim_key": "CLAIM_RAW_KEEPALIVE_0x3E",
     "prior_statement": "Raw adapter keepalive opcode = 0x3E",
     "reason": "Unproven conflation of KWP TesterPresent service with adapter opcode.",
     "corrected_statement": "Adapter keepalive opcode is UNKNOWN",
-    "retracted_at": "2026-09-22 22:10:51"
+    "retracted_at": "2026-09-22 22:31:05"
   },
   {
     "claim_key": "CLAIM_FUN_14011FEB8_DECODER",
     "prior_statement": "FUN_14011FEB8 is Group 011 formula decoder",
     "reason": "False claim. Decompilation of FUN_14011feb8 proves it is an adapter security challenge block validator checking magic bytes 0xAA and 0x55.",
     "corrected_statement": "FUN_14011FEB8 is an adapter security verification routine",
-    "retracted_at": "2026-09-22 22:10:51"
+    "retracted_at": "2026-09-22 22:31:05"
   },
   {
     "claim_key": "CLAIM_100_PERCENT_DECOMPILATION",
     "prior_statement": "100% full decompilation of VCDS",
     "reason": "Ungrounded exaggeration. Replaced with exact Ghidra inventory and coverage statistics.",
     "corrected_statement": "Partial targeted decompilation of transport and session subsystems",
-    "retracted_at": "2026-09-22 22:10:51"
+    "retracted_at": "2026-09-22 22:31:05"
   }
 ]
