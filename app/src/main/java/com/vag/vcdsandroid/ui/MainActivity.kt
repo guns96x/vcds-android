@@ -21,6 +21,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.vag.vcdsandroid.BuildConfig
 import com.vag.vcdsandroid.R
 import com.vag.vcdsandroid.databinding.ActivityMainBinding
 import com.vag.vcdsandroid.logging.AsyncCsvLogger
