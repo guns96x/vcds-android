@@ -1,0 +1,78 @@
+{
+  "total_vtables": 133,
+  "total_slots": 7637,
+  "vtables_by_class": {
+    "HelperComponent": 32,
+    "MFC_CDialog": 58,
+    "CppClass_28Slots": 1,
+    "CppClass_79Slots": 4,
+    "CppClass_29Slots": 1,
+    "MFC_CWnd": 13,
+    "CppClass_30Slots": 4,
+    "CppClass_11Slots": 1,
+    "CppClass_7Slots": 1,
+    "MFC_CFrameWnd": 3,
+    "CppClass_19Slots": 1,
+    "MFC_CView": 2,
+    "CppClass_31Slots": 1,
+    "CppClass_24Slots": 2,
+    "CppClass_25Slots": 1,
+    "CppClass_21Slots": 1,
+    "TransportAdapter": 7
+  },
+  "transport_vtables": [
+    {
+      "address": "0x14019E860",
+      "slots": 35,
+      "ctors": [
+        "0x14003D43F"
+      ]
+    },
+    {
+      "address": "0x1401ADED0",
+      "slots": 35,
+      "ctors": [
+        "0x14008466A",
+        "0x14008489B"
+      ]
+    },
+    {
+      "address": "0x1401AE100",
+      "slots": 35,
+      "ctors": [
+        "0x140090D85"
+      ]
+    },
+    {
+      "address": "0x1401AF330",
+      "slots": 35,
+      "ctors": [
+        "0x14009BA90"
+      ]
+    },
+    {
+      "address": "0x14019E740",
+      "slots": 35,
+      "ctors": [
+        "0x14003D378",
+        "0x14003D466",
+        "0x140084961",
+        "0x140098B1C"
+      ]
+    },
+    {
+      "address": "0x1401AF170",
+      "slots": 35,
+      "ctors": [
+        "0x14009981D"
+      ]
+    },
+    {
+      "address": "0x1401AD3C0",
+      "slots": 35,
+      "ctors": [
+        "0x14007CA81"
+      ]
+    }
+  ]
+}
