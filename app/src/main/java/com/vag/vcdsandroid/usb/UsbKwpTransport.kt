@@ -161,7 +161,9 @@ class UsbKwpTransport(private val context: Context) {
         currentDevice = deviceToOpen
 
         val info = identifyDevice(deviceToOpen)
-        val initialBaud = baudRate ?: if (info.isRossTechIntelligent) 500000 else KLINE_BAUD_RATE
+        // Generic serial path defaults to K-Line speed only. Intelligent FA24
+        // framing is opened by HexB03Adapter, never by guessing a 500 kbaud UART.
+        val initialBaud = baudRate ?: KLINE_BAUD_RATE
 
         android.util.Log.i("VCDS_USB", "connect(): VID:PID=${info.vidPidHex} name=${info.displayName} devName=${deviceToOpen.deviceName}")
 
@@ -234,14 +236,13 @@ class UsbKwpTransport(private val context: Context) {
                 UsbSerialPort.STOPBITS_1,
                 UsbSerialPort.PARITY_NONE
             )
-            // FT232R: DTR# pin is ACTIVE LOW output.
-            // setDtr(true) → DTR# LOW → ATmega162 RESET LOW → MCU in reset!
-            // setDtr(false) → DTR# HIGH → RESET HIGH → MCU runs!
+            // Generic serial mode does not assume downstream MCU wiring.
+            // Adapter-specific control-line state is applied by the adapter path.
             port.dtr = false
             port.rts = false
             serialPort = port
             isPortOpen = true
-            android.util.Log.i("VCDS_USB", "Serial port opened OK at $initialBaud baud, DTR=false (MCU reset released)")
+            android.util.Log.i("VCDS_USB", "Serial port opened OK at $initialBaud baud")
 
             // FTDI latency timer: reduce default 16ms buffer delay to 1ms for high-speed diagnostic response
             if (deviceToOpen.vendorId == 0x0403) {
