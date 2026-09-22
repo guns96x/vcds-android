@@ -140,6 +140,8 @@ class MainActivity : AppCompatActivity() {
     private var connectionMode = AppConnectionMode.USB_HARDWARE
     private var isPermissionRequested = false
     private var currentDevice: UsbDevice? = null
+    private var activeB03Adapter: HexB03Adapter? = null
+    private var activeB03Identity: String? = null
 
     private var pollingJob: Job? = null
     private var tickerJob: Job? = null
@@ -312,7 +314,8 @@ class MainActivity : AppCompatActivity() {
         // Connect button
         binding.btnConnect.setOnClickListener {
             val isConnected =
-                engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
+                activeB03Adapter?.driver?.isConnected == true ||
+                    engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
             if (isConnected) {
                 performDisconnect()
             } else {
@@ -459,12 +462,16 @@ class MainActivity : AppCompatActivity() {
                         val probeHex = probe.probePayload.joinToString(" ") {
                             "%02X".format(it.toInt() and 0xFF)
                         }
+                        activeB03Adapter = adapter
+                        activeB03Identity = probe.identityText
+                        currentDevice = dev
                         binding.tvSubStatus.text = "Interface responded: ${probe.identityText}"
                         DiagLog.i(
                             "B03_M1",
                             "INTERFACE RESPONDED identity=${probe.identityText}, " +
                                 "probePayload=[$probeHex], elapsedMs=${probe.elapsedMs}"
                         )
+                        updateStatusUI()
                         AlertDialog.Builder(this@MainActivity)
                             .setTitle("INTERFACE RESPONDED")
                             .setMessage(
@@ -533,6 +540,9 @@ class MainActivity : AppCompatActivity() {
                 }
             }
             try {
+                activeB03Adapter?.close()
+                activeB03Adapter = null
+                activeB03Identity = null
                 when (targetMode) {
                     AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 -> elmEngine.disconnect()
                     AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO -> engine.disconnect()
@@ -2366,6 +2376,16 @@ private fun updateStatusUI() {
                 }
             }
             AppConnectionMode.USB_HARDWARE -> {
+                if (activeB03Adapter?.driver?.isConnected == true) {
+                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
+                    binding.tvStatus.text = "Interface Connected (USB HEX)"
+                    binding.tvSubStatus.text = activeB03Identity ?: "FA24 interface responded"
+                    binding.btnConnect.text = "Disconnect"
+                    binding.btnConnect.backgroundTintList =
+                        ColorStateList.valueOf(Color.parseColor("#30363D"))
+                    renderLoggingState()
+                    return
+                }
                 when (engine.state) {
                     DiagState.CONNECTED, DiagState.POLLING -> {
                         binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
