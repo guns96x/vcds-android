@@ -2,10 +2,12 @@ package com.vag.vcdsandroid.adapters
 
 /**
  * Protocol framing and packet codec for Ross-Tech HEX-USB+CAN / B03-V2 (0403:FA24).
- * NOTE: This codec is designed for offline decoding of recorded traces and research fixtures.
- * All opcodes and constants are unverified hypotheses pending live D2XX trace evidence.
+ * NOTE: The outer S/M framing and the plaintext 0x02 probe / 0x04 identify exchange are
+ * capture-grounded by independent public live traces of the same 0403:FA24 interface family.
+ * They are now used only for the cable-only M1 handshake and still require validation on this
+ * user's exact RT000001 sample. Diagnostic/session opcodes remain unverified and blocked.
  *
- * Hypothesized Wire format:
+ * Capture-grounded outer wire format:
  * [marker][length][opcode][payload...][xor_checksum]
  * - Marker: 0x53 ('S') Host -> Cable, 0x4D ('M') Cable -> Host.
  * - Length: Total frame length in bytes (4 + payload.length).
@@ -183,8 +185,10 @@ class HexB03StreamDecoder(
 }
 
 /**
- * Sealed hierarchy of candidate read-only adapter commands (HYPOTHESIS).
- * Strictly for offline fixture testing and future gated probe execution.
+ * Sealed hierarchy of adapter research commands.
+ * ProbePing/Identify have external capture evidence for the FA24 family, but this hierarchy
+ * remains non-transmitting; the M1 probe uses the dedicated cable-only handshake path.
+ * All later session/diagnostic commands remain hypotheses until verified on this sample.
  */
 sealed class CandidateB03Command(
     val opcode: Byte,
@@ -193,12 +197,12 @@ sealed class CandidateB03Command(
 ) {
     object ProbePing : CandidateB03Command(
         opcode = 0x02.toByte(),
-        description = "HYPOTHESIS: Probe ping (unverified MCU presence check)"
+        description = "FA24 capture-grounded interface probe; exact sample pending validation"
     )
 
     object Identify : CandidateB03Command(
         opcode = 0x04.toByte(),
-        description = "HYPOTHESIS: Identify query (unverified version banner)"
+        description = "FA24 capture-grounded identify query; exact sample pending validation"
     )
 
     object StatusRead : CandidateB03Command(
