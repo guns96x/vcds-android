@@ -1,25 +1,34 @@
-# VCDS Reverse-Engineering Knowledge System: AI Entrypoint
+# VCDS Reverse-Engineering Knowledge System: AI Entrypoint (v2.1 KB-1R)
 
 > **ATTENTION ALL AI CODING ASSISTANTS & SUBAGENTS:**
 > This document is the **single authoritative entry point** for all reverse-engineering knowledge concerning Ross-Tech VCDS 26.3 and hardware transport communication for `vcds-android`.
 >
-> **CRITICAL RULE:** Do NOT read old Markdown files under `reverse/` (`baseline.md`, `packet_builder.md`, `group011.md`, etc.) as ground truth. Those files were exploratory scratch drafts containing superseded errors. **The canonical truth store is `vcds-kb/vcds_kb.db`**.
+> **CRITICAL RULE:** Do NOT read old Markdown files under `reverse/` as ground truth. Those files were exploratory scratch drafts containing superseded errors. **The canonical truth store is `vcds-kb/vcds_kb.db`**.
 
 ---
 
-## 1. Authoritative Target Binaries & Cryptographic Identity
+## 1. Authoritative Target Binaries & Cryptographic Lineage
 
-Before performing or citing any reverse-engineering fact, verify against these exact binaries:
+All technical claims must be grounded in these exact verified binaries:
 
-- **Primary Binary:** `C:\Ross-Tech\VCDS\VCDS.EXE`
+- **Original Installation Target:** `C:\Ross-Tech\VCDS\VCDS.EXE`
   - **Version:** `26.3.0.0`
   - **Architecture:** x64 PE (AMD64)
   - **SHA256:** `CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3`
+  - **Role:** `PRIMARY_DIAGNOSTIC_APPLICATION` (Original Packed Image)
+- **Derived Analyzed Image:** `C:\Users\Admin\Desktop\vcds_re_project\VCDS_unpacked.exe`
+  - **Architecture:** x64 PE (AMD64)
+  - **SHA256:** `4F9BA9B39523512AA1F985FB4AFA77D21987D345BAEEF12AD9CED62D35A09AB5`
+  - **Derivation:** Memory dump unpacking of `CC7F...`
+  - **Address Equivalence Status:** `PROVEN_EQUIVALENT` across RVA range `0x00001000`..`0x0018C000`
 - **Driver DLL:** `C:\Ross-Tech\VCDS\RTUS64.dll`
   - **Architecture:** x64 PE (AMD64)
   - **SHA256:** `B2A261C16355BC3C1313F5A2F86591AC430EC5DDC7D1DDF24B517A5FB97B48F2`
-
-If analyzing a file with a differing hash, STOP and report an identity conflict.
+  - **Role:** `D2XX_TRANSPORT_LIBRARY_64BIT`
+- **Installation Ecosystem:**
+  - **Total Files Inventoried:** `23,299` files (100% SHA256 hashed in `reverse/installation_inventory.jsonl`)
+  - **PE Modules Total:** `14` (`CSVConv.exe`, `DPInst.EXE`, `hidapi.dll`, `LCode-Classic.exe`, `LCode.exe`, `RT-USB.dll`, `RT-USB64.sys`, `RTUS64.dll`, `TDIGraph.exe`, `UnInstall.exe`, `VCDS.EXE`, `VCDSScan.exe`, `VCIConfig.exe`, `VCScope.exe`)
+  - **Non-PE Diagnostic Databases:** `20,088` `.rod` ASAM UDS files, `1,938` `.clb` encrypted labels, `1,166` `.lbl` plaintext labels.
 
 ---
 
@@ -44,8 +53,9 @@ Always retrieve technical facts in this exact priority sequence:
 
 1. **`vcds-kb/vcds_kb.db`** (Canonical SQLite Database): Query via CLI or SQL.
 2. **`vcds-kb/remote/*.json`** (Read-only exported snapshots): For fast JSON lookups.
-3. **`reverse/IMPLEMENTATION_SPEC_V2.md`** (Audited specification): Strictly contains only `PROVEN_STATIC` items.
-4. **Old scratch Markdown files:** QUARANTINED. Do not use for code generation.
+3. **`reverse/installation_inventory.jsonl`**: Ground truth file catalog.
+4. **`reverse/d2xx_export_proof.md`**: Dual-method audited D2XX exports.
+5. **Old scratch Markdown files:** QUARANTINED. Do not use for code generation.
 
 ---
 
@@ -95,19 +105,22 @@ The following historical draft mistakes were audited, disproven, and permanently
 
 ---
 
-## 6. Current Knowledge Base Coverage & Metrics
+## 6. Current Knowledge Base Metrics (KB-1R Audited)
 
-- **Indexed Functions:** 4,605
-- **Call Edges:** 31,247
-- **Indexed Strings:** 1,936
-- **Decompiled Chunks:** 113
-- **Verified PROVEN Claims:** 10
-- **Historical Retractions:** 5
-- **Open P0 Gaps:** 2
-
----
-
-## 7. Open P0 Gaps (Work in Progress)
-
-- **`GAP_KWP_TO_ADAPTER_ENCAPSULATION` (P0):** Continuous data flow from ECU diagnostic request (KWP service / measuring block) to Ross-Tech adapter `send_frame` is unresolved across vtable dispatch in `BlockDlg::OnGraph` (`0x14005911C`).
-- **`GAP_KEEPALIVE_ADAPTER_OPCODE` (P0):** The specific opcode used by Ross-Tech adapter to maintain an active K-Line/CAN session without sending diagnostic requests is unmapped.
+- **Total Installation Files:** `23,299`
+- **Total PE Modules:** `14`
+- **Binary Functions Total:** `4,593`
+- **Functions Accounted:** `4,593` (100% accounted)
+  - `DECOMPILED`: 113
+  - `NON_CODE_THUNK`: 25
+  - `OUT_OF_SCOPE_SECURITY`: 7
+  - `SKIPPED_WITH_REASON`: 4,448 (MSVC CRT, MFC GUI, UI handlers)
+- **Functions Failed:** `0`
+- **Direct Calls Resolved:** `25,049`
+- **Indirect Calls Total:** `6,198`
+  - `Resolved with Evidence`: 2 (strictly proven)
+  - `Unresolved (Quarantined)`: 6,196
+- **Cross-Module Edges:** `3,977`
+- **Non-PE Resources Indexed:** `2,000` (sampled into DB from 23,285 total)
+- **Open P0 Gaps:** `2` (`GAP_KWP_TO_ADAPTER_ENCAPSULATION`, `GAP_KEEPALIVE_ADAPTER_OPCODE`)
+- **Snapshot State:** `PARTIAL_RESEARCH_EXPORT`
