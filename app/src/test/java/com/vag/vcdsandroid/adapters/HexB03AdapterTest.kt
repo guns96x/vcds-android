@@ -184,6 +184,73 @@ class HexB03AdapterTest {
     }
 
     @Test
+    fun `interface probe sends only capture-grounded probe and identify`() = runBlocking {
+        val driver = TestHardwareDriver().apply {
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = 0x02,
+                    payload = byteArrayOf(0x01, 0x60, 0x44)
+                )
+            )
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = 0x04,
+                    payload = byteArrayOf(
+                        0x52, 0x4F, 0x53, 0x53, 0x54, 0x45, 0x43, 0x48,
+                        0x00, 0x00, 0x00,
+                        0xA8.toByte(), 0x9D.toByte(), 0x01, 0x00, 0x09
+                    )
+                )
+            )
+        }
+        val adapter = HexB03Adapter(driver, serialNumber = "RT000001")
+
+        val result = adapter.probeInterface()
+
+        assertTrue(result.isSuccess)
+        val probe = result.getOrThrow()
+        assertTrue(probe.identityText.startsWith("ROSSTECH"))
+        assertArrayEquals(byteArrayOf(0x01, 0x60, 0x44), probe.probePayload)
+        assertEquals(115200, driver.lastBaudRate)
+        assertFalse(driver.isConnected)
+
+        val expectedTx = byteArrayOf(
+            0x53, 0x04, 0x02, 0x55,
+            0x53, 0x04, 0x04, 0x53
+        )
+        assertArrayEquals(expectedTx, driver.writtenBytes.toByteArray())
+    }
+
+    @Test
+    fun `interface probe fails if identify does not contain ROSSTECH`() = runBlocking {
+        val driver = TestHardwareDriver().apply {
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = 0x02,
+                    payload = byteArrayOf(0x01, 0x60, 0x44)
+                )
+            )
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = 0x04,
+                    payload = "UNKNOWN".toByteArray()
+                )
+            )
+        }
+        val adapter = HexB03Adapter(driver)
+
+        val result = adapter.probeInterface()
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("ROSSTECH") == true)
+        assertFalse(driver.isConnected)
+    }
+
+    @Test
     fun `executeCandidateCommand strictly enforces ZERO-TX on candidate commands`() = runBlocking {
         val driver = TestHardwareDriver()
         val adapter = HexB03Adapter(driver)
