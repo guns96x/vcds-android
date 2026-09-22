@@ -176,7 +176,11 @@ pub unsafe extern "system" fn FT_Open(device_number: u32, handle: *mut FtHandle)
 #[no_mangle]
 pub unsafe extern "system" fn FT_OpenEx(arg1: *const c_void, flags: u32, handle: *mut FtHandle) -> FtStatus {
     let arg_desc = if (flags & 1) != 0 || (flags & 2) != 0 {
-        CStr::from_ptr(arg1 as *const c_char).to_string_lossy().into_owned()
+        if arg1.is_null() {
+            "null".to_string()
+        } else {
+            CStr::from_ptr(arg1 as *const c_char).to_string_lossy().into_owned()
+        }
     } else {
         format!("{arg1:p}")
     };
@@ -554,24 +558,24 @@ pub unsafe extern "system" fn FT_Read(
 }
 
 // ============================================================================
-// SAFETY GUARDRAILS: BLOCK EEPROM WRITING CALLS
+// SAFETY GUARDRAILS: BLOCK EEPROM WRITING CALLS (SAFE_TRACE MODE)
 // ============================================================================
 
 #[no_mangle]
 pub unsafe extern "system" fn FT_WriteEE(handle: FtHandle, _word_offset: u32, _value: u16) -> FtStatus {
-    log_line(&format!("SAFETY ALERT: Blocked FT_WriteEE on handle {handle:p}"));
+    log_line(&format!("[SAFE_TRACE GUARD] Blocked FT_WriteEE on handle {handle:p}"));
     FT_OTHER_ERROR
 }
 
 #[no_mangle]
 pub unsafe extern "system" fn FT_EraseEE(handle: FtHandle) -> FtStatus {
-    log_line(&format!("SAFETY ALERT: Blocked FT_EraseEE on handle {handle:p}"));
+    log_line(&format!("[SAFE_TRACE GUARD] Blocked FT_EraseEE on handle {handle:p}"));
     FT_OTHER_ERROR
 }
 
 #[no_mangle]
 pub unsafe extern "system" fn FT_EE_Program(handle: FtHandle, _data: *const c_void) -> FtStatus {
-    log_line(&format!("SAFETY ALERT: Blocked FT_EE_Program on handle {handle:p}"));
+    log_line(&format!("[SAFE_TRACE GUARD] Blocked FT_EE_Program on handle {handle:p}"));
     FT_OTHER_ERROR
 }
 
@@ -584,25 +588,33 @@ pub unsafe extern "system" fn FT_EE_ProgramEx(
     _s3: *const c_char,
     _s4: *const c_char,
 ) -> FtStatus {
-    log_line(&format!("SAFETY ALERT: Blocked FT_EE_ProgramEx on handle {handle:p}"));
+    log_line(&format!("[SAFE_TRACE GUARD] Blocked FT_EE_ProgramEx on handle {handle:p}"));
     FT_OTHER_ERROR
 }
 
 #[no_mangle]
 pub unsafe extern "system" fn FT_EE_UAWrite(handle: FtHandle, _data: *const u8, _data_len: u32) -> FtStatus {
-    log_line(&format!("SAFETY ALERT: Blocked FT_EE_UAWrite on handle {handle:p}"));
+    log_line(&format!("[SAFE_TRACE GUARD] Blocked FT_EE_UAWrite on handle {handle:p}"));
     FT_OTHER_ERROR
 }
 
 #[no_mangle]
 pub unsafe extern "system" fn FT_EE_WriteConfig(handle: FtHandle, _addr: u32, _value: u8) -> FtStatus {
-    log_line(&format!("SAFETY ALERT: Blocked FT_EE_WriteConfig on handle {handle:p}"));
+    log_line(&format!("[SAFE_TRACE GUARD] Blocked FT_EE_WriteConfig on handle {handle:p}"));
     FT_OTHER_ERROR
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn FT_EEPROM_Program(handle: FtHandle, _eeprom_data: *const c_void) -> FtStatus {
-    log_line(&format!("SAFETY ALERT: Blocked FT_EEPROM_Program on handle {handle:p}"));
+pub unsafe extern "system" fn FT_EEPROM_Program(
+    handle: FtHandle,
+    _eeprom_data: *const c_void,
+    _eeprom_data_size: u32,
+    _manufacturer: *const c_char,
+    _manufacturer_id: *const c_char,
+    _description: *const c_char,
+    _serial_number: *const c_char,
+) -> FtStatus {
+    log_line(&format!("[SAFE_TRACE GUARD] Blocked FT_EEPROM_Program on handle {handle:p}"));
     FT_OTHER_ERROR
 }
 
@@ -695,11 +707,27 @@ pub unsafe extern "system" fn FT_EE_ReadECC(handle: FtHandle, option: u8, val: *
 }
 
 #[no_mangle]
-pub unsafe extern "system" fn FT_EEPROM_Read(handle: FtHandle, data: *mut c_void) -> FtStatus {
-    log_line(&format!("FT_EEPROM_Read(handle: {handle:p})"));
-    type FnType = unsafe extern "system" fn(FtHandle, *mut c_void) -> FtStatus;
+pub unsafe extern "system" fn FT_EEPROM_Read(
+    handle: FtHandle,
+    eeprom_data: *mut c_void,
+    eeprom_data_size: u32,
+    manufacturer: *mut c_char,
+    manufacturer_id: *mut c_char,
+    description: *mut c_char,
+    serial_number: *mut c_char,
+) -> FtStatus {
+    log_line(&format!("FT_EEPROM_Read(handle: {handle:p}, data_size: {eeprom_data_size})"));
+    type FnType = unsafe extern "system" fn(
+        FtHandle,
+        *mut c_void,
+        u32,
+        *mut c_char,
+        *mut c_char,
+        *mut c_char,
+        *mut c_char,
+    ) -> FtStatus;
     if let Some(f) = get_proc::<FnType>(b"FT_EEPROM_Read\0") {
-        f(handle, data)
+        f(handle, eeprom_data, eeprom_data_size, manufacturer, manufacturer_id, description, serial_number)
     } else {
         FT_INVALID_HANDLE
     }
@@ -820,10 +848,14 @@ pub unsafe extern "system" fn FT_GetDeviceInfoDetail(
     type FnType = unsafe extern "system" fn(u32, *mut u32, *mut u32, *mut u32, *mut u32, *mut c_char, *mut c_char, *mut FtHandle) -> FtStatus;
     if let Some(f) = get_proc::<FnType>(b"FT_GetDeviceInfoDetail\0") {
         let st = f(index, flags, device_type, id, loc_id, serial_number, description, handle);
-        let ser = if !serial_number.is_null() { CStr::from_ptr(serial_number).to_string_lossy() } else { "".into() };
-        let desc = if !description.is_null() { CStr::from_ptr(description).to_string_lossy() } else { "".into() };
-        let vid_pid = if !id.is_null() { *id } else { 0 };
-        log_line(&format!("FT_GetDeviceInfoDetail(idx: {index}) -> id: 0x{vid_pid:08X}, ser: \"{ser}\", desc: \"{desc}\""));
+        if st == FT_OK {
+            let ser = if !serial_number.is_null() { CStr::from_ptr(serial_number).to_string_lossy() } else { "".into() };
+            let desc = if !description.is_null() { CStr::from_ptr(description).to_string_lossy() } else { "".into() };
+            let vid_pid = if !id.is_null() { *id } else { 0 };
+            log_line(&format!("FT_GetDeviceInfoDetail(idx: {index}) -> id: 0x{vid_pid:08X}, ser: \"{ser}\", desc: \"{desc}\""));
+        } else {
+            log_line(&format!("FT_GetDeviceInfoDetail(idx: {index}) -> status {st}"));
+        }
         st
     } else {
         FT_OTHER_ERROR

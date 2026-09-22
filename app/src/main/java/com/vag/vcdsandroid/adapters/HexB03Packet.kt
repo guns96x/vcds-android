@@ -2,11 +2,13 @@ package com.vag.vcdsandroid.adapters
 
 /**
  * Protocol framing and packet codec for Ross-Tech HEX-USB+CAN / B03-V2 (0403:FA24).
+ * NOTE: This codec is designed for offline decoding of recorded traces and research fixtures.
+ * All opcodes and constants are unverified hypotheses pending live D2XX trace evidence.
  *
- * Wire format:
+ * Hypothesized Wire format:
  * [marker][length][opcode][payload...][xor_checksum]
  * - Marker: 0x53 ('S') Host -> Cable, 0x4D ('M') Cable -> Host.
- * - Length: Total frame length in bytes (3 + payload.length).
+ * - Length: Total frame length in bytes (4 + payload.length).
  * - Opcode: Command or response opcode.
  * - XOR Checksum: XOR sum of all preceding bytes.
  */
@@ -181,37 +183,37 @@ class HexB03StreamDecoder(
 }
 
 /**
- * Sealed hierarchy of verified read-only adapter commands.
- * Callers cannot construct arbitrary raw frames through this interface.
+ * Sealed hierarchy of candidate read-only adapter commands (HYPOTHESIS).
+ * Strictly for offline fixture testing and future gated probe execution.
  */
-sealed class VerifiedB03Command(
+sealed class CandidateB03Command(
     val opcode: Byte,
     val payload: ByteArray = ByteArray(0),
     val description: String
 ) {
-    object ProbePing : VerifiedB03Command(
+    object ProbePing : CandidateB03Command(
         opcode = 0x02.toByte(),
-        description = "PROVEN_STATIC: Probe ping (checks MCU presence)"
+        description = "HYPOTHESIS: Probe ping (unverified MCU presence check)"
     )
 
-    object Identify : VerifiedB03Command(
+    object Identify : CandidateB03Command(
         opcode = 0x04.toByte(),
-        description = "PROVEN_STATIC: Identify query (version banner)"
+        description = "HYPOTHESIS: Identify query (unverified version banner)"
     )
 
-    object StatusRead : VerifiedB03Command(
+    object StatusRead : CandidateB03Command(
         opcode = 0x82.toByte(),
-        description = "PROVEN_STATIC: Status read"
+        description = "HYPOTHESIS: Status read"
     )
 
-    object ModeRead : VerifiedB03Command(
+    object ModeRead : CandidateB03Command(
         opcode = 0x0D.toByte(),
-        description = "PROVEN_STATIC: Mode read"
+        description = "HYPOTHESIS: Mode read"
     )
 
-    object KeepalivePing : VerifiedB03Command(
+    object KeepalivePing : CandidateB03Command(
         opcode = 0xA0.toByte(),
-        description = "PROVEN_STATIC: Keepalive ping"
+        description = "HYPOTHESIS: Keepalive ping"
     )
 
     fun encodeFrame(): ByteArray {

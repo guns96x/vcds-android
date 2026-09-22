@@ -43,6 +43,10 @@ data class FaultCode(
         }
 
         private fun deriveSaeCode(high: Int, low: Int): String {
+            val raw16 = ((high and 0xFF) shl 8) or (low and 0xFF)
+            if (raw16 in 16384..19999) {
+                return String.format(Locale.US, "P%04d", raw16 - 16384)
+            }
             val prefix = when ((high shr 6) and 0x03) {
                 0 -> "P"
                 1 -> "C"

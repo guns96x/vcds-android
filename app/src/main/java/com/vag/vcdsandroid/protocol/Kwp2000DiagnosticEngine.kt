@@ -107,9 +107,11 @@ class Kwp2000DiagnosticEngine(
                 try {
                     Log.i("VCDS_PROBE", "=== Connection attempt $attempt/3 ===")
 
-                    val info = transport.getActiveAdapterInfo()
-                    val isRossTech = info?.isRossTechIntelligent == true
-                    val initialBaud = if (isRossTech) 500000 else UsbKwpTransport.KLINE_BAUD_RATE
+                    // Derive adapter identity from targetDevice or available device before connecting
+                    val effectiveDevice = targetDevice ?: transport.findAvailableDevice()
+                    val targetInfo = effectiveDevice?.let { UsbKwpTransport.identifyDevice(it) }
+                    val isTargetRossTech = targetInfo?.isRossTechIntelligent == true
+                    val initialBaud = if (isTargetRossTech) 500000 else UsbKwpTransport.KLINE_BAUD_RATE
 
                     // Reconnect if port died
                     if (!transport.isConnected()) {
@@ -130,26 +132,22 @@ class Kwp2000DiagnosticEngine(
                         }
                     }
 
+                    val connectedInfo = transport.getActiveAdapterInfo()
+                    val isRossTech = isTargetRossTech || connectedInfo?.isRossTechIntelligent == true
+
                     transport.purge()
                     delay(60)
 
                     var ok = false
 
                     if (isRossTech) {
-                        Log.i("VCDS_PROBE", "Starting Ross-Tech Intelligent CAN TP2.0 / ATmega probing...")
-                        ok = tryRossTechCanInit(targetEcuAddress)
-
-                        // If write failed (port died), try reconnecting
-                        if (!ok && !transport.isConnected()) {
-                            Log.w("VCDS_PROBE", "USB port died during probe, will retry...")
-                            if (attempt < 3) {
-                                delay(500)
-                                continue
-                            }
-                        }
+                        Log.w("VCDS_PROBE", "Ross-Tech B03 ZERO-TX enforced: physical ECU probe disabled pending live trace verification")
+                        lastError = "Ross-Tech B03 ZERO-TX enforced: physical ECU probe disabled pending live trace verification"
+                        state = DiagState.ERROR
+                        return@withContext false
                     }
 
-                    if (!ok) {
+                    if (!ok && !isRossTech) {
                         // Fallback to K-Line strategies
                         if (transport.isConnected()) {
                             transport.setBaudRate(UsbKwpTransport.KLINE_BAUD_RATE)
@@ -218,84 +216,20 @@ class Kwp2000DiagnosticEngine(
     }
 
     private suspend fun tryRossTechCanInit(target: Byte): Boolean {
-        try {
-            // FT232R DTR# is active-low. Keep the interface MCU released from reset.
-            // The old second pass used DTR=true (RESET low) and then tried to talk
-            // to a processor it had just held in reset, which cannot be a valid probe.
-            val dtrStates = listOf(false)
-            for (dtrState in dtrStates) {
-                Log.i("VCDS_PROBE", "--- Trying DTR=$dtrState (FT232R DTR# = ${if (dtrState) "LOW/reset" else "HIGH/run"}) ---")
-                transport.setDtr(dtrState)
-                // ATmega162 MCU needs ~500ms after reset release to boot firmware
-                delay(600)
-
-            val bauds = listOf(500000, 250000, 115200)
-            for (baud in bauds) {
-                transport.setBaudRate(baud)
-                transport.purge()
-                delay(50)
-
-                // 1. Sync byte with retry (first write after MCU boot may fail)
-                var syncOk = false
-                for (attempt in 1..3) {
-                    try {
-                        transport.write(byteArrayOf(0x55))
-                        syncOk = true
-                        break
-                    } catch (e: Exception) {
-                        Log.w("VCDS_PROBE", "Sync write attempt $attempt failed on $baud: ${e.message}")
-                        delay(200)
-                    }
-                }
-                if (!syncOk) {
-                    Log.w("VCDS_PROBE", "All sync write attempts failed on $baud, skipping")
-                    continue
-                }
-
-                val pingBuf = ByteArray(64)
-                val pingRead = transport.read(pingBuf, 200)
-                if (pingRead > 0) {
-                    Log.i("VCDS_PROBE", "Ross-Tech ping response on $baud ($pingRead bytes): " + pingBuf.take(pingRead).joinToString(" ") { "%02X".format(it) })
-                } else {
-                    Log.i("VCDS_PROBE", "Ross-Tech ping on $baud: no response (timeout)")
-                }
-
-                // 2. TP 2.0 channel setup packet for Engine ECU (logical addr 0x01)
-                // Frame: [dest=0x01] [opcode=0xC0 channel setup] [rx_id=0x00 0x10] [tx_id=0x00 0x03] [app=0x01 diag]
-                val tp2ChannelSetup = byteArrayOf(0x01, 0xC0.toByte(), 0x00, 0x10, 0x00, 0x03, 0x01)
-                try {
-                    transport.write(tp2ChannelSetup)
-                } catch (e: Exception) {
-                    Log.w("VCDS_PROBE", "TP2.0 channel setup write failed on $baud: ${e.message}")
-                    continue
-                }
-                val tpBuf = ByteArray(64)
-                val tpRead = transport.read(tpBuf, 500)
-                if (tpRead >= 2) {
-                    val hexStr = tpBuf.take(tpRead).joinToString(" ") { "%02X".format(it) }
-                    Log.i("VCDS_PROBE", "CAN TP2.0 reply on $baud ($tpRead bytes): $hexStr")
-                    // True TP2.0 positive channel setup response contains opcode 0xD0 and is not a local TX echo
-                    val isEcho = tpRead >= 7 && tpBuf[0] == 0x01.toByte() && (tpBuf[1].toInt() and 0xFF) == 0xC0
-                    if (!isEcho && tpBuf.take(tpRead).any { (it.toInt() and 0xFF) == 0xD0 }) {
-                        Log.i("VCDS_PROBE", "Confirmed positive VW TP 2.0 Channel Setup (0xD0)!")
-                        return true
-                    }
-                } else {
-                    Log.i("VCDS_PROBE", "CAN TP2.0 on $baud: no reply ($tpRead bytes)")
-                }
-            }
-            } // end dtrStates loop
-            return false
-        } catch (e: Exception) {
-            Log.w("VCDS_PROBE", "tryRossTechCanInit error: ${e.message}")
-            return false
-        }
+        Log.w("VCDS_PROBE", "Ross-Tech B03 ZERO-TX enforced: physical ECU probe disabled pending live trace verification")
+        return false
     }
 
     suspend fun bruteForceSweep(): String = withContext(Dispatchers.IO) {
         val sb = StringBuilder()
         if (!transport.isConnected()) {
             val msg = "USB adapter is not connected or open."
+            Log.w("VCDS_PROBE", msg)
+            return@withContext msg
+        }
+        val info = transport.getActiveAdapterInfo()
+        if (info?.isRossTechIntelligent == true) {
+            val msg = "ZERO-TX enforced: bruteForceSweep is disabled for Ross-Tech adapter pending live trace verification."
             Log.w("VCDS_PROBE", msg)
             return@withContext msg
         }

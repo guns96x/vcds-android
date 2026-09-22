@@ -1,8 +1,8 @@
-name: Android CI
+name: Android CI & Trace Toolchain
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, 'feat/**' ]
   pull_request:
     branches: [ master ]
 
@@ -35,3 +35,35 @@ jobs:
         path: app/build/outputs/apk/debug/app-debug.apk
         if-no-files-found: error
         retention-days: 30
+
+  trace-toolchain:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Rust
+      uses: dtolnay/rust-toolchain@stable
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install Python dependencies
+      run: pip install pefile
+
+    - name: Build D2XX Trace Shim DLL (Release)
+      run: cargo build --release
+      working-directory: tools/vcds/d2xx_trace
+
+    - name: Run Trace Analyzer Unit Tests
+      run: python tools/vcds/d2xx_trace/test_analyze_trace.py
+
+    - name: Run USB PCAP Parser Unit Tests
+      run: python tools/usb/test_pcap_tools.py
+
+    - name: Verify DLL Exports Against Canonical Manifest
+      run: python tools/vcds/d2xx_trace/verify_exports.py
+

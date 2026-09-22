@@ -120,26 +120,26 @@ class HexB03PacketTest {
     }
 
     @Test
-    fun testVerifiedB03CommandsEncoding() {
-        val pingFrame = VerifiedB03Command.ProbePing.encodeFrame()
+    fun testCandidateB03CommandsEncoding() {
+        val pingFrame = CandidateB03Command.ProbePing.encodeFrame()
         assertEquals(HexB03Constants.MARKER_HOST, pingFrame[0])
         assertEquals(4.toByte(), pingFrame[1])
         assertEquals(0x02.toByte(), pingFrame[2])
 
-        val identifyFrame = VerifiedB03Command.Identify.encodeFrame()
+        val identifyFrame = CandidateB03Command.Identify.encodeFrame()
         assertEquals(HexB03Constants.MARKER_HOST, identifyFrame[0])
         assertEquals(4.toByte(), identifyFrame[1])
         assertEquals(0x04.toByte(), identifyFrame[2])
 
-        val statusFrame = VerifiedB03Command.StatusRead.encodeFrame()
+        val statusFrame = CandidateB03Command.StatusRead.encodeFrame()
         assertEquals(HexB03Constants.MARKER_HOST, statusFrame[0])
         assertEquals(0x82.toByte(), statusFrame[2])
 
-        val modeFrame = VerifiedB03Command.ModeRead.encodeFrame()
+        val modeFrame = CandidateB03Command.ModeRead.encodeFrame()
         assertEquals(HexB03Constants.MARKER_HOST, modeFrame[0])
         assertEquals(0x0D.toByte(), modeFrame[2])
 
-        val keepaliveFrame = VerifiedB03Command.KeepalivePing.encodeFrame()
+        val keepaliveFrame = CandidateB03Command.KeepalivePing.encodeFrame()
         assertEquals(HexB03Constants.MARKER_HOST, keepaliveFrame[0])
         assertEquals(0xA0.toByte(), keepaliveFrame[2])
     }
