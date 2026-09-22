@@ -1,0 +1,77 @@
+{
+  "project": "vcds-android",
+  "target": "VCDS 26.3.0.0 (x64)",
+  "vcds_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+  "rtus64_sha256": "B2A261C16355BC3C1313F5A2F86591AC430EC5DDC7D1DDF24B517A5FB97B48F2",
+  "evidence_items": [
+    {
+      "id": "EVD-D2XX-TABLE",
+      "status": "PROVEN_STATIC",
+      "address_range": "0x14018C810 - 0x14018C8E0",
+      "description": "Contiguous D2XX function pointer table in VCDS .rdata section",
+      "key_entries": {
+        "0x14018C810": "FT_ResetDevice",
+        "0x14018C820": "FT_SetDataCharacteristics",
+        "0x14018C828": "FT_Close",
+        "0x14018C840": "FT_Purge",
+        "0x14018C848": "FT_SetTimeouts",
+        "0x14018C858": "FT_Read",
+        "0x14018C860": "FT_Write",
+        "0x14018C878": "FT_SetLatencyTimer",
+        "0x14018C890": "FT_GetQueueStatus",
+        "0x14018C8A8": "FT_Open",
+        "0x14018C8B8": "FT_SetBaudRate"
+      }
+    },
+    {
+      "id": "EVD-PACKET-BUILDER",
+      "status": "PROVEN_STATIC",
+      "function_name": "vcds_adapter_send_frame",
+      "function_address": "0x14007E734",
+      "framing": {
+        "sync_byte": "0x53 ('S')",
+        "length_offset": 1,
+        "length_formula": "payload_length + 3",
+        "checksum_offset": "length - 1",
+        "checksum_algorithm": "cumulative XOR over header, length, and all payload bytes",
+        "max_payload": 80
+      }
+    },
+    {
+      "id": "EVD-RESPONSE-PARSER",
+      "status": "PROVEN_STATIC",
+      "function_name": "vcds_adapter_read_frame",
+      "function_address": "0x14007E824",
+      "framing": {
+        "sync_byte": "0x4D ('M')",
+        "length_offset": 1,
+        "checksum_verification": "XOR over entire frame == 0x00",
+        "payload_length": "length - 3"
+      }
+    },
+    {
+      "id": "EVD-5BAUD-INIT",
+      "status": "PROVEN_STATIC",
+      "function_name": "HC::Init5Baud",
+      "function_address": "0x14007E3B4",
+      "caller": "HexInit (0x14007E21D)",
+      "opcode": "0x84",
+      "subcommand": "0x03",
+      "parity_algorithm": "7-bit odd parity on target ECU address (e.g. 0x01 -> 0x81)",
+      "timeout_ms": 3300,
+      "response_sync": "0x55",
+      "timing_delegation": "Delegated entirely to intelligent HEX adapter microcontroller hardware"
+    },
+    {
+      "id": "EVD-MEASURING-BLOCKS",
+      "status": "PROVEN_STATIC",
+      "class_name": "BlockDlg",
+      "address_range": "0x140057000 - 0x14005C000",
+      "kwp1281_block_title_req": "0x29",
+      "kwp1281_block_title_resp": "0xE7",
+      "kwp2000_service_req": "0x21",
+      "field_count_per_group": 4,
+      "decoder_function": "FUN_14011feb8 (0x14011FEB8)"
+    }
+  ]
+}
