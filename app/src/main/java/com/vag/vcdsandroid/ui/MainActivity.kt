@@ -463,8 +463,8 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 if (dumbModeConfirmed) {
-                    DiagLog.i("B03_M2", "DUMB K-LINE PASS-THROUGH CONFIRMED; opening 01-Engine")
-                    binding.tvSubStatus.text = "K-Line passthrough OK -> 01-Engine..."
+                    DiagLog.i("B03_M2", "K-LINE RAW ECHO DETECTED; starting five-baud 01-Engine init")
+                    binding.tvSubStatus.text = "K-Line echo OK -> five-baud 01-Engine..."
 
                     val ecuConnected = engine.connect(
                         targetDevice = dev,
@@ -484,19 +484,19 @@ class MainActivity : AppCompatActivity() {
                         AlertDialog.Builder(this@MainActivity)
                             .setTitle("01-ENGINE RESPONDED")
                             .setMessage(
-                                "HEX dumb K-Line: OK\n" +
+                                "HEX raw K-Line: OK\n" +
                                     "ECU address: 01\n" +
-                                    "KWP2000 link: CONNECTED\n" +
+                                    "5-baud KWP link: CONNECTED\n" +
                                     "Identity reply: $idHex"
                             )
                             .setPositiveButton("OK", null)
                             .show()
                     } else {
                         AlertDialog.Builder(this@MainActivity)
-                            .setTitle("K-LINE OK / 01-ENGINE NO REPLY")
+                            .setTitle("01-ENGINE SLOW INIT FAILED")
                             .setMessage(
-                                "The cable passed the 0xF0 dumb-mode echo test, but the ECU " +
-                                    "did not complete KWP2000 initialization.\n\n" +
+                                "The cable produced the expected raw K-Line echo, but the ECU " +
+                                    "did not complete the five-baud KWP initialization.\n\n" +
                                     (engine.lastError ?: "No ECU response")
                             )
                             .setPositiveButton("OK", null)
