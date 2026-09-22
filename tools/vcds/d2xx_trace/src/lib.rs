@@ -96,7 +96,7 @@ fn get_dll_directory() -> Option<PathBuf> {
             &mut hmod,
         );
         if ok != 0 {
-            let len = GetModuleFileNameW(std::ptr::null_mut(), path_buf.as_mut_ptr(), path_buf.len() as u32);
+            let len = GetModuleFileNameW(hmod, path_buf.as_mut_ptr(), path_buf.len() as u32);
             if len > 0 {
                 let s = String::from_utf16_lossy(&path_buf[..len as usize]);
                 let p = PathBuf::from(s);
