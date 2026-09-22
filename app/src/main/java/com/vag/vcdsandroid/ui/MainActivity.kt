@@ -441,6 +441,60 @@ class MainActivity : AppCompatActivity() {
                 "(zeroTx=${identity.isZeroTxEnforced}, serial=${identity.serialNumber})"
         )
 
+        if (adapter is HexB03Adapter) {
+            adapter.setRawTraceListener { direction, data ->
+                val hex = data.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+                DiagLog.i("B03_M1", "$direction $hex")
+            }
+
+            lifecycleScope.launch {
+                binding.btnConnect.isEnabled = false
+                binding.tvSubStatus.text = "Opening FA24 interface..."
+
+                val probeResult = adapter.probeInterface()
+
+                binding.btnConnect.isEnabled = true
+                probeResult.fold(
+                    onSuccess = { probe ->
+                        val probeHex = probe.probePayload.joinToString(" ") {
+                            "%02X".format(it.toInt() and 0xFF)
+                        }
+                        binding.tvSubStatus.text = "Interface responded: ${probe.identityText}"
+                        DiagLog.i(
+                            "B03_M1",
+                            "INTERFACE RESPONDED identity=${probe.identityText}, " +
+                                "probePayload=[$probeHex], elapsedMs=${probe.elapsedMs}"
+                        )
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("INTERFACE RESPONDED")
+                            .setMessage(
+                                "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
+                                    "Serial: ${identity.serialNumber ?: "N/A"}\n" +
+                                    "Identity: ${probe.identityText}\n" +
+                                    "Probe reply: $probeHex\n" +
+                                    "Time: ${probe.elapsedMs} ms"
+                            )
+                            .setPositiveButton("OK", null)
+                            .show()
+                    },
+                    onFailure = { error ->
+                        binding.tvSubStatus.text = "Interface handshake failed"
+                        DiagLog.e("B03_M1", "Interface probe failed: ${error.message}")
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("INTERFACE HANDSHAKE FAILED")
+                            .setMessage(
+                                "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
+                                    "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
+                                    (error.message ?: "Unknown interface error")
+                            )
+                            .setPositiveButton("OK", null)
+                            .show()
+                    }
+                )
+            }
+            return
+        }
+
         if (identity.isZeroTxEnforced) {
             AlertDialog.Builder(this)
                 .setTitle(identity.profileName)
