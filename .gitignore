@@ -8,3 +8,16 @@ app/build/
 /screen_*.jpg
 /window_dump.xml
 /sample_log.csv
+
+# SQLite local databases (canonical truth store remains local, remote JSON is committed)
+*.db
+*.sqlite3
+vcds-kb/*.db
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs and scratch
+*.log
+

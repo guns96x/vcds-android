@@ -1,0 +1,23 @@
+{
+  "vcds_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+  "vcds_version": "26.3.0.0",
+  "rtus64_sha256": "B2A261C16355BC3C1313F5A2F86591AC430EC5DDC7D1DDF24B517A5FB97B48F2",
+  "ghidra_version": "12.1.4_PUBLIC",
+  "schema_version": "2.0",
+  "generated_at": "2026-09-22T22:13:17.295637+00:00",
+  "snapshot_state": "CANONICAL_DB_EXPORT",
+  "claim_count": 10,
+  "function_count": 4605,
+  "verified_function_count": 25,
+  "gap_count": 2,
+  "conflict_count": 0,
+  "retraction_count": 5,
+  "integrity_status": "VALID",
+  "coverage_summary": {
+    "d2xx_transport": "PROVEN_STATIC",
+    "framing_builder_parser": "PROVEN_STATIC",
+    "baud_switch_handshake": "PROVEN_STATIC",
+    "five_baud_parity_init": "PROVEN_STATIC",
+    "diagnostic_payload_encapsulation": "UNKNOWN_P0_GAP"
+  }
+}

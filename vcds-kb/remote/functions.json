@@ -1,0 +1,227 @@
+[
+  {
+    "address": "0x14005911C",
+    "rva": "0x0005911C",
+    "original_name": "FUN_14005911c",
+    "assigned_name": "BlockDlg::OnGraph",
+    "namespace": "Global",
+    "semantic_category": "UI",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14007E3B4",
+    "rva": "0x0007E3B4",
+    "original_name": "FUN_14007e3b4",
+    "assigned_name": "vcds_cmd_init_5baud",
+    "namespace": "Global",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14007E988",
+    "rva": "0x0007E988",
+    "original_name": "FUN_14007e988",
+    "assigned_name": "vcds_cmd_get_version",
+    "namespace": "Global",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14007EC2C",
+    "rva": "0x0007EC2C",
+    "original_name": "FUN_14007ec2c",
+    "assigned_name": "vcds_cmd_set_com_baud",
+    "namespace": "Global",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14007ED84",
+    "rva": "0x0007ED84",
+    "original_name": "FUN_14007ed84",
+    "assigned_name": "vcds_cmd_kline_test",
+    "namespace": "Global",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14007F1D8",
+    "rva": "0x0007F1D8",
+    "original_name": "FUN_14007f1d8",
+    "assigned_name": "vcds_read_controller_blocks",
+    "namespace": "Global",
+    "semantic_category": "SESSION",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14007F758",
+    "rva": "0x0007F758",
+    "original_name": "FUN_14007f758",
+    "assigned_name": "vcds_cmd_reset",
+    "namespace": "Global",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x1401117BC",
+    "rva": "0x001117BC",
+    "original_name": "FUN_1401117bc",
+    "assigned_name": "vcds_ftdi_read_byte",
+    "namespace": "Global",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x140111828",
+    "rva": "0x00111828",
+    "original_name": "FUN_140111828",
+    "assigned_name": "vcds_ftdi_write_byte",
+    "namespace": "Global",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14011185C",
+    "rva": "0x0011185C",
+    "original_name": "FUN_14011185c",
+    "assigned_name": "vcds_ftdi_write_buffer",
+    "namespace": "Global",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x140111F40",
+    "rva": "0x00111F40",
+    "original_name": "FUN_140111f40",
+    "assigned_name": "vcds_ftdi_enumerate_and_open",
+    "namespace": "Global",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x140112160",
+    "rva": "0x00112160",
+    "original_name": "FUN_140112160",
+    "assigned_name": "vcds_ftdi_init_channel",
+    "namespace": "Global",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14011FEB8",
+    "rva": "0x0011FEB8",
+    "original_name": "FUN_14011feb8",
+    "assigned_name": "vcds_security_challenge_verify",
+    "namespace": "Global",
+    "semantic_category": "SECURITY",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14018C860",
+    "rva": "0x0018C860",
+    "original_name": "FT_Write",
+    "assigned_name": "FT_Write",
+    "namespace": "RTUS64.dll",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14018C858",
+    "rva": "0x0018C858",
+    "original_name": "FT_Read",
+    "assigned_name": "FT_Read",
+    "namespace": "RTUS64.dll",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14018C890",
+    "rva": "0x0018C890",
+    "original_name": "FT_GetQueueStatus",
+    "assigned_name": "FT_GetQueueStatus",
+    "namespace": "RTUS64.dll",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14018C878",
+    "rva": "0x0018C878",
+    "original_name": "FT_SetLatencyTimer",
+    "assigned_name": "FT_SetLatencyTimer",
+    "namespace": "RTUS64.dll",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14018C848",
+    "rva": "0x0018C848",
+    "original_name": "FT_SetTimeouts",
+    "assigned_name": "FT_SetTimeouts",
+    "namespace": "RTUS64.dll",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14018C820",
+    "rva": "0x0018C820",
+    "original_name": "FT_SetDataCharacteristics",
+    "assigned_name": "FT_SetDataCharacteristics",
+    "namespace": "RTUS64.dll",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14018C8A8",
+    "rva": "0x0018C8A8",
+    "original_name": "FT_Open",
+    "assigned_name": "FT_Open",
+    "namespace": "RTUS64.dll",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14018C810",
+    "rva": "0x0018C810",
+    "original_name": "FT_ResetDevice",
+    "assigned_name": "FT_ResetDevice",
+    "namespace": "RTUS64.dll",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14018C8B8",
+    "rva": "0x0018C8B8",
+    "original_name": "FT_SetBaudRate",
+    "assigned_name": "FT_SetBaudRate",
+    "namespace": "RTUS64.dll",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14018C840",
+    "rva": "0x0018C840",
+    "original_name": "FT_Purge",
+    "assigned_name": "FT_Purge",
+    "namespace": "RTUS64.dll",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14007E734",
+    "rva": "0x0007E734",
+    "original_name": "vcds_adapter_send_frame",
+    "assigned_name": "vcds_adapter_send_frame",
+    "namespace": "HC::Transport",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  },
+  {
+    "address": "0x14007E824",
+    "rva": "0x0007E824",
+    "original_name": "vcds_adapter_read_frame",
+    "assigned_name": "vcds_adapter_read_frame",
+    "namespace": "HC::Transport",
+    "semantic_category": "TRANSPORT",
+    "semantic_status": "PROVEN_STATIC"
+  }
+]

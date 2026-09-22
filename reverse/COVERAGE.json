@@ -1,0 +1,20 @@
+{
+  "binary_functions_total": 4605,
+  "functions_decompiled": 113,
+  "functions_failed": 0,
+  "functions_classified": 25,
+  "functions_semantically_verified": 25,
+  "direct_calls_resolved": 25049,
+  "indirect_calls_total": 6198,
+  "indirect_calls_resolved": 6198,
+  "vtables_total": 1,
+  "vtable_slots_total": 35,
+  "vtable_slots_resolved": 35,
+  "transport_functions_verified": 22,
+  "adapter_opcodes_found": 3,
+  "adapter_opcodes_verified": 3,
+  "diagnostic_services_found": 1,
+  "diagnostic_services_mapped_to_transport": 0,
+  "runtime_actions_traced": 0,
+  "open_P0_gaps": 2
+}

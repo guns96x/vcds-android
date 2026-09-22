@@ -1,0 +1,102 @@
+[
+  {
+    "claim_key": "CLAIM_D2XX_FT_WRITE_PTR",
+    "statement": "FT_Write pointer is located at slot 0x14018C860 in .rdata, pointing to RTUS64.dll!FT_Write (RVA 0x02C10).",
+    "evidence_status": "PROVEN_STATIC",
+    "binary_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+    "function_address": "0x14018C860",
+    "callsite": "0x14011185C",
+    "confidence": "HIGH",
+    "provenance": "Export table matching RTUS64.dll and decompiler xrefs in FUN_14011185c"
+  },
+  {
+    "claim_key": "CLAIM_D2XX_FT_READ_PTR",
+    "statement": "FT_Read pointer is located at slot 0x14018C858 in .rdata, pointing to RTUS64.dll!FT_Read (RVA 0x02BB0).",
+    "evidence_status": "PROVEN_STATIC",
+    "binary_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+    "function_address": "0x14018C858",
+    "callsite": "0x1401117BC",
+    "confidence": "HIGH",
+    "provenance": "Export table matching RTUS64.dll and decompiler xrefs in FUN_1401117bc"
+  },
+  {
+    "claim_key": "CLAIM_D2XX_LATENCY_TIMER",
+    "statement": "VCDS configures FTDI USB Latency Timer to 1 ms via FT_SetLatencyTimer(ftHandle, 1) in FUN_140111f40.",
+    "evidence_status": "PROVEN_STATIC",
+    "binary_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+    "function_address": "0x140111F40",
+    "callsite": "0x140112028",
+    "confidence": "HIGH",
+    "provenance": "Decompiled C AST in FUN_140111f40 calling (*DAT_14018c878)(DAT_140630f48, 1)"
+  },
+  {
+    "claim_key": "CLAIM_D2XX_VID_PID_FILTER",
+    "statement": "VCDS filters connected FTDI devices for Ross-Tech hardware by checking ID at offset +8 of FT_DEVICE_LIST_INFO_NODE (VID == 0x0403, PID in 0xFA20..0xFA2F).",
+    "evidence_status": "PROVEN_STATIC",
+    "binary_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+    "function_address": "0x140111F40",
+    "callsite": "0x140111F80",
+    "confidence": "HIGH",
+    "provenance": "Decompiled C AST in FUN_140111f40 lines 24-32"
+  },
+  {
+    "claim_key": "CLAIM_FRAME_BUILDER",
+    "statement": "Host-to-adapter request frames are constructed by FUN_14007e734: sync byte 0x53 ('S'), length byte L = payload_len + 3, XOR checksum appended.",
+    "evidence_status": "PROVEN_STATIC",
+    "binary_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+    "function_address": "0x14007E734",
+    "callsite": "0x14007E734",
+    "confidence": "HIGH",
+    "provenance": "Decompiled C AST in FUN_14007e734 and vtable slot 0x108 at 0x1401AD4C8"
+  },
+  {
+    "claim_key": "CLAIM_FRAME_PARSER",
+    "statement": "Adapter-to-host response frames are verified by FUN_14007e824: sync byte 0x4D ('M'), total length L, cumulative XOR checksum over all L bytes must equal 0x00.",
+    "evidence_status": "PROVEN_STATIC",
+    "binary_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+    "function_address": "0x14007E824",
+    "callsite": "0x14007E824",
+    "confidence": "HIGH",
+    "provenance": "Decompiled C AST in FUN_14007e824 and vtable slot 0x110 at 0x1401AD4D0"
+  },
+  {
+    "claim_key": "CLAIM_5BAUD_PARITY",
+    "statement": "5-baud address encoding in FUN_14007e3b4 uses ODD PARITY: bit 7 (0x80) is set ONLY if initial 1-bits count is even. Address 0x01 has 1 bit -> encodes to 0x01.",
+    "evidence_status": "PROVEN_STATIC",
+    "binary_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+    "function_address": "0x14007E3B4",
+    "callsite": "0x14007E3B4",
+    "confidence": "HIGH",
+    "provenance": "Decompiled C AST lines 20-33 in FUN_14007e3b4"
+  },
+  {
+    "claim_key": "CLAIM_OPCODE_02_VERSION",
+    "statement": "Opcode 0x02 (HC::GetVersion) queries adapter firmware version and model character ('D' for Dual-K+CAN) with 750 ms timeout.",
+    "evidence_status": "PROVEN_STATIC",
+    "binary_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+    "function_address": "0x14007E988",
+    "callsite": "0x14007E9C7",
+    "confidence": "HIGH",
+    "provenance": "Decompiled C AST and strings in FUN_14007e988"
+  },
+  {
+    "claim_key": "CLAIM_OPCODE_03_BAUD",
+    "statement": "Opcode 0x03 (HC::Com115) switches UART speed to 115200 via 4-phase handshake (0x03 -> 0xFE -> local FT_SetBaudRate -> 0xFD -> 0xFE).",
+    "evidence_status": "PROVEN_STATIC",
+    "binary_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+    "function_address": "0x14007EC2C",
+    "callsite": "0x14007EC5E",
+    "confidence": "HIGH",
+    "provenance": "Decompiled C AST and strings in FUN_14007ec2c"
+  },
+  {
+    "claim_key": "CLAIM_OPCODE_84_5BAUD_INIT",
+    "statement": "Opcode 0x84 (HC::Init5Baud) instructs adapter microcontroller to autonomously drive 5-baud wake-up pulses on K-line with 3300 ms timeout.",
+    "evidence_status": "PROVEN_STATIC",
+    "binary_sha256": "CC7F81CC08222A14A6317ABF5EBDF059E5A8853EA885524C562E0602B19733E3",
+    "function_address": "0x14007E3B4",
+    "callsite": "0x14007E410",
+    "confidence": "HIGH",
+    "provenance": "Decompiled C AST in FUN_14007e3b4 with 0x55 sync byte validation"
+  }
+]
