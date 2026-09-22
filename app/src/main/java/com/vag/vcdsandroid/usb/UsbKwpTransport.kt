@@ -14,6 +14,7 @@ import com.hoho.android.usbserial.driver.ProlificSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
+import com.vag.vcdsandroid.protocol.KwpSlowInit
 import java.io.IOException
 
 /**
@@ -24,6 +25,20 @@ data class AdapterInfo(
     val displayName: String,
     val isRossTechIntelligent: Boolean,
     val vidPidHex: String
+)
+
+data class FiveBaudSlowInitResult(
+    val success: Boolean,
+    val address: Int,
+    val syncByte: Int? = null,
+    val keyByte1: Int? = null,
+    val keyByte2: Int? = null,
+    val addressComplement: Int? = null,
+    val sessionBaud: Int = KwpSlowInit.PRIMARY_SESSION_BAUD,
+    val failureStage: String? = null,
+    val ignoredBeforeSync: ByteArray = byteArrayOf(),
+    val w4SendDelayMs: Long? = null,
+    val elapsedMs: Long = 0L
 )
 
 /**
@@ -366,7 +381,7 @@ class UsbKwpTransport(private val context: Context) {
             isPortOpen = true
             android.util.Log.i(
                 "VCDS_DUMB",
-                "DUMB K-LINE PASS-THROUGH CONFIRMED at $KLINE_BAUD_RATE baud"
+                "K-LINE RAW ECHO DETECTED at $KLINE_BAUD_RATE baud; ECU slow-init still required"
             )
             return true
         } catch (e: Exception) {
@@ -377,6 +392,210 @@ class UsbKwpTransport(private val context: Context) {
             isPortOpen = false
             currentDevice = null
             return false
+        }
+    }
+
+
+    /**
+     * Performs the ISO 9141 / ISO 14230 five-baud wake-up on an already-open
+     * transparent K-Line port.
+     *
+     * This implements the missing connection primitive proven necessary by the
+     * user's own real-car trace (ELM reports ISO 14230-4 / KWP 5BAUD):
+     *  - address is emitted as 7O1 using BREAK line levels at 200 ms/bit;
+     *  - RX garbage/echo caused by BREAK transitions is ignored until ECU sync 0x55;
+     *  - exactly two key bytes are collected;
+     *  - the complement of key byte 2 is sent inside the W4 25-50 ms window;
+     *  - tester echo is tolerated while waiting for the ECU address complement.
+     *
+     * No diagnostic service is sent here. A successful result proves the physical
+     * ECU at [address] completed the slow-init handshake.
+     */
+    fun performFiveBaudSlowInit(address: Int = 0x01): FiveBaudSlowInitResult = synchronized(ioLock) {
+        val port = serialPort ?: return@synchronized FiveBaudSlowInitResult(
+            success = false,
+            address = address,
+            failureStage = "PORT_NOT_OPEN"
+        )
+
+        val startedNs = System.nanoTime()
+        val ignored = ArrayList<Byte>(16)
+
+        fun elapsedMs(): Long = (System.nanoTime() - startedNs) / 1_000_000L
+
+        fun failure(
+            stage: String,
+            sync: Int? = null,
+            key1: Int? = null,
+            key2: Int? = null,
+            w4: Long? = null
+        ): FiveBaudSlowInitResult {
+            try { port.setBreak(false) } catch (_: Exception) {}
+            return FiveBaudSlowInitResult(
+                success = false,
+                address = address,
+                syncByte = sync,
+                keyByte1 = key1,
+                keyByte2 = key2,
+                sessionBaud = KwpSlowInit.PRIMARY_SESSION_BAUD,
+                failureStage = stage,
+                ignoredBeforeSync = ignored.toByteArray(),
+                w4SendDelayMs = w4,
+                elapsedMs = elapsedMs()
+            )
+        }
+
+        fun waitUntilNs(deadlineNs: Long) {
+            while (true) {
+                val remainingNs = deadlineNs - System.nanoTime()
+                if (remainingNs <= 0L) return
+
+                // Sleep while there is comfortable headroom, then yield/spin near
+                // the edge. The 200 ms address bits tolerate scheduler jitter; W4
+                // is handled separately with the same monotonic clock.
+                if (remainingNs > 3_000_000L) {
+                    val sleepMs = (remainingNs / 1_000_000L - 1L).coerceAtLeast(1L)
+                    Thread.sleep(sleepMs)
+                } else {
+                    Thread.yield()
+                }
+            }
+        }
+
+        fun readOneUntil(deadlineNs: Long): Int? {
+            val one = ByteArray(1)
+            while (System.nanoTime() < deadlineNs) {
+                val remainingMs = ((deadlineNs - System.nanoTime()) / 1_000_000L)
+                    .coerceAtLeast(1L)
+                    .coerceAtMost(5L)
+                    .toInt()
+                val n = try {
+                    port.read(one, remainingMs)
+                } catch (_: Exception) {
+                    0
+                }
+                if (n > 0) return one[0].toInt() and 0xFF
+            }
+            return null
+        }
+
+        try {
+            if (address !in 0..0x7F) return@synchronized failure("INVALID_7BIT_ADDRESS")
+
+            // Incoming sync/key bytes use the normal session UART parameters.
+            port.setParameters(
+                KwpSlowInit.PRIMARY_SESSION_BAUD,
+                8,
+                UsbSerialPort.STOPBITS_1,
+                UsbSerialPort.PARITY_NONE
+            )
+            port.dtr = true
+            port.rts = false
+            port.setBreak(false)
+            port.purgeHwBuffers(true, true)
+
+            // ISO W0: bus idle/high before starting the five-baud address.
+            val idleUntil = System.nanoTime() + 5_000_000L
+            waitUntilNs(idleUntil)
+
+            val bits = KwpSlowInit.addressBits7O1(address)
+            var bitEndNs = System.nanoTime()
+
+            // Start + D0..D6 + parity: each is held for a full 200 ms.
+            // The stop level stays HIGH while we immediately begin W1 sync wait.
+            for (i in 0 until bits.lastIndex) {
+                port.setBreak(!bits[i]) // BREAK asserted = K-Line LOW
+                bitEndNs += KwpSlowInit.BIT_TIME_MS * 1_000_000L
+                waitUntilNs(bitEndNs)
+            }
+            port.setBreak(false) // stop / idle HIGH
+
+            // Do NOT purge here: ECU 0x55 may already be on its way. BREAK
+            // transitions can create local echo bytes, so scan until real sync.
+            val syncDeadline = System.nanoTime() + KwpSlowInit.W1_SYNC_MAX_MS * 1_000_000L
+            var sync: Int? = null
+            while (System.nanoTime() < syncDeadline) {
+                val b = readOneUntil(syncDeadline) ?: break
+                if (b == 0x55) {
+                    sync = b
+                    break
+                }
+                if (ignored.size < 32) ignored.add(b.toByte())
+            }
+            if (sync != 0x55) return@synchronized failure("WAIT_SYNC_55")
+
+            // Read one byte at a time so no key byte is accidentally consumed in
+            // the same USB read as the sync byte. Low FTDI latency is essential.
+            val key1 = readOneUntil(
+                System.nanoTime() + (KwpSlowInit.W2_KEY1_MAX_MS + 10L) * 1_000_000L
+            ) ?: return@synchronized failure("WAIT_KEY1", sync = sync)
+
+            val key2 = readOneUntil(
+                System.nanoTime() + (KwpSlowInit.W3_KEY2_MAX_MS + 10L) * 1_000_000L
+            ) ?: return@synchronized failure("WAIT_KEY2", sync = sync, key1 = key1)
+
+            // W4 is the critical part. Do no logging/string formatting here.
+            val lastKeyReadNs = System.nanoTime()
+            val earliestComplementNs =
+                lastKeyReadNs + KwpSlowInit.W4_COMPLEMENT_MIN_MS * 1_000_000L
+            val latestComplementNs =
+                lastKeyReadNs + KwpSlowInit.W4_COMPLEMENT_MAX_MS * 1_000_000L
+
+            waitUntilNs(earliestComplementNs)
+            if (System.nanoTime() > latestComplementNs) {
+                return@synchronized failure(
+                    "W4_MISSED",
+                    sync = sync,
+                    key1 = key1,
+                    key2 = key2,
+                    w4 = (System.nanoTime() - lastKeyReadNs) / 1_000_000L
+                )
+            }
+
+            val keyComplement = KwpSlowInit.byteComplement(key2)
+            port.write(byteArrayOf(keyComplement.toByte()), 50)
+            val w4DelayMs = (System.nanoTime() - lastKeyReadNs) / 1_000_000L
+
+            // Dumb K-Line adapters echo our own byte. Ignore that echo and any
+            // unrelated transition byte until the ECU returns ~address.
+            val expectedAddressComplement = KwpSlowInit.expectedAddressComplement(address)
+            val complementDeadline =
+                System.nanoTime() + KwpSlowInit.ADDRESS_COMPLEMENT_TIMEOUT_MS * 1_000_000L
+            var ecuComplement: Int? = null
+            while (System.nanoTime() < complementDeadline) {
+                val b = readOneUntil(complementDeadline) ?: break
+                if (b == expectedAddressComplement) {
+                    ecuComplement = b
+                    break
+                }
+                // keyComplement is normally the local tester echo; ignore it.
+            }
+
+            if (ecuComplement != expectedAddressComplement) {
+                return@synchronized failure(
+                    "WAIT_ADDRESS_COMPLEMENT",
+                    sync = sync,
+                    key1 = key1,
+                    key2 = key2,
+                    w4 = w4DelayMs
+                )
+            }
+
+            FiveBaudSlowInitResult(
+                success = true,
+                address = address,
+                syncByte = sync,
+                keyByte1 = key1,
+                keyByte2 = key2,
+                addressComplement = ecuComplement,
+                sessionBaud = KwpSlowInit.PRIMARY_SESSION_BAUD,
+                ignoredBeforeSync = ignored.toByteArray(),
+                w4SendDelayMs = w4DelayMs,
+                elapsedMs = elapsedMs()
+            )
+        } catch (e: Exception) {
+            android.util.Log.e("VCDS_SLOW_INIT", "Five-baud init exception: ${e.message}")
+            failure("EXCEPTION_${e.javaClass.simpleName}")
         }
     }
 
