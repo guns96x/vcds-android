@@ -1,0 +1,209 @@
+2026-09-20 13:11:46.512 I/DIAG_LOG: === session start 2026-09-20 13:11:46.511 ===
+2026-09-20 13:11:46.610 I/VCDS_USB: onCreate: current USB devices: no USB devices in UsbManager.deviceList (nothing enumerated)
+2026-09-20 13:11:48.659 W/VCDS_USB: performConnect: no cable found. USB devices Android currently sees: no USB devices in UsbManager.deviceList (nothing enumerated)
+2026-09-20 13:11:48.837 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 13:11:59.954 W/VCDS_USB: performConnect: no cable found. USB devices Android currently sees: no USB devices in UsbManager.deviceList (nothing enumerated)
+2026-09-20 13:12:00.035 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 13:12:04.789 I/VCDS_USB: USB_DEVICE_ATTACHED: 0403:FA24 Ross-Tech HEX-USB+CAN (Вася)
+2026-09-20 13:12:13.727 I/VCDS_PROBE: Connect tapped: 0403:FA24
+2026-09-20 13:12:13.737 I/VCDS_PROBE: === Connection attempt 1/3 ===
+2026-09-20 13:12:13.739 I/VCDS_USB: connect(): VID:PID=0403:FA24 name=Ross-Tech HEX-USB+CAN (Вася) devName=/dev/bus/usb/001/002
+2026-09-20 13:12:13.742 I/VCDS_USB: Serial port opened OK at 500000 baud, DTR=false (MCU reset released)
+2026-09-20 13:12:13.805 I/VCDS_PROBE: Starting Ross-Tech Intelligent CAN TP2.0 / ATmega probing...
+2026-09-20 13:12:13.806 I/VCDS_PROBE: --- Trying DTR=false (FT232R DTR# = HIGH/run) ---
+2026-09-20 13:12:14.668 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 13:12:15.184 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 13:12:15.444 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 13:12:15.953 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 13:12:16.223 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 13:12:16.731 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 13:12:16.735 I/VCDS_PROBE: --- Trying DTR=true (FT232R DTR# = LOW/reset) ---
+2026-09-20 13:12:17.601 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 13:12:18.111 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 13:12:18.377 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 13:12:18.891 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 13:12:19.168 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 13:12:19.680 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 13:12:19.686 I/VCDS_PROBE: Ross-Tech CAN probing gave no positive reply, falling back to K-Line at 10400 baud
+2026-09-20 13:12:19.750 I/VCDS_PROBE: K-Line tryInitDirect target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 13:12:20.206 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 13:12:20.297 I/VCDS_PROBE: K-Line tryInitDirectId target=0x01 TX: 82 01 F1 1A 9B 29
+2026-09-20 13:12:20.909 I/VCDS_PROBE: K-Line tryInitDirectId: no reply (0 bytes)
+2026-09-20 13:12:21.003 I/VCDS_PROBE: K-Line tryInitFastPulse: sending 25ms break + 25ms mark
+2026-09-20 13:12:21.058 I/VCDS_PROBE: K-Line tryInitFastPulse target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 13:12:21.514 I/VCDS_PROBE: K-Line tryInitFastPulse: no reply (0 bytes)
+2026-09-20 13:12:21.606 I/VCDS_PROBE: K-Line tryInitDirect target=0x33 TX: 81 33 F1 81 26
+2026-09-20 13:12:22.060 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 13:12:22.067 I/VCDS_PROBE: Connect result: failed: Ross-Tech adapter online (TCP bridge :9999 ready). ECU did not reply: ensure ignition is ON and adapter LED is lit.
+2026-09-20 13:12:22.154 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 13:12:24.499 I/VCDS_PROBE: Connect tapped: 0403:FA24
+2026-09-20 13:12:24.503 I/VCDS_PROBE: === Connection attempt 1/3 ===
+2026-09-20 13:12:24.570 I/VCDS_PROBE: Starting Ross-Tech Intelligent CAN TP2.0 / ATmega probing...
+2026-09-20 13:12:24.574 I/VCDS_PROBE: --- Trying DTR=false (FT232R DTR# = HIGH/run) ---
+2026-09-20 13:12:25.447 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 13:12:25.962 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 13:12:26.235 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 13:12:26.748 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 13:12:27.020 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 13:12:27.529 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 13:12:27.535 I/VCDS_PROBE: --- Trying DTR=true (FT232R DTR# = LOW/reset) ---
+2026-09-20 13:12:28.408 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 13:12:28.918 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 13:12:29.188 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 13:12:29.699 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 13:12:29.955 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 13:12:30.467 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 13:12:30.467 I/VCDS_PROBE: Ross-Tech CAN probing gave no positive reply, falling back to K-Line at 10400 baud
+2026-09-20 13:12:30.520 I/VCDS_PROBE: K-Line tryInitDirect target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 13:12:30.971 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 13:12:31.056 I/VCDS_PROBE: K-Line tryInitDirectId target=0x01 TX: 82 01 F1 1A 9B 29
+2026-09-20 13:12:31.663 I/VCDS_PROBE: K-Line tryInitDirectId: no reply (0 bytes)
+2026-09-20 13:12:31.744 I/VCDS_PROBE: K-Line tryInitFastPulse: sending 25ms break + 25ms mark
+2026-09-20 13:12:31.795 I/VCDS_PROBE: K-Line tryInitFastPulse target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 13:12:32.245 I/VCDS_PROBE: K-Line tryInitFastPulse: no reply (0 bytes)
+2026-09-20 13:12:32.330 I/VCDS_PROBE: K-Line tryInitDirect target=0x33 TX: 81 33 F1 81 26
+2026-09-20 13:12:32.786 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 13:12:32.792 I/VCDS_PROBE: Connect result: failed: Ross-Tech adapter online (TCP bridge :9999 ready). ECU did not reply: ensure ignition is ON and adapter LED is lit.
+2026-09-20 13:12:32.873 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 13:12:41.286 I/DIAG_LOG: === session start 2026-09-20 13:12:41.285 ===
+2026-09-20 13:12:41.370 I/VCDS_USB: onCreate: current USB devices: VID:PID=0403:FA24 class=0 subclass=0 name=/dev/bus/usb/001/002 product=Ross-Tech HEX-USB
+2026-09-20 13:12:42.550 I/VCDS_PROBE: Connect tapped: 0403:FA24
+2026-09-20 13:12:42.556 I/VCDS_PROBE: === Connection attempt 1/3 ===
+2026-09-20 13:12:42.559 I/VCDS_USB: connect(): VID:PID=0403:FA24 name=Ross-Tech HEX-USB+CAN (Вася) devName=/dev/bus/usb/001/002
+2026-09-20 13:12:42.565 I/VCDS_USB: Serial port opened OK at 500000 baud, DTR=false (MCU reset released)
+2026-09-20 13:12:42.629 I/VCDS_PROBE: Starting Ross-Tech Intelligent CAN TP2.0 / ATmega probing...
+2026-09-20 13:12:42.630 I/VCDS_PROBE: --- Trying DTR=false (FT232R DTR# = HIGH/run) ---
+2026-09-20 13:12:43.493 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 13:12:44.007 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 13:12:44.276 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 13:12:44.789 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 13:12:45.060 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 13:12:45.569 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 13:12:45.575 I/VCDS_PROBE: --- Trying DTR=true (FT232R DTR# = LOW/reset) ---
+2026-09-20 13:12:46.444 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 13:12:46.957 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 13:12:47.228 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 13:12:47.742 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 13:12:48.016 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 13:12:48.523 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 13:12:48.530 I/VCDS_PROBE: Ross-Tech CAN probing gave no positive reply, falling back to K-Line at 10400 baud
+2026-09-20 13:12:48.593 I/VCDS_PROBE: K-Line tryInitDirect target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 13:12:49.052 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 13:12:49.144 I/VCDS_PROBE: K-Line tryInitDirectId target=0x01 TX: 82 01 F1 1A 9B 29
+2026-09-20 13:12:49.759 I/VCDS_PROBE: K-Line tryInitDirectId: no reply (0 bytes)
+2026-09-20 13:12:49.852 I/VCDS_PROBE: K-Line tryInitFastPulse: sending 25ms break + 25ms mark
+2026-09-20 13:12:49.909 I/VCDS_PROBE: K-Line tryInitFastPulse target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 13:12:50.367 I/VCDS_PROBE: K-Line tryInitFastPulse: no reply (0 bytes)
+2026-09-20 13:12:50.458 I/VCDS_PROBE: K-Line tryInitDirect target=0x33 TX: 81 33 F1 81 26
+2026-09-20 13:12:50.913 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 13:12:50.921 I/VCDS_PROBE: Connect result: failed: Ross-Tech adapter online (TCP bridge :9999 ready). ECU did not reply: ensure ignition is ON and adapter LED is lit.
+2026-09-20 13:12:51.055 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 13:56:13.818 I/DIAG_LOG: === session start 2026-09-20 13:56:13.816 ===
+2026-09-20 13:56:13.898 I/VCDS_USB: onCreate: current USB devices: no USB devices in UsbManager.deviceList (nothing enumerated)
+2026-09-20 13:56:20.940 W/VCDS_USB: performConnect: no cable found. USB devices Android currently sees: no USB devices in UsbManager.deviceList (nothing enumerated)
+2026-09-20 13:56:21.055 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 13:56:28.113 I/VCDS_USB: USB_DEVICE_ATTACHED: 0403:FA24 Ross-Tech HEX-USB+CAN (Вася)
+2026-09-20 13:56:40.520 I/VCDS_PROBE: Connect tapped: 0403:FA24
+2026-09-20 13:56:40.527 I/VCDS_PROBE: === Connection attempt 1/3 ===
+2026-09-20 13:56:40.533 I/VCDS_USB: connect(): VID:PID=0403:FA24 name=Ross-Tech HEX-USB+CAN (Вася) devName=/dev/bus/usb/001/002
+2026-09-20 13:56:40.539 I/VCDS_USB: Serial port opened OK at 500000 baud, DTR=false (MCU reset released)
+2026-09-20 13:56:40.603 I/VCDS_PROBE: Starting Ross-Tech Intelligent CAN TP2.0 / ATmega probing...
+2026-09-20 13:56:40.604 I/VCDS_PROBE: --- Trying DTR=false (FT232R DTR# = HIGH/run) ---
+2026-09-20 13:56:41.462 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 13:56:41.970 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 13:56:42.231 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 13:56:42.742 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 13:56:43.006 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 13:56:43.514 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 13:56:43.519 I/VCDS_PROBE: --- Trying DTR=true (FT232R DTR# = LOW/reset) ---
+2026-09-20 13:56:44.386 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 13:56:44.898 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 13:56:45.162 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 13:56:45.674 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 13:56:45.939 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 13:56:46.447 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 13:56:46.452 I/VCDS_PROBE: Ross-Tech CAN probing gave no positive reply, falling back to K-Line at 10400 baud
+2026-09-20 13:56:46.509 I/VCDS_PROBE: K-Line tryInitDirect target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 13:56:46.967 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 13:56:47.052 I/VCDS_PROBE: K-Line tryInitDirectId target=0x01 TX: 82 01 F1 1A 9B 29
+2026-09-20 13:56:47.663 I/VCDS_PROBE: K-Line tryInitDirectId: no reply (0 bytes)
+2026-09-20 13:56:47.751 I/VCDS_PROBE: K-Line tryInitFastPulse: sending 25ms break + 25ms mark
+2026-09-20 13:56:47.804 I/VCDS_PROBE: K-Line tryInitFastPulse target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 13:56:48.255 I/VCDS_PROBE: K-Line tryInitFastPulse: no reply (0 bytes)
+2026-09-20 13:56:48.344 I/VCDS_PROBE: K-Line tryInitDirect target=0x33 TX: 81 33 F1 81 26
+2026-09-20 13:56:48.806 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 13:56:48.812 I/VCDS_PROBE: Connect result: failed: USB serial port opened, but no confirmed reply from the cable controller or ECU. Check ignition, cable LED and interface compatibility.
+2026-09-20 13:56:48.902 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 13:56:51.816 I/VCDS_PROBE: Connect tapped: 0403:FA24
+2026-09-20 13:56:51.818 I/VCDS_PROBE: === Connection attempt 1/3 ===
+2026-09-20 13:56:51.883 I/VCDS_PROBE: Starting Ross-Tech Intelligent CAN TP2.0 / ATmega probing...
+2026-09-20 13:56:51.886 I/VCDS_PROBE: --- Trying DTR=false (FT232R DTR# = HIGH/run) ---
+2026-09-20 13:56:52.751 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 13:56:53.262 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 13:56:53.526 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 13:56:54.029 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 13:56:54.290 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 13:56:54.796 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 13:56:54.799 I/VCDS_PROBE: --- Trying DTR=true (FT232R DTR# = LOW/reset) ---
+2026-09-20 13:56:55.660 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 13:56:56.171 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 13:56:56.434 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 13:56:56.938 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 13:56:57.198 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 13:56:57.704 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 13:56:57.708 I/VCDS_PROBE: Ross-Tech CAN probing gave no positive reply, falling back to K-Line at 10400 baud
+2026-09-20 13:56:57.766 I/VCDS_PROBE: K-Line tryInitDirect target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 13:56:58.222 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 13:56:58.310 I/VCDS_PROBE: K-Line tryInitDirectId target=0x01 TX: 82 01 F1 1A 9B 29
+2026-09-20 13:56:58.918 I/VCDS_PROBE: K-Line tryInitDirectId: no reply (0 bytes)
+2026-09-20 13:56:59.006 I/VCDS_PROBE: K-Line tryInitFastPulse: sending 25ms break + 25ms mark
+2026-09-20 13:56:59.059 I/VCDS_PROBE: K-Line tryInitFastPulse target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 13:56:59.510 I/VCDS_PROBE: K-Line tryInitFastPulse: no reply (0 bytes)
+2026-09-20 13:56:59.596 I/VCDS_PROBE: K-Line tryInitDirect target=0x33 TX: 81 33 F1 81 26
+2026-09-20 13:57:00.053 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 13:57:00.057 I/VCDS_PROBE: Connect result: failed: USB serial port opened, but no confirmed reply from the cable controller or ECU. Check ignition, cable LED and interface compatibility.
+2026-09-20 13:57:00.164 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 13:58:33.635 W/VCDS_USB: USB_DEVICE_DETACHED: 0403:FA24
+2026-09-20 13:58:33.687 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 14:07:44.632 W/VCDS_USB: performConnect: no cable found. USB devices Android currently sees: no USB devices in UsbManager.deviceList (nothing enumerated)
+2026-09-20 14:07:44.716 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 14:07:54.799 W/VCDS_USB: performConnect: no cable found. USB devices Android currently sees: no USB devices in UsbManager.deviceList (nothing enumerated)
+2026-09-20 14:07:54.887 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 14:11:59.542 I/DIAG_LOG: === session start 2026-09-20 14:11:59.540 ===
+2026-09-20 14:11:59.632 I/VCDS_USB: onCreate: current USB devices: no USB devices in UsbManager.deviceList (nothing enumerated)
+2026-09-20 14:18:44.697 I/DIAG_LOG: === session start 2026-09-20 14:18:44.695 ===
+2026-09-20 14:18:44.779 I/VCDS_USB: onCreate: current USB devices: no USB devices in UsbManager.deviceList (nothing enumerated)
+2026-09-20 14:18:59.589 W/VCDS_USB: performConnect: no cable found. USB devices Android currently sees: no USB devices in UsbManager.deviceList (nothing enumerated)
+2026-09-20 14:18:59.721 W/DIAG_UPLOAD: Auto-upload skipped: missing token
+2026-09-20 14:19:11.820 I/VCDS_USB: USB_DEVICE_ATTACHED: 0403:FA24 Ross-Tech HEX-USB+CAN (Вася)
+2026-09-20 14:19:16.983 I/VCDS_PROBE: Connect tapped: 0403:FA24
+2026-09-20 14:19:16.991 I/VCDS_PROBE: === Connection attempt 1/3 ===
+2026-09-20 14:19:16.994 I/VCDS_USB: connect(): VID:PID=0403:FA24 name=Ross-Tech HEX-USB+CAN (Вася) devName=/dev/bus/usb/001/002
+2026-09-20 14:19:16.998 I/VCDS_USB: Serial port opened OK at 500000 baud, DTR=false (MCU reset released)
+2026-09-20 14:19:17.060 I/VCDS_PROBE: Starting Ross-Tech Intelligent CAN TP2.0 / ATmega probing...
+2026-09-20 14:19:17.061 I/VCDS_PROBE: --- Trying DTR=false (FT232R DTR# = HIGH/run) ---
+2026-09-20 14:19:17.918 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 14:19:18.428 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 14:19:18.686 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 14:19:19.192 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 14:19:19.452 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 14:19:19.964 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 14:19:19.968 I/VCDS_PROBE: --- Trying DTR=true (FT232R DTR# = LOW/reset) ---
+2026-09-20 14:19:20.829 I/VCDS_PROBE: Ross-Tech ping on 500000: no response (timeout)
+2026-09-20 14:19:21.340 I/VCDS_PROBE: CAN TP2.0 on 500000: no reply (0 bytes)
+2026-09-20 14:19:21.597 I/VCDS_PROBE: Ross-Tech ping on 250000: no response (timeout)
+2026-09-20 14:19:22.108 I/VCDS_PROBE: CAN TP2.0 on 250000: no reply (0 bytes)
+2026-09-20 14:19:22.373 I/VCDS_PROBE: Ross-Tech ping on 115200: no response (timeout)
+2026-09-20 14:19:22.884 I/VCDS_PROBE: CAN TP2.0 on 115200: no reply (0 bytes)
+2026-09-20 14:19:22.887 I/VCDS_PROBE: Ross-Tech CAN probing gave no positive reply, falling back to K-Line at 10400 baud
+2026-09-20 14:19:22.946 I/VCDS_PROBE: K-Line tryInitDirect target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 14:19:23.403 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 14:19:23.493 I/VCDS_PROBE: K-Line tryInitDirectId target=0x01 TX: 82 01 F1 1A 9B 29
+2026-09-20 14:19:24.104 I/VCDS_PROBE: K-Line tryInitDirectId: no reply (0 bytes)
+2026-09-20 14:19:24.192 I/VCDS_PROBE: K-Line tryInitFastPulse: sending 25ms break + 25ms mark
+2026-09-20 14:19:24.246 I/VCDS_PROBE: K-Line tryInitFastPulse target=0x01 TX: 81 01 F1 81 F4
+2026-09-20 14:19:24.698 I/VCDS_PROBE: K-Line tryInitFastPulse: no reply (0 bytes)
+2026-09-20 14:19:24.786 I/VCDS_PROBE: K-Line tryInitDirect target=0x33 TX: 81 33 F1 81 26
+2026-09-20 14:19:25.242 I/VCDS_PROBE: K-Line tryInitDirect: no reply (0 bytes)
+2026-09-20 14:19:25.247 I/VCDS_PROBE: Connect result: failed: USB sees 0403:FA24, but the cable controller/ECU did not reply. CAN adapter protocol is unverified in this app. Check this cable with Windows VCDS.
+2026-09-20 14:19:25.336 W/DIAG_UPLOAD: Auto-upload skipped: missing token
