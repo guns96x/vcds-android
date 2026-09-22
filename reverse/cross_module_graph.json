@@ -1,0 +1,462 @@
+{
+  "total_edges": 3977,
+  "total_non_pe_resources": 23198,
+  "sample_edges": [
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "HeapAlloc",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "HeapAlloc",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "HeapFree",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "HeapFree",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "RtlLookupFunctionEntry",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "RtlLookupFunctionEntry",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "RtlUnwindEx",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "RtlUnwindEx",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "HeapReAlloc",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "HeapReAlloc",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "RaiseException",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "RaiseException",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "RtlPcToFileHeader",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "RtlPcToFileHeader",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "HeapQueryInformation",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "HeapQueryInformation",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "HeapSize",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "HeapSize",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "EncodePointer",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "EncodePointer",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "DecodePointer",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "DecodePointer",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "FlsGetValue",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "FlsGetValue",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "FlsSetValue",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "FlsSetValue",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "FlsFree",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "FlsFree",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "FlsAlloc",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "FlsAlloc",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "TerminateProcess",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "TerminateProcess",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "UnhandledExceptionFilter",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "UnhandledExceptionFilter",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "SetUnhandledExceptionFilter",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "SetUnhandledExceptionFilter",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "IsDebuggerPresent",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "IsDebuggerPresent",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "RtlVirtualUnwind",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "RtlVirtualUnwind",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "RtlCaptureContext",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "RtlCaptureContext",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "SetHandleCount",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "SetHandleCount",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetStdHandle",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetStdHandle",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetFileType",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetFileType",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetStartupInfoA",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetStartupInfoA",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "FreeEnvironmentStringsA",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "FreeEnvironmentStringsA",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetEnvironmentStrings",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetEnvironmentStrings",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "FreeEnvironmentStringsW",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "FreeEnvironmentStringsW",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetEnvironmentStringsW",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetEnvironmentStringsW",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "HeapSetInformation",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "HeapSetInformation",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "HeapCreate",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "HeapCreate",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "QueryPerformanceCounter",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "QueryPerformanceCounter",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetTickCount",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetTickCount",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetSystemTimeAsFileTime",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetSystemTimeAsFileTime",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetACP",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetACP",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "IsValidCodePage",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "IsValidCodePage",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetConsoleCP",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetConsoleCP",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetConsoleMode",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetConsoleMode",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "SetStdHandle",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "SetStdHandle",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "LCMapStringA",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "LCMapStringA",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "LCMapStringW",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "LCMapStringW",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetStringTypeA",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetStringTypeA",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetStringTypeW",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetStringTypeW",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "WriteConsoleA",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "WriteConsoleA",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetConsoleOutputCP",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetConsoleOutputCP",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "WriteConsoleW",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "WriteConsoleW",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetProcessHeap",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetProcessHeap",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "GetCommandLineA",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "GetCommandLineA",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "ExitProcess",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "ExitProcess",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    },
+    {
+      "from_module": "CSVConv.exe",
+      "import_or_call": "Sleep",
+      "to_module": "KERNEL32.dll",
+      "symbol_name": "Sleep",
+      "dispatch_type": "STATIC_IMPORT",
+      "evidence_status": "RAW",
+      "details": "PE IAT entry in CSVConv.exe"
+    }
+  ],
+  "non_pe_summary_by_type": {
+    "rod_databases": 20085,
+    "clb_encrypted_labels": 1938,
+    "lbl_plaintext_labels": 1163,
+    "cfg_ini_configs": 5
+  }
+}
