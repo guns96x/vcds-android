@@ -47,6 +47,8 @@ class Kwp2000DiagnosticEngine(
         private set
     var lastEcuIdentityPayload: ByteArray? = null
         private set
+    var lastEcuVerificationPayload: ByteArray? = null
+        private set
     var lastSlowInitResult: FiveBaudSlowInitResult? = null
         private set
 
@@ -113,6 +115,7 @@ class Kwp2000DiagnosticEngine(
             state = DiagState.CONNECTING
             lastError = null
             lastEcuIdentityPayload = null
+            lastEcuVerificationPayload = null
             lastSlowInitResult = null
             stopKeepAlive()
 
@@ -203,23 +206,44 @@ class Kwp2000DiagnosticEngine(
                         )
 
                         if (slow.success) {
-                            // Slow-init itself establishes the ISO14230 session. Do NOT send
-                            // another 0x81 StartCommunication here; some ECUs reject that.
+                            // The five-baud handshake proves that something answered the
+                            // initialization sequence, but it is not yet enough to claim
+                            // "01-Engine connected". Require one checksum-valid KWP frame
+                            // whose source address is exactly the requested ECU.
                             delay(55) // P3 minimum before first tester request.
 
-                            lastEcuIdentityPayload = readEcuIdentificationRaw(targetEcuAddress)
-                            noteDiagnosticActivity()
-                            state = DiagState.CONNECTED
-                            startIdleKeepAlive()
+                            val verification = readEcuIdentificationRaw(targetEcuAddress)
+                            lastEcuVerificationPayload = verification
+                            lastEcuIdentityPayload = verification?.takeIf {
+                                it.isNotEmpty() &&
+                                    (it[0] == 0x5A.toByte() || it[0] == 0x61.toByte())
+                            }
 
-                            Log.i(
-                                "VCDS_PROBE",
-                                "01-Engine five-baud KWP connected; identity=" +
-                                    (lastEcuIdentityPayload?.joinToString(" ") {
-                                        "%02X".format(it.toInt() and 0xFF)
-                                    } ?: "(slow-init valid; no 1A 9B payload)")
-                            )
-                            return@withContext true
+                            if (verification != null) {
+                                noteDiagnosticActivity()
+                                state = DiagState.CONNECTED
+                                startIdleKeepAlive()
+
+                                Log.i(
+                                    "VCDS_PROBE",
+                                    "01-Engine verified by ECU KWP frame=" +
+                                        verification.joinToString(" ") {
+                                            "%02X".format(it.toInt() and 0xFF)
+                                        }
+                                )
+                                return@withContext true
+                            }
+
+                            lastError =
+                                "Five-baud init completed, but no checksum-valid KWP reply " +
+                                    "was received from ECU address 01."
+
+                            if (attempt < 3) {
+                                continue
+                            }
+
+                            state = DiagState.ERROR
+                            return@withContext false
                         }
 
                         lastError =
@@ -436,8 +460,10 @@ class Kwp2000DiagnosticEngine(
     }
 
     /**
-     * Optional read-only identity confirmation after StartCommunication succeeds.
-     * A missing 1A 9B reply does not invalidate the already-established KWP session.
+     * Sends one read-only VAG identity request after slow init and returns any
+     * checksum-valid reply from the selected ECU. A positive identity response
+     * (0x5A/0x61) is ideal, but a valid negative response (0x7F...) still proves
+     * that ECU address 01 is alive and that the KWP framing is working.
      */
     private fun readEcuIdentificationRaw(target: Byte): ByteArray? {
         return try {
@@ -449,9 +475,7 @@ class Kwp2000DiagnosticEngine(
             )
             transport.write(idReq)
             val payload = readKwpPayload(700) ?: return null
-            if (payload.isNotEmpty() &&
-                (payload[0] == 0x5A.toByte() || payload[0] == 0x61.toByte())
-            ) {
+            if (payload.isNotEmpty()) {
                 noteDiagnosticActivity()
                 payload
             } else {
@@ -691,7 +715,11 @@ class Kwp2000DiagnosticEngine(
      * would feed the request we just sent back to the caller as live ECU data.
      */
     internal fun extractPayload(buffer: ByteArray, count: Int): ByteArray? =
-        KwpFrameParser.extractPayload(buffer, count)
+        KwpFrameParser.extractPayload(
+            buffer,
+            count,
+            expectedSource = targetEcuAddress.toInt() and 0xFF
+        )
 
     /**
      * Realistic EDC16U34 4th-gear WOT acceleration simulation.
