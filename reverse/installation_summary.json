@@ -1,0 +1,43 @@
+{
+  "installation_path": "C:\\Ross-Tech\\VCDS",
+  "total_files": 23299,
+  "total_pe_modules": 14,
+  "pe_modules": [
+    "CSVConv.exe",
+    "DPInst.EXE",
+    "hidapi.dll",
+    "LCode-Classic.exe",
+    "LCode.exe",
+    "RT-USB.dll",
+    "RT-USB64.sys",
+    "RTUS64.dll",
+    "TDIGraph.exe",
+    "UnInstall.exe",
+    "VCDS.EXE",
+    "VCDSScan.exe",
+    "VCIConfig.exe",
+    "VCScope.exe"
+  ],
+  "extensions_summary": {
+    ".txt": 11,
+    ".dat": 1,
+    ".reg": 1,
+    ".exe": 10,
+    ".bin": 4,
+    ".dll": 3,
+    ".clb": 1938,
+    ".lbl": 1166,
+    ".crd": 48,
+    ".xpl": 3,
+    ".ini": 2,
+    ".rtf": 2,
+    ".cat": 1,
+    ".inf": 1,
+    ".sys": 1,
+    ".a01": 13,
+    ".scl": 1,
+    ".cfg": 4,
+    ".a03": 1,
+    ".rod": 20088
+  }
+}
