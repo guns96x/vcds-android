@@ -103,5 +103,43 @@ class TestVcdsKnowledgeBase(unittest.TestCase):
         db_funcs = cur.fetchone()[0]
         self.assertEqual(cov["binary_functions_total"], db_funcs)
 
+    def test_08_cross_module_and_non_pe_resource_counts(self):
+        """Ensure all 3,977 cross-module edges and 23,198 non-PE resources are recorded in DB."""
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM cross_module_edges")
+        n_edges = cur.fetchone()[0]
+        self.assertGreaterEqual(n_edges, 3977, "All 3977 cross-module edges must be recorded")
+        
+        cur.execute("SELECT COUNT(*) FROM non_pe_resources")
+        n_resources = cur.fetchone()[0]
+        self.assertGreaterEqual(n_resources, 23198, "All 23198 non-PE resource bindings must be recorded")
+
+    def test_09_full_vtable_discovery(self):
+        """Ensure full vtable discovery found >= 100 vtables, >= 7000 slots, and verified transport slot 0x108."""
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(DISTINCT address) FROM reverse_vtables")
+        n_vt = cur.fetchone()[0]
+        self.assertGreaterEqual(n_vt, 100, "Must discover >= 100 vtables with constructor proof")
+        
+        cur.execute("SELECT COUNT(*) FROM reverse_vtables")
+        n_slots = cur.fetchone()[0]
+        self.assertGreaterEqual(n_slots, 7000, "Must discover >= 7000 vtable slots")
+        
+        cur.execute("SELECT target_function FROM reverse_vtables WHERE address = '0x1401AD3C0' AND slot = 264")
+        row = cur.fetchone()
+        self.assertIsNotNone(row, "Transport vtable slot 0x108 must exist")
+        self.assertEqual(row[0], "0x14007E734", "Slot 0x108 must map strictly to vcds_adapter_send_frame")
+
+    def test_10_all_pe_modules_analyzed(self):
+        """Ensure all 14 PE modules have verified analysis status in installation inventory."""
+        cur = self.conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM installation_inventory WHERE is_pe = 1 AND analysis_status = 'PENDING_GHIDRA_ANALYSIS'")
+        pending = cur.fetchone()[0]
+        self.assertEqual(pending, 0, "No PE module should remain pending analysis")
+        
+        cur.execute("SELECT COUNT(*) FROM installation_inventory WHERE is_pe = 1")
+        total_pe = cur.fetchone()[0]
+        self.assertEqual(total_pe, 14, "All 14 PE modules must be recorded in inventory")
+
 if __name__ == "__main__":
     unittest.main()

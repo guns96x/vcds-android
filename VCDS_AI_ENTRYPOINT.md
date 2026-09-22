@@ -108,7 +108,7 @@ The following historical draft mistakes were audited, disproven, and permanently
 ## 6. Current Knowledge Base Metrics (KB-1R Audited)
 
 - **Total Installation Files:** `23,299`
-- **Total PE Modules:** `14`
+- **Total PE Modules:** `14` (100% analyzed via Ghidra Headless in `reverse/raw/pe_modules_analyzed.jsonl`)
 - **Binary Functions Total:** `4,593`
 - **Functions Accounted:** `4,593` (100% accounted)
   - `DECOMPILED`: 113
@@ -120,7 +120,12 @@ The following historical draft mistakes were audited, disproven, and permanently
 - **Indirect Calls Total:** `6,198`
   - `Resolved with Evidence`: 2 (strictly proven)
   - `Unresolved (Quarantined)`: 6,196
-- **Cross-Module Edges:** `3,977`
-- **Non-PE Resources Indexed:** `2,000` (sampled into DB from 23,285 total)
+- **Discovered VTables:** `133` (7,637 slots with proven constructor references in `.text`)
+  - `TransportAdapter` (35 slots): `0x1401AD3C0` (Slot 0x108 = `0x14007E734`, Slot 0x110 = `0x14007E824`)
+  - `MFC_CDialog` (89 slots): 44 dialog classes
+  - `MFC_CWnd` (80-88 slots): 12 window classes
+  - Helper & Stream Components: 77 classes
+- **Cross-Module Edges:** `3,977` (fully serialized in `reverse/raw/cross_module_edges.jsonl`)
+- **Non-PE Resources Indexed:** `23,198` (100% ingested into `non_pe_resources`)
 - **Open P0 Gaps:** `2` (`GAP_KWP_TO_ADAPTER_ENCAPSULATION`, `GAP_KEEPALIVE_ADAPTER_OPCODE`)
 - **Snapshot State:** `PARTIAL_RESEARCH_EXPORT`

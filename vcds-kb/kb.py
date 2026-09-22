@@ -330,18 +330,24 @@ def cmd_check(args):
     n_cross = cur.fetchone()[0]
     cur.execute("SELECT COUNT(*) FROM non_pe_resources")
     n_res = cur.fetchone()[0]
-    if n_cross < 10 or n_res < 10:
-        failures.append(f"Gate 10 Failed: Cross-module graph ({n_cross}) or non-PE resources ({n_res}) insufficient.")
+    if n_cross < 3977 or n_res < 23198:
+        failures.append(f"Gate 10 Failed: Cross-module graph ({n_cross}/3977) or non-PE resources ({n_res}/23198) incomplete.")
     else:
-        print(f"[PASS] Gate 10: Cross-module graph ({n_cross} edges) and non-PE resources ({n_res} bindings) verified.")
+        print(f"[PASS] Gate 10: Cross-module graph ({n_cross} edges) and non-PE resources ({n_res} bindings) strictly verified.")
         
     # Gate 11: VTable Inventory and Transport Slots
+    cur.execute("SELECT COUNT(DISTINCT address) FROM reverse_vtables")
+    n_vt = cur.fetchone()[0]
+    cur.execute("SELECT COUNT(*) FROM reverse_vtables")
+    n_vtslots = cur.fetchone()[0]
     cur.execute("SELECT target_function FROM reverse_vtables WHERE address = '0x1401AD3C0' AND slot = 264")
     vt_row = cur.fetchone()
     if not vt_row or vt_row[0] != "0x14007E734":
         failures.append(f"Gate 11 Failed: VTable slot 0x108 mapping incorrect: {vt_row[0] if vt_row else 'NONE'}")
+    elif n_vt < 100 or n_vtslots < 7000:
+        failures.append(f"Gate 11 Failed: VTable discovery incomplete ({n_vt} vtables, {n_vtslots} slots; expected >= 100 vtables, >= 7000 slots).")
     else:
-        print(f"[PASS] Gate 11: Mandatory VTable inventory verified (Slot 0x108 strictly mapped to 0x14007E734).")
+        print(f"[PASS] Gate 11: Full VTable inventory verified ({n_vt} vtables, {n_vtslots} slots; Slot 0x108 strictly mapped to 0x14007E734).")
         
     # Gate 12: Epistemic Integrity (5 Retractions, Open P0 Gaps, Snapshot State)
     cur.execute("SELECT COUNT(*) FROM retractions")

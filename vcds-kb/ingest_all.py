@@ -115,6 +115,22 @@ def run_pipeline():
             "SUPPORT_MODULE", None, "OFFICIAL_INSTALLER", "NOT_APPLICABLE"
         )
     ]
+    pe_analyzed_file = RAW_DIR / "pe_modules_analyzed.jsonl"
+    if pe_analyzed_file.exists():
+        with open(pe_analyzed_file, "r", encoding="utf-8") as pf:
+            for line in pf:
+                if not line.strip(): continue
+                mod = json.loads(line)
+                mod_sha = mod["sha256"]
+                if mod_sha in [ORIGINAL_VCDS_SHA256, UNPACKED_VCDS_SHA256, RTUS64_SHA256]:
+                    continue
+                arch = "x64" if (mod["image_base"].startswith("0x14") or mod["image_base"].startswith("0x18") or mod["image_base"] == "0x100000000") else "x86"
+                binaries.append((
+                    rf"C:\Ross-Tech\VCDS\{mod['module']}",
+                    mod_sha,
+                    "SUPPORT", arch, mod["image_base"], "vcds_re",
+                    "SUPPORT_MODULE", None, "OFFICIAL_INSTALLER", "NOT_APPLICABLE"
+                ))
     for b in binaries:
         cur.execute("""
             INSERT INTO reverse_binaries 
@@ -169,8 +185,13 @@ def run_pipeline():
                 slot_int = int(data["slot"], 16)
                 cur.execute("""
                     INSERT OR REPLACE INTO reverse_vtables (address, slot, target_function, class_candidate, constructor_evidence, usage_evidence)
-                    VALUES (?, ?, ?, ?, '0x14007CA6C sets *param_1 = 0x1401AD3C0', 'Dispatched via *(param_1 + 0x108)')
-                """, (norm_addr(data["vtable"]), slot_int, norm_addr(data["target"]), data["class"]))
+                    VALUES (?, ?, ?, ?, ?, ?)
+                """, (
+                    norm_addr(data["vtable"]), slot_int, norm_addr(data["target"]),
+                    data.get("class", data.get("class_candidate", "TransportAdapter")),
+                    data.get("constructor_evidence", "0x14007CA6C sets *param_1 = 0x1401AD3C0"),
+                    data.get("usage_evidence", "Dispatched via *(param_1 + 0x108)")
+                ))
                 
     # Decompiler Chunks
     decomp_file = RAW_DIR / "decompiler.jsonl"
