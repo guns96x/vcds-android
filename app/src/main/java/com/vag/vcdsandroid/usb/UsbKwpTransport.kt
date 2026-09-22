@@ -280,16 +280,16 @@ class UsbKwpTransport(private val context: Context) {
      * after the USB chooser dialog remounts the device.
      */
     /**
-     * Opens a legacy Ross-Tech HEX interface as a plain K-Line pass-through and
-     * verifies that the interface is really in dumb mode before any ECU request is sent.
+     * Opens a legacy Ross-Tech HEX interface for the M2 direct K-Line experiment.
      *
-     * Verification follows the long-established legacy HEX/VCP behaviour used by
-     * third-party KWP2000 tools: 10400 baud, 8N1, DTR asserted, RTS clear, then a
-     * single 0xF0 byte must echo back unchanged. 0xF0 is deliberately not a KWP
-     * start byte; this is only a cable/transceiver loopback check.
+     * This method deliberately sends NO probe byte. A local 0xF0 echo only proves
+     * that TX can be seen again on the one-wire path; it does not prove dumb mode,
+     * and extra traffic immediately before five-baud init can disturb ECU timing.
      *
-     * On success the port stays OPEN at 10400 so Kwp2000DiagnosticEngine can
-     * immediately perform the real 01-Engine init on the same handle.
+     * The real acceptance gate is performed afterwards:
+     * five-baud init -> checksum-valid KWP frame from the requested ECU address.
+     *
+     * On success the serial port stays open at 10400 baud for the slow init.
      */
     fun connectDumbRossTech(targetDevice: UsbDevice? = null): Boolean {
         disconnect()
@@ -302,14 +302,14 @@ class UsbKwpTransport(private val context: Context) {
         ) {
             android.util.Log.w(
                 "VCDS_DUMB",
-                "Dumb-mode probe refused for non-legacy Ross-Tech VID:PID=%04X:%04X"
+                "Direct K-Line open refused for non-legacy Ross-Tech VID:PID=%04X:%04X"
                     .format(deviceToOpen.vendorId, deviceToOpen.productId)
             )
             return false
         }
 
         if (!usbManager.hasPermission(deviceToOpen)) {
-            android.util.Log.w("VCDS_DUMB", "No USB permission for dumb-mode probe")
+            android.util.Log.w("VCDS_DUMB", "No USB permission for direct K-Line open")
             return false
         }
 
@@ -343,50 +343,22 @@ class UsbKwpTransport(private val context: Context) {
                 }
             }
 
-            // Legacy HEX dumb/VCP mode: DTR asserted enables receive, RTS stays clear.
+            // Preserve the control-line state already used by the M2 experiment,
+            // but do not infer success from it. ECU traffic is the only proof.
             port.dtr = true
             port.rts = false
             try { port.setBreak(false) } catch (_: Exception) {}
             port.purgeHwBuffers(true, true)
 
-            val marker = byteArrayOf(0xF0.toByte())
-            port.write(marker, 100)
-            val echo = ByteArray(8)
-            val count = try {
-                port.read(echo, 150)
-            } catch (_: Exception) {
-                0
-            }
-
-            val confirmed = count > 0 && echo[0] == marker[0]
-            val echoHex = if (count > 0) {
-                echo.take(count).joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
-            } else {
-                "(none)"
-            }
-            android.util.Log.i(
-                "VCDS_DUMB",
-                "FA24 dumb echo: confirmed=$confirmed count=$count echo=$echoHex"
-            )
-
-            port.purgeHwBuffers(true, true)
-
-            if (!confirmed) {
-                try { port.close() } catch (_: Exception) {}
-                try { connection.close() } catch (_: Exception) {}
-                currentDevice = null
-                return false
-            }
-
             serialPort = port
             isPortOpen = true
             android.util.Log.i(
                 "VCDS_DUMB",
-                "K-LINE RAW ECHO DETECTED at $KLINE_BAUD_RATE baud; ECU slow-init still required"
+                "K-Line serial path OPEN at $KLINE_BAUD_RATE baud; no echo probe sent"
             )
             return true
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_DUMB", "Dumb-mode probe failed: ${e.message}")
+            android.util.Log.e("VCDS_DUMB", "Direct K-Line open failed: ${e.message}")
             try { port.close() } catch (_: Exception) {}
             try { connection.close() } catch (_: Exception) {}
             serialPort = null
@@ -395,7 +367,6 @@ class UsbKwpTransport(private val context: Context) {
             return false
         }
     }
-
 
     /**
      * Performs the ISO 9141 / ISO 14230 five-baud wake-up on an already-open
