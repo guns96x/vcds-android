@@ -3,8 +3,17 @@ package com.vag.vcdsandroid.adapters
 import androidx.annotation.VisibleForTesting
 import com.vag.vcdsandroid.hardware.ConnectionParameters
 import com.vag.vcdsandroid.hardware.HardwareDriver
+import com.vag.vcdsandroid.hardware.UsbFtdiDriver
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+
+data class B03InterfaceProbeResult(
+    val identityText: String,
+    val probePayload: ByteArray,
+    val identifyPayload: ByteArray,
+    val elapsedMs: Long
+)
 
 /**
  * Adapter transport for Ross-Tech HEX-USB+CAN / B03-V2 FTDI clones (VID 0403, PID FA24).
@@ -91,6 +100,144 @@ class HexB03Adapter(
 
     override suspend fun identify(): AdapterIdentity = withContext(Dispatchers.IO) {
         identity
+    }
+
+    /**
+     * Minimal cable-only proof of communication.
+     *
+     * This reproduces only the capture-grounded plaintext interface exchange used by
+     * Ross-Tech-style 0403:FA24 HEX cables: 0x02 probe followed by 0x04 identify.
+     * It deliberately stops before session setup/auth and sends no ECU diagnostic request.
+     *
+     * Public live captures of the same FA24 interface family establish:
+     * - FTDI setup: 8N1, 9600 -> 19200 -> 115200, 1 ms latency, DTR/RTS clear;
+     * - flat S/M framing with total-length byte and XOR checksum;
+     * - 0x02 probe and 0x04 identify, whose reply contains "ROSSTECH".
+     *
+     * Success here proves Android <-> cable bidirectional communication only.
+     */
+    suspend fun probeInterface(timeoutMs: Long = 1000): Result<B03InterfaceProbeResult> =
+        withContext(Dispatchers.IO) {
+            val started = System.currentTimeMillis()
+            streamDecoder.reset()
+
+            val openResult = when (val hw = driver) {
+                is UsbFtdiDriver -> hw.openRossTechFa24()
+                else -> {
+                    // Test/fallback driver path mirrors the capture-grounded FA24 settings.
+                    val opened = hw.open(
+                        ConnectionParameters(
+                            baudRate = 9_600,
+                            dataBits = 8,
+                            stopBits = 1,
+                            parity = 0,
+                            dtr = false,
+                            rts = false
+                        )
+                    )
+                    if (opened.isSuccess) {
+                        hw.purge()
+                        hw.setBaudRate(19_200)
+                        hw.setBaudRate(115_200)
+                        hw.setDtr(false)
+                        hw.setRts(false)
+                    }
+                    opened
+                }
+            }
+
+            if (openResult.isFailure) {
+                return@withContext Result.failure(
+                    openResult.exceptionOrNull() ?: IllegalStateException("Unable to open FA24 interface")
+                )
+            }
+
+            try {
+                val probeFrame = sendInterfaceCommand(
+                    opcode = 0x02.toByte(),
+                    timeoutMs = timeoutMs
+                ) ?: return@withContext Result.failure(
+                    IllegalStateException("FA24 probe timed out: no valid 0x02 reply")
+                )
+
+                val identifyFrame = sendInterfaceCommand(
+                    opcode = 0x04.toByte(),
+                    timeoutMs = timeoutMs
+                ) ?: return@withContext Result.failure(
+                    IllegalStateException("FA24 identify timed out: no valid 0x04 reply")
+                )
+
+                val identityText = parseInterfaceIdentity(identifyFrame.payload)
+                    ?: return@withContext Result.failure(
+                        IllegalStateException(
+                            "FA24 identify replied, but the ROSSTECH identity string was not present"
+                        )
+                    )
+
+                Result.success(
+                    B03InterfaceProbeResult(
+                        identityText = identityText,
+                        probePayload = probeFrame.payload,
+                        identifyPayload = identifyFrame.payload,
+                        elapsedMs = System.currentTimeMillis() - started
+                    )
+                )
+            } finally {
+                // M1 probe is self-contained and repeatable; release USB cleanly after each run.
+                close()
+            }
+        }
+
+    private suspend fun sendInterfaceCommand(opcode: Byte, timeoutMs: Long): HexB03Frame? {
+        val request = HexB03FrameCodec.encode(
+            marker = HexB03Constants.MARKER_HOST,
+            opcode = opcode
+        )
+        traceListener?.invoke("TX", request)
+
+        val written = driver.write(request)
+        if (written != request.size) return null
+
+        val deadlineNs = System.nanoTime() + timeoutMs * 1_000_000L
+        val readBuffer = ByteArray(512)
+
+        while (System.nanoTime() < deadlineNs) {
+            val remainingMs = ((deadlineNs - System.nanoTime()) / 1_000_000L)
+                .coerceAtLeast(1L)
+            val count = driver.read(readBuffer, minOf(100L, remainingMs))
+            if (count < 0) return null
+            if (count == 0) {
+                delay(2)
+                continue
+            }
+
+            val chunk = readBuffer.copyOf(count)
+            traceListener?.invoke("RX", chunk)
+            val frames = streamDecoder.feed(chunk)
+            val matched = frames.firstOrNull { it.opcode == opcode }
+            if (matched != null) return matched
+        }
+        return null
+    }
+
+    private fun parseInterfaceIdentity(payload: ByteArray): String? {
+        if (payload.isEmpty()) return null
+        val asciiLen = payload.indexOfFirst { b ->
+            val v = b.toInt() and 0xFF
+            v < 0x20 || v > 0x7E
+        }.let { if (it < 0) payload.size else it }
+
+        if (asciiLen == 0) return null
+        val tag = payload.copyOfRange(0, asciiLen).toString(Charsets.US_ASCII)
+        if (!tag.contains("ROSSTECH", ignoreCase = true)) return null
+
+        val version = payload.copyOfRange(asciiLen, payload.size)
+            .dropWhile { it == 0.toByte() }
+        return if (version.isEmpty()) {
+            tag
+        } else {
+            tag + " " + version.joinToString("") { "%02X".format(it.toInt() and 0xFF) }
+        }
     }
 
     /**
