@@ -160,7 +160,7 @@ class Kwp2000DiagnosticEngine(
                         }
                         if (!opened) {
                             lastError = if (isTargetRossTech && allowRossTechDumbMode) {
-                                "Legacy HEX raw K-Line echo was not detected (0xF0 echo failed)."
+                                "Legacy HEX direct K-Line serial path could not be opened."
                             } else {
                                 "Cannot open USB Serial Port. Check OTG cable & permission."
                             }
