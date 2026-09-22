@@ -458,13 +458,17 @@ class MainActivity : AppCompatActivity() {
                 // as a plain K-Line pass-through. This avoids the intelligent-mode
                 // per-ECU encrypted session and lets the existing KWP2000 engine talk
                 // directly to address 01.
-                val dumbModeConfirmed = withContext(Dispatchers.IO) {
+                val directKLineOpened = withContext(Dispatchers.IO) {
                     transport.connectDumbRossTech(dev)
                 }
 
-                if (dumbModeConfirmed) {
-                    DiagLog.i("B03_M2", "K-LINE RAW ECHO DETECTED; starting five-baud 01-Engine init")
-                    binding.tvSubStatus.text = "K-Line echo OK -> five-baud 01-Engine..."
+                var directKLineFailure: String? = null
+                if (directKLineOpened) {
+                    DiagLog.i(
+                        "B03_M2",
+                        "K-Line serial path open; starting five-baud 01-Engine init without echo probe"
+                    )
+                    binding.tvSubStatus.text = "K-Line open -> verifying 01-Engine..."
 
                     val ecuConnected = engine.connect(
                         targetDevice = dev,
@@ -472,39 +476,46 @@ class MainActivity : AppCompatActivity() {
                         allowRossTechDumbMode = true
                     )
 
-                    binding.btnConnect.isEnabled = true
                     updateStatusUI()
 
                     if (ecuConnected) {
-                        val idHex = engine.lastEcuIdentityPayload?.joinToString(" ") {
+                        binding.btnConnect.isEnabled = true
+                        val verificationHex = engine.lastEcuVerificationPayload?.joinToString(" ") {
                             "%02X".format(it.toInt() and 0xFF)
-                        } ?: "(StartCommunication OK; 1A 9B identity not returned)"
+                        } ?: "(missing)"
 
-                        DiagLog.i("B03_M2", "01-ENGINE RESPONDED identity=[$idHex]")
-                        startOemPolling()
+                        val identityHex = engine.lastEcuIdentityPayload?.joinToString(" ") {
+                            "%02X".format(it.toInt() and 0xFF)
+                        }
+
+                        DiagLog.i(
+                            "B03_M2",
+                            "01-ENGINE RESPONDED verification=[$verificationHex] " +
+                                "identity=[${identityHex ?: "not returned"}]"
+                        )
+                        binding.tvSubStatus.text = "01-Engine verified"
                         AlertDialog.Builder(this@MainActivity)
-                            .setTitle("01-ENGINE CONNECTED")
+                            .setTitle("01-ENGINE RESPONDED")
                             .setMessage(
-                                "HEX raw K-Line: OK\n" +
-                                    "ECU address: 01 (EDC16U34)\n" +
-                                    "5-baud KWP link: CONNECTED\n" +
-                                    "Identity reply: $idHex\n\n" +
-                                    "Live telemetry polling (Group 011 / 008 / 003) is now ACTIVE!"
-                            )
-                            .setPositiveButton("View Telemetry", null)
-                            .show()
-                    } else {
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle("01-ENGINE SLOW INIT FAILED")
-                            .setMessage(
-                                "The cable produced the expected raw K-Line echo, but the ECU " +
-                                    "did not complete the five-baud KWP initialization.\n\n" +
-                                    (engine.lastError ?: "No ECU response")
+                                "ECU address: 01\n" +
+                                    "Five-baud init: OK\n" +
+                                    "Checksum-valid KWP reply from source 01: OK\n" +
+                                    "Verification reply: $verificationHex" +
+                                    (identityHex?.let { "\nIdentity reply: $it" } ?: "") +
+                                    "\n\nM2 passed. Measuring Groups are not started automatically."
                             )
                             .setPositiveButton("OK", null)
                             .show()
+                        return@launch
                     }
-                    return@launch
+
+                    directKLineFailure = engine.lastError ?: "No verified response from ECU address 01"
+                    DiagLog.w("B03_M2", "Direct K-Line M2 failed: $directKLineFailure")
+                    // Release the experimental direct-serial handle before checking the
+                    // already-proven smart interface path.
+                    transport.disconnect()
+                } else {
+                    directKLineFailure = "Direct K-Line serial path could not be opened"
                 }
 
                 // If the cable is still booting in intelligent mode, retain the
@@ -539,26 +550,14 @@ class MainActivity : AppCompatActivity() {
                             .setTitle("INTERFACE RESPONDED (SMART MODE)")
                             .setMessage(
                                 "Interface responds: ${probe.identityText}\n\n" +
-                                    "Hardware link is verified! Tap 'Connect 01-Engine' to initiate direct KWP communication with the EDC16 ECU."
+                                    "M1 remains verified. M2 direct K-Line did not produce a verified " +
+                                    "ECU 01 response.\n\n" +
+                                    "Last M2 result: ${directKLineFailure ?: "not attempted"}\n\n" +
+                                    "For the direct K-Line experiment, use VCDS Options on Windows: " +
+                                    "run Test, disable 'Boot in intelligent mode' (or enable Forced Dumb Mode), " +
+                                    "run Test again, then reconnect this cable to the phone."
                             )
-                            .setPositiveButton("Connect 01-Engine") { _, _ ->
-                                lifecycleScope.launch {
-                                    binding.tvSubStatus.text = "Attempting 01-Engine KWP init..."
-                                    val ecuConnected = engine.connect(
-                                        targetDevice = dev,
-                                        targetAddress = 0x01,
-                                        allowRossTechDumbMode = true
-                                    )
-                                    updateStatusUI()
-                                    if (ecuConnected) {
-                                        startOemPolling()
-                                        Toast.makeText(this@MainActivity, "Connected to 01-Engine! Telemetry active.", Toast.LENGTH_SHORT).show()
-                                    } else {
-                                        Toast.makeText(this@MainActivity, "01-Engine init failed: ${engine.lastError}", Toast.LENGTH_LONG).show()
-                                    }
-                                }
-                            }
-                            .setNegativeButton("OK", null)
+                            .setPositiveButton("OK", null)
                             .show()
                     },
                     onFailure = { error ->
