@@ -92,6 +92,7 @@ data class DiagnosticSample(
     }
 }
 
+@SuppressLint("MissingPermission")
 class MainActivity : AppCompatActivity() {
 
     private companion object {
