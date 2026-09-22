@@ -11,6 +11,7 @@ object KwpSlowInit {
 
     const val BIT_TIME_MS = 200L
     const val W0_IDLE_MIN_MS = 2L
+    const val PRE_INIT_QUIET_MS = 300L
     const val W1_SYNC_MAX_MS = 450L
     const val W2_KEY1_MAX_MS = 20L
     const val W3_KEY2_MAX_MS = 20L
