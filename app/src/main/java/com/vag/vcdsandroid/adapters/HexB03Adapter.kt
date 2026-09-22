@@ -12,6 +12,8 @@ data class B03InterfaceProbeResult(
     val identityText: String,
     val probePayload: ByteArray,
     val identifyPayload: ByteArray,
+    val statusPayload: ByteArray,
+    val modePayload: ByteArray,
     val elapsedMs: Long
 )
 
@@ -185,13 +187,38 @@ class HexB03Adapter(
                     )
                 }
 
-            // Success is intentionally left OPEN. This is the M1 acceptance state:
-            // Android has a live bidirectional link to the physical interface.
+            // The user's returned identity A89D010009 matches the independently captured
+            // FA24 family sample byte-for-byte. The next two read-only control queries are
+            // part of that same plaintext open sequence and do not address an ECU.
+            val statusFrame = sendInterfaceCommand(
+                opcode = 0x82.toByte(),
+                timeoutMs = timeoutMs
+            ) ?: run {
+                close()
+                return@withContext Result.failure(
+                    IllegalStateException("FA24 status query timed out: no valid 0x82 reply")
+                )
+            }
+
+            val modeFrame = sendInterfaceCommand(
+                opcode = 0x0D.toByte(),
+                timeoutMs = timeoutMs
+            ) ?: run {
+                close()
+                return@withContext Result.failure(
+                    IllegalStateException("FA24 mode query timed out: no valid 0x0D reply")
+                )
+            }
+
+            // Success is intentionally left OPEN. This is the M1/M2 staging state:
+            // Android has a live, initialized bidirectional link to the physical interface.
             Result.success(
                 B03InterfaceProbeResult(
                     identityText = identityText,
                     probePayload = probeFrame.payload,
                     identifyPayload = identifyFrame.payload,
+                    statusPayload = statusFrame.payload,
+                    modePayload = modeFrame.payload,
                     elapsedMs = System.currentTimeMillis() - started
                 )
             )
