@@ -1,0 +1,111 @@
+{
+  "binary_sha256": "B2A261C16355BC3C1313F5A2F86591AC430EC5DDC7D1DDF24B517A5FB97B48F2",
+  "image_base": "0x180000000",
+  "independent_methods": [
+    "python-pefile-2024.8.26",
+    "python-raw-pe-struct-parser",
+    "ghidra-headless"
+  ],
+  "verified_symbols_count": 11,
+  "exports": [
+    {
+      "name": "FT_Open",
+      "ordinal": 1,
+      "rva": "0x00005830",
+      "va": "0x180005830",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    },
+    {
+      "name": "FT_Close",
+      "ordinal": 2,
+      "rva": "0x00002B40",
+      "va": "0x180002B40",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    },
+    {
+      "name": "FT_Read",
+      "ordinal": 3,
+      "rva": "0x00002BB0",
+      "va": "0x180002BB0",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    },
+    {
+      "name": "FT_Write",
+      "ordinal": 4,
+      "rva": "0x00002C10",
+      "va": "0x180002C10",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    },
+    {
+      "name": "FT_ResetDevice",
+      "ordinal": 6,
+      "rva": "0x00002CF0",
+      "va": "0x180002CF0",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    },
+    {
+      "name": "FT_SetBaudRate",
+      "ordinal": 7,
+      "rva": "0x00002D30",
+      "va": "0x180002D30",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    },
+    {
+      "name": "FT_SetDataCharacteristics",
+      "ordinal": 8,
+      "rva": "0x00002DC0",
+      "va": "0x180002DC0",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    },
+    {
+      "name": "FT_Purge",
+      "ordinal": 16,
+      "rva": "0x00002FE0",
+      "va": "0x180002FE0",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    },
+    {
+      "name": "FT_SetTimeouts",
+      "ordinal": 17,
+      "rva": "0x00003020",
+      "va": "0x180003020",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    },
+    {
+      "name": "FT_GetQueueStatus",
+      "ordinal": 18,
+      "rva": "0x00003060",
+      "va": "0x180003060",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    },
+    {
+      "name": "FT_SetLatencyTimer",
+      "ordinal": 29,
+      "rva": "0x00004320",
+      "va": "0x180004320",
+      "forwarder": null,
+      "verification_status": "PROVEN_STATIC_CONSENSUS",
+      "ghidra_agreement": true
+    }
+  ]
+}

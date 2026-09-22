@@ -4,7 +4,7 @@
   "rtus64_sha256": "B2A261C16355BC3C1313F5A2F86591AC430EC5DDC7D1DDF24B517A5FB97B48F2",
   "ghidra_version": "12.1.4_PUBLIC",
   "schema_version": "2.0",
-  "generated_at": "2026-09-22T22:13:17.295637+00:00",
+  "generated_at": "2026-09-22T22:15:57.916583+00:00",
   "snapshot_state": "CANONICAL_DB_EXPORT",
   "claim_count": 10,
   "function_count": 4605,
