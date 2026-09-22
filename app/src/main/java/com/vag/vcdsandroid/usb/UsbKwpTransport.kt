@@ -495,8 +495,11 @@ class UsbKwpTransport(private val context: Context) {
             port.setBreak(false)
             port.purgeHwBuffers(true, true)
 
-            // ISO W0: bus idle/high before starting the five-baud address.
-            val idleUntil = System.nanoTime() + 5_000_000L
+            // Leave the bus quiet after the raw echo/probe before initiating a
+            // real controller wake-up. This comfortably exceeds W0 and avoids
+            // carrying probe traffic into the five-baud timing window.
+            val idleUntil =
+                System.nanoTime() + KwpSlowInit.PRE_INIT_QUIET_MS * 1_000_000L
             waitUntilNs(idleUntil)
 
             val bits = KwpSlowInit.addressBits7O1(address)
