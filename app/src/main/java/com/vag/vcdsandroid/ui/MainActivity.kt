@@ -138,7 +138,7 @@ class MainActivity : AppCompatActivity() {
         62, 6, 2
     )
 
-    private var connectionMode = AppConnectionMode.TURBO_FAST_OBD
+    private var connectionMode = AppConnectionMode.USB_HARDWARE
     private var isPermissionRequested = false
     private var currentDevice: UsbDevice? = null
 
@@ -256,7 +256,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupListeners()
-        switchConnectionMode(AppConnectionMode.TURBO_FAST_OBD)
+        switchConnectionMode(AppConnectionMode.USB_HARDWARE)
         startUiTicker()
     }
 
@@ -306,36 +306,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        // Mode toggle button
-        binding.btnModeToggle.setOnClickListener {
-            val modes = arrayOf(
-                "Mode A: Turbo Fast (OBD-II High Speed)",
-                "Mode B: VAG OEM (Group 011 / TP 2.0)",
-                "Mode C: USB FTDI (KKL Cable)",
-                "Mode D: Virtual Simulator (Demo)"
-            )
-            AlertDialog.Builder(this)
-                .setTitle("Select Diagnostic Mode")
-                .setItems(modes) { _, which ->
-                    val newMode = when (which) {
-                        0 -> AppConnectionMode.TURBO_FAST_OBD
-                        1 -> AppConnectionMode.VAG_OEM_TP20
-                        2 -> AppConnectionMode.USB_HARDWARE
-                        else -> AppConnectionMode.SIMULATOR_DEMO
-                    }
-                    switchConnectionMode(newMode)
-                }
-                .show()
-        }
+        // USB-only product mode: no Bluetooth transport is exposed in the UI.
+        binding.btnModeToggle.text = "USB HEX Cable"
+        binding.btnModeToggle.isEnabled = false
 
         // Connect button
         binding.btnConnect.setOnClickListener {
-            val isConnected = when (connectionMode) {
-                AppConnectionMode.TURBO_FAST_OBD, AppConnectionMode.VAG_OEM_TP20 ->
-                    elmEngine.state == DiagState.CONNECTED || elmEngine.state == DiagState.POLLING
-                AppConnectionMode.USB_HARDWARE, AppConnectionMode.SIMULATOR_DEMO ->
-                    engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
-            }
+            val isConnected =
+                engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
             if (isConnected) {
                 performDisconnect()
             } else {
@@ -348,11 +326,7 @@ class MainActivity : AppCompatActivity() {
             runPreFlightCheck()
         }
         binding.btnCheckData.setOnLongClickListener {
-            if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
-                runRpmStressTest()
-            } else {
-                runOemGroupStressTest()
-            }
+            runOemGroupStressTest()
             true
         }
 
@@ -363,11 +337,7 @@ class MainActivity : AppCompatActivity() {
             if (recordingStartRequested.get() || recordingStopRequested.get()) {
                 return@setOnClickListener
             }
-            if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
-                if (!asyncLogger.isLogging) startWotLog() else stopWotLog()
-            } else {
-                if (!asyncLogger.isLogging) startOemLog() else stopOemLog()
-            }
+            if (!asyncLogger.isLogging) startOemLog() else stopOemLog()
         }
 
         // Collapsible RAW DEBUG toggle
@@ -377,51 +347,30 @@ class MainActivity : AppCompatActivity() {
             binding.tvRawDebugHeaderTitle.text = if (isRawDebugExpanded) "▼ RAW DEBUG (tap to collapse)" else "▶ RAW DEBUG (tap to toggle)"
         }
 
-        // DTC actions are transport-specific. Do not send generic OBD 03/04
-        // while the ELM is configured as a raw VW TP2.0 transport.
+        // USB cable only: all DTC operations go through the USB diagnostic engine.
         binding.btnScanDtc.setOnClickListener {
-            if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
-                binding.tvDtcList.text =
-                    "TP2.0 DTC service is not implemented yet. Use Turbo Fast for SAE DTCs or USB KWP for VAG KWP DTCs."
-                return@setOnClickListener
-            }
             lifecycleScope.launch {
                 binding.tvDtcList.text = "Scanning DTCs..."
-                val dtcs = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
-                    elmEngine.readFaultCodes()
-                } else {
-                    engine.readFaultCodes()
-                }
+                val dtcs = engine.readFaultCodes()
                 if (dtcs.isEmpty()) {
                     binding.tvDtcList.text = "No fault codes stored."
                 } else {
-                    binding.tvDtcList.text = dtcs.joinToString("\n") { "${it.saeCode} (${it.vagCode}): ${it.descriptionEn}" }
+                    binding.tvDtcList.text = dtcs.joinToString("\n") {
+                        "${it.saeCode} (${it.vagCode}): ${it.descriptionEn}"
+                    }
                 }
             }
         }
 
         binding.btnClearDtc.setOnClickListener {
-            if (connectionMode == AppConnectionMode.VAG_OEM_TP20) {
-                binding.tvDtcList.text =
-                    "TP2.0 DTC clear is disabled until the KWP-over-TP2 service is implemented and tested."
-                return@setOnClickListener
-            }
             lifecycleScope.launch {
-                val ok = if (connectionMode == AppConnectionMode.TURBO_FAST_OBD) {
-                    elmEngine.clearFaultCodes()
-                } else {
-                    engine.clearFaultCodes()
-                }
-                binding.tvDtcList.text = if (ok) {
-                    "Fault codes cleared successfully."
-                } else {
-                    "Failed to clear DTCs."
-                }
+                val ok = engine.clearFaultCodes()
+                binding.tvDtcList.text =
+                    if (ok) "Fault codes cleared successfully." else "Failed to clear DTCs."
             }
         }
     }
-
-    private fun switchConnectionMode(newMode: AppConnectionMode) {
+   private fun switchConnectionMode(newMode: AppConnectionMode) {
         if (connectionMode != newMode) {
             val oldMode = connectionMode
             performDisconnect(oldMode)
@@ -457,15 +406,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performConnect() {
-        if (connectionMode == AppConnectionMode.TURBO_FAST_OBD || connectionMode == AppConnectionMode.VAG_OEM_TP20) {
-            connectElmBluetooth()
-        } else if (connectionMode == AppConnectionMode.SIMULATOR_DEMO) {
+        if (connectionMode == AppConnectionMode.SIMULATOR_DEMO && BuildConfig.DEBUG) {
             lifecycleScope.launch {
                 engine.connect(null)
                 updateStatusUI()
                 startOemPolling()
             }
-        } else {
+            return
+        }
+
             val dev = currentDevice ?: transport.findAvailableDevice()
             if (dev == null) {
                 Toast.makeText(this, "No USB FTDI / KKL cable detected.", Toast.LENGTH_LONG).show()
@@ -2530,7 +2479,7 @@ private fun updateStatusUI() {
                         if (dev == null) {
                             binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
                             binding.tvStatus.text = "No USB Adapter"
-                            binding.tvSubStatus.text = "Plug in USB cable or switch to Mode A/B (BT)"
+                            binding.tvSubStatus.text = "Plug in the USB-OTG HEX cable"
                             binding.btnConnect.text = "Connect"
                             binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
                         } else {
