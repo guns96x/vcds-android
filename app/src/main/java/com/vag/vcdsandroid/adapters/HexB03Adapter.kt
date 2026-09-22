@@ -41,17 +41,20 @@ class HexB03Adapter(
          */
         const val CANDIDATE_BAUD_RATE = 115200
 
-        // Service IDs classified as destructive/modifying under KWP2000/UDS.
-        // Secondary defense layer for raw debug transmissions.
-        private val FORBIDDEN_WRITE_SERVICES = setOf(
-            0x2E.toByte(), // WriteDataByIdentifier
-            0x3B.toByte(), // WriteDataByLocalIdentifier
-            0x34.toByte(), // RequestDownload (flashing)
-            0x35.toByte(), // RequestUpload
-            0x36.toByte(), // TransferData (flashing)
-            0x37.toByte(), // RequestTransferExit
-            0x28.toByte(), // CommunicationControl
-            0x31.toByte()  // RoutineControl (actuator tests)
+        /**
+         * Strict allowlist of permissible read-only diagnostic service IDs (ISO 14230 / KWP2000).
+         * Any service not in this allowlist is unconditionally blocked from transmission.
+         */
+        val ALLOWED_READ_SERVICES = setOf(
+            0x1A.toByte(), // ReadEcuIdentification
+            0x21.toByte(), // ReadDataByLocalIdentifier (Measuring groups)
+            0x22.toByte(), // ReadDataByIdentifier
+            0x18.toByte(), // ReadDiagnosticTroubleCodesByStatus
+            0x13.toByte(), // ReadDiagnosticTroubleCodes
+            0x17.toByte(), // ReadStatusOfDiagnosticTroubleCodes
+            0x3E.toByte(), // TesterPresent
+            0x81.toByte(), // StartCommunication
+            0x82.toByte()  // StopCommunication
         )
     }
 
@@ -327,14 +330,23 @@ class HexB03Adapter(
     }
 
     /**
-     * Inspects a diagnostic payload to ensure it does not attempt writing or flashing.
+     * Inspects a diagnostic payload to ensure it conforms to the strict read-only allowlist.
+     * Blocks any un-whitelisted, non-read, or potentially modifying service ID.
      */
     fun assertReadOnlyGuardrails(payload: ByteArray): String? {
         if (payload.isEmpty()) return null
-        for (b in payload.take(3)) {
-            if (FORBIDDEN_WRITE_SERVICES.contains(b)) {
-                return "Blocked potentially destructive diagnostic service: 0x%02X".format(b)
-            }
+
+        // Extract service ID:
+        // Format 1: Direct service request [sid, ...]
+        // Format 2: Framed ISO 14230 header [fmt/dest, target, source, sid, ...]
+        val sid = if (payload.size >= 4 && (payload[0].toInt() and 0xC0) == 0x80) {
+            payload[3]
+        } else {
+            payload[0]
+        }
+
+        if (!ALLOWED_READ_SERVICES.contains(sid)) {
+            return "Blocked non-whitelisted diagnostic service: 0x%02X (strict read-only allowlist enforced)".format(sid)
         }
         return null
     }

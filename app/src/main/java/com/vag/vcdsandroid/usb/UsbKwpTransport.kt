@@ -228,6 +228,16 @@ class UsbKwpTransport(private val context: Context) {
             isPortOpen = true
             android.util.Log.i("VCDS_USB", "Serial port opened OK at $initialBaud baud, DTR=false (MCU reset released)")
 
+            // FTDI latency timer: reduce default 16ms buffer delay to 1ms for high-speed diagnostic response
+            if (deviceToOpen.vendorId == 0x0403) {
+                try {
+                    val res = connection.controlTransfer(0x40, 0x09, 1, 1, null, 0, 500)
+                    android.util.Log.i("VCDS_USB", "FTDI Latency Timer set to 1ms (result=$res)")
+                } catch (e: Exception) {
+                    android.util.Log.w("VCDS_USB", "Could not set FTDI latency timer: ${e.message}")
+                }
+            }
+
             // Start TCP Bridge server on 127.0.0.1:9999
             if (bridgeServer == null) {
                 bridgeServer = TcpBridgeServer(this).also { it.start() }

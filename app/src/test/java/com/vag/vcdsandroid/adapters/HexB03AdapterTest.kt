@@ -166,7 +166,7 @@ class HexB03AdapterTest {
         val traces = mutableListOf<Pair<String, ByteArray>>()
         adapter.setRawTraceListener { dir, data -> traces.add(Pair(dir, data)) }
 
-        val request = byteArrayOf(0x01, 0x02)
+        val request = byteArrayOf(0x1A, 0x9B.toByte()) // ReadEcuIdentification (whitelisted)
         val response = adapter.transactRawDebug(
             request = request,
             timeoutMs = 1000,
@@ -258,5 +258,27 @@ class HexB03AdapterTest {
         val response = adapter.executeCandidateCommand(CandidateB03Command.ProbePing, timeoutMs = 500)
         assertEquals(AdapterResponse.Unsupported, response)
         assertTrue("Zero-TX contract violated: driver received bytes!", driver.writtenBytes.isEmpty())
+    }
+
+    @Test
+    fun `assertReadOnlyGuardrails allows whitelisted read services and blocks non-read services`() {
+        val driver = TestHardwareDriver()
+        val adapter = HexB03Adapter(driver)
+
+        // Allowed read requests: direct SID
+        assertNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x1A, 0x9B.toByte()))) // ReadEcuId
+        assertNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x21, 0x01)))          // ReadDataByLocalId
+        assertNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x18, 0x00, 0x00)))    // ReadDTCs
+
+        // Allowed read requests: framed ISO 14230 [fmt, target, source, sid, ...]
+        assertNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x82.toByte(), 0x01, 0xF1.toByte(), 0x1A, 0x9B.toByte(), 0x69)))
+
+        // Blocked write/flash/security/reset services
+        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x34.toByte(), 0x00))) // Flash Download
+        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x11, 0x01)))          // ECU Reset
+        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x14, 0x00, 0x00)))    // Clear DTCs
+        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x27, 0x01)))          // Security Access
+        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x30, 0x01)))          // IO Control
+        assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x2E.toByte(), 0x01))) // WriteDataById
     }
 }
