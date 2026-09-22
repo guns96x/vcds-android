@@ -39,6 +39,8 @@ class Kwp2000DiagnosticEngine(
         private set
     var lastError: String? = null
         private set
+    var lastEcuIdentityPayload: ByteArray? = null
+        private set
 
     private var targetEcuAddress: Byte = 0x01
     private val commMutex = Mutex()
@@ -90,11 +92,16 @@ class Kwp2000DiagnosticEngine(
         }
     }
 
-    suspend fun connect(targetDevice: UsbDevice? = null, targetAddress: Byte = 0x01): Boolean = withContext(Dispatchers.IO) {
+    suspend fun connect(
+        targetDevice: UsbDevice? = null,
+        targetAddress: Byte = 0x01,
+        allowRossTechDumbMode: Boolean = false
+    ): Boolean = withContext(Dispatchers.IO) {
         commMutex.withLock {
             targetEcuAddress = targetAddress
             state = DiagState.CONNECTING
             lastError = null
+            lastEcuIdentityPayload = null
 
             if (mode == TransportMode.SIMULATOR_DEMO) {
                 delay(400) // Emulate fast init delay
@@ -111,7 +118,9 @@ class Kwp2000DiagnosticEngine(
                     val effectiveDevice = targetDevice ?: transport.findAvailableDevice()
                     val targetInfo = effectiveDevice?.let { UsbKwpTransport.identifyDevice(it) }
                     val isTargetRossTech = targetInfo?.isRossTechIntelligent == true
-                    val initialBaud = if (isTargetRossTech) 500000 else UsbKwpTransport.KLINE_BAUD_RATE
+                    val initialBaud =
+                        if (isTargetRossTech && !allowRossTechDumbMode) 500000
+                        else UsbKwpTransport.KLINE_BAUD_RATE
 
                     // Reconnect if port died
                     if (!transport.isConnected()) {
@@ -121,8 +130,17 @@ class Kwp2000DiagnosticEngine(
                             try { transport.disconnect() } catch (_: Exception) {}
                             delay(500) // Let Samsung re-enumerate USB
                         }
-                        if (!transport.connect(targetDevice, initialBaud)) {
-                            lastError = "Cannot open USB Serial Port. Check OTG cable & permission."
+                        val opened = if (isTargetRossTech && allowRossTechDumbMode) {
+                            transport.connectDumbRossTech(effectiveDevice)
+                        } else {
+                            transport.connect(targetDevice, initialBaud)
+                        }
+                        if (!opened) {
+                            lastError = if (isTargetRossTech && allowRossTechDumbMode) {
+                                "Legacy HEX dumb K-Line mode was not confirmed (0xF0 echo failed)."
+                            } else {
+                                "Cannot open USB Serial Port. Check OTG cable & permission."
+                            }
                             if (attempt < 3) {
                                 delay(1000)
                                 continue
@@ -140,14 +158,14 @@ class Kwp2000DiagnosticEngine(
 
                     var ok = false
 
-                    if (isRossTech) {
-                        Log.w("VCDS_PROBE", "Ross-Tech B03 ZERO-TX enforced: physical ECU probe disabled pending live trace verification")
-                        lastError = "Ross-Tech B03 ZERO-TX enforced: physical ECU probe disabled pending live trace verification"
+                    if (isRossTech && !allowRossTechDumbMode) {
+                        Log.w("VCDS_PROBE", "Ross-Tech B03 smart mode: direct ECU TX remains blocked")
+                        lastError = "Ross-Tech smart mode active. Put legacy HEX interface into dumb mode for direct K-Line."
                         state = DiagState.ERROR
                         return@withContext false
                     }
 
-                    if (!ok && !isRossTech) {
+                    if (!ok && (!isRossTech || allowRossTechDumbMode)) {
                         // Fallback to K-Line strategies
                         if (transport.isConnected()) {
                             transport.setBaudRate(UsbKwpTransport.KLINE_BAUD_RATE)
@@ -169,13 +187,30 @@ class Kwp2000DiagnosticEngine(
                     }
 
                     if (ok) {
-                        // Optional diagnostic session setup (0x10 0x89)
-                        try {
-                            val sessionReq = buildMessage(targetEcuAddress, 0xF1.toByte(), byteArrayOf(0x10.toByte(), 0x89.toByte()))
-                            transport.write(sessionReq)
-                            val respBuffer = ByteArray(64)
-                            transport.read(respBuffer, 200)
-                        } catch (_: Exception) {}
+                        // For M2 dumb-mode acceptance, stop after a read-only ECU identity query.
+                        // Do not start a different diagnostic session until this path is proven live.
+                        if (allowRossTechDumbMode) {
+                            lastEcuIdentityPayload = readEcuIdentificationRaw(targetEcuAddress)
+                            Log.i(
+                                "VCDS_PROBE",
+                                "01-Engine K-Line connected; identity=" +
+                                    (lastEcuIdentityPayload?.joinToString(" ") {
+                                        "%02X".format(it.toInt() and 0xFF)
+                                    } ?: "(no 1A 9B reply)")
+                            )
+                        } else {
+                            // Existing non-B03 path retains its optional session setup.
+                            try {
+                                val sessionReq = buildMessage(
+                                    targetEcuAddress,
+                                    0xF1.toByte(),
+                                    byteArrayOf(0x10.toByte(), 0x89.toByte())
+                                )
+                                transport.write(sessionReq)
+                                val respBuffer = ByteArray(64)
+                                transport.read(respBuffer, 200)
+                            } catch (_: Exception) {}
+                        }
 
                         state = DiagState.CONNECTED
                         return@withContext true
@@ -282,6 +317,32 @@ class Kwp2000DiagnosticEngine(
             sb.append("Sweep aborted: ${e.message}\n")
         }
         return@withContext sb.toString()
+    }
+
+    /**
+     * Optional read-only identity confirmation after StartCommunication succeeds.
+     * A missing 1A 9B reply does not invalidate the already-established KWP session.
+     */
+    private fun readEcuIdentificationRaw(target: Byte): ByteArray? {
+        return try {
+            transport.purge()
+            val idReq = buildMessage(
+                target,
+                0xF1.toByte(),
+                byteArrayOf(0x1A.toByte(), 0x9B.toByte())
+            )
+            transport.write(idReq)
+            val payload = readKwpPayload(700) ?: return null
+            if (payload.isNotEmpty() &&
+                (payload[0] == 0x5A.toByte() || payload[0] == 0x61.toByte())
+            ) {
+                payload
+            } else {
+                null
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun tryInitDirect(target: Byte): Boolean {
