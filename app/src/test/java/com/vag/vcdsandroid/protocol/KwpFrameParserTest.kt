@@ -83,6 +83,25 @@ class KwpFrameParserTest {
     }
 
     @Test
+    fun `specific ECU filter rejects a valid frame from another controller`() {
+        val foreignReply = group11Reply().copyOf()
+        foreignReply[2] = 0x02 // transmission ECU, not requested Engine 01
+        var cs = 0
+        for (k in 0 until foreignReply.size - 1) {
+            cs += (foreignReply[k].toInt() and 0xFF)
+        }
+        foreignReply[foreignReply.size - 1] = (cs and 0xFF).toByte()
+
+        assertNull(
+            KwpFrameParser.extractPayload(
+                foreignReply,
+                foreignReply.size,
+                expectedSource = 0x01
+            )
+        )
+    }
+
+    @Test
     fun `frame with a corrupt checksum is rejected`() {
         val reply = group11Reply().copyOf()
         reply[reply.size - 1] = (reply[reply.size - 1] + 1).toByte()
