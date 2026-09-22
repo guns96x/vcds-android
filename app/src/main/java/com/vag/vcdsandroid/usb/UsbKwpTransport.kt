@@ -477,13 +477,19 @@ class UsbKwpTransport(private val context: Context) {
             var bitEndNs = System.nanoTime()
 
             // Start + D0..D6 + parity: each is held for a full 200 ms.
-            // The stop level stays HIGH while we immediately begin W1 sync wait.
             for (i in 0 until bits.lastIndex) {
                 port.setBreak(!bits[i]) // BREAK asserted = K-Line LOW
                 bitEndNs += KwpSlowInit.BIT_TIME_MS * 1_000_000L
                 waitUntilNs(bitEndNs)
             }
+
+            // The stop bit is part of the 5-baud address byte too. Hold the HIGH
+            // level for the full 200 ms before W1 starts; otherwise the sync
+            // deadline begins one whole bit early and late-but-valid 0x55 replies
+            // can be missed.
             port.setBreak(false) // stop / idle HIGH
+            bitEndNs += KwpSlowInit.BIT_TIME_MS * 1_000_000L
+            waitUntilNs(bitEndNs)
 
             // Do NOT purge here: ECU 0x55 may already be on its way. BREAK
             // transitions can create local echo bytes, so scan until real sync.
