@@ -49,9 +49,9 @@ Opus 5.5 виявив проблеми, які необхідно усунути
 ```
  [M0: Гігієна доказів PR #4]
             │
- [M1: Samsung S24 FE ↔ FA24 cable: real interface handshake]
+ [M1: Samsung S24 FE ↔ FA24 cable: real interface handshake — DONE]
             │
- [M2: 01-Engine connect]
+ [M2: 01-Engine connect over legacy dumb K-Line — ACTIVE]
             │
  [M3: Group 011 read]
             │
@@ -86,3 +86,15 @@ Opus 5.5 виявив проблеми, які необхідно усунути
 
 План повністю структурований і готовий до виконання.
 Пропоную розпочати з **Етапу M0**: внести всі виправлення зауважень рев'ю PR #4 та виявлені дефекти безпеки, прогнати тести та запушити оновлення на GitHub. Переходимо?
+
+### M2 connection ground truth
+
+The current M2 is not a blind experiment anymore:
+
+- exact cable-side M1 is proven on `RT000001`;
+- the user's own ELM traces show `ISO 14230-4 / KWP 5BAUD`, `TP2.0 Active: false`;
+- Ross-Tech documents legacy HEX-USB+CAN dumb mode for third-party serial use;
+- NefMoto's current open implementation documents the critical ISO 14230 slow-init windows (W1/W2/W3/W4), including the hard 25–50 ms W4 complement window;
+- current Android code implements that slow-init state machine, verifies a checksum-valid ECU frame from source `0x01`, retries with a quiet gap, keeps the KWP session alive, and now detects stale USB handles after Samsung OTG re-enumeration.
+
+Do not enable M3 until the real car returns the first verified ECU 01 KWP frame.
