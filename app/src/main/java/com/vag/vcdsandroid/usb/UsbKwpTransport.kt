@@ -15,6 +15,10 @@ import com.hoho.android.usbserial.driver.ProlificSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialDriver
 import com.hoho.android.usbserial.driver.UsbSerialPort
 import com.hoho.android.usbserial.driver.UsbSerialProber
+import com.vag.vcdsandroid.adapters.HexB03Constants
+import com.vag.vcdsandroid.adapters.HexB03Frame
+import com.vag.vcdsandroid.adapters.HexB03FrameCodec
+import com.vag.vcdsandroid.adapters.HexB03StreamDecoder
 import com.vag.vcdsandroid.protocol.KwpSlowInit
 import java.io.IOException
 
@@ -293,6 +297,47 @@ class UsbKwpTransport(private val context: Context) {
     }
 
     /**
+     * Sends one checksum-framed FA24 cable-control request and waits for a complete,
+     * checksum-valid response with the expected opcode. Handles fragmented USB reads.
+     */
+    private fun sendFa24Control(
+        port: UsbSerialPort,
+        opcode: Byte,
+        payload: ByteArray = ByteArray(0),
+        expectedOpcode: Byte,
+        timeoutMs: Int
+    ): HexB03Frame? {
+        val request = HexB03FrameCodec.encode(
+            marker = HexB03Constants.MARKER_HOST,
+            opcode = opcode,
+            payload = payload
+        )
+        val decoder = HexB03StreamDecoder(expectedMarker = HexB03Constants.MARKER_CABLE)
+        val deadlineNs = System.nanoTime() + timeoutMs.toLong() * 1_000_000L
+        val buf = ByteArray(128)
+
+        port.write(request, minOf(timeoutMs, 500))
+
+        while (System.nanoTime() < deadlineNs) {
+            val remainingMs = ((deadlineNs - System.nanoTime()) / 1_000_000L)
+                .coerceAtLeast(1L)
+                .coerceAtMost(100L)
+                .toInt()
+            val count = try {
+                port.read(buf, remainingMs)
+            } catch (_: IOException) {
+                0
+            }
+            if (count <= 0) continue
+
+            val frames = decoder.feed(buf.copyOf(count))
+            val match = frames.firstOrNull { it.opcode == expectedOpcode }
+            if (match != null) return match
+        }
+        return null
+    }
+
+    /**
      * Re-find a USB device from the current system device list by matching VID:PID.
      * This is critical on Samsung devices where the /dev/bus/usb path changes
      * after the USB chooser dialog remounts the device.
@@ -361,38 +406,87 @@ class UsbKwpTransport(private val context: Context) {
                 }
             }
 
-            // Automated mode transition:
-            // When a Ross-Tech HEX interface (FA20/FA24/FA25) is booted in Intelligent Mode (0x02),
-            // its MCU intercepts all UART traffic and rejects raw KWP bytes.
-            // We automatically switch it to Legacy Dumb K-Line mode (0x00) via HC::SetBoot(0).
+            // Automated mode transition recovered from VCDS HC::SetBoot / HC::ReadBoot.
+            // Use the exact FA24 intelligent-link bring-up before issuing framed commands.
             try {
-                port.setParameters(115_200, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                port.purgeHwBuffers(true, true)
+                if (port is FtdiSerialDriver.FtdiSerialPort) {
+                    try { port.setLatencyTimer(1) } catch (_: Exception) {}
+                }
+                for (baud in intArrayOf(9_600, 19_200, 115_200)) {
+                    port.setParameters(
+                        baud,
+                        8,
+                        UsbSerialPort.STOPBITS_1,
+                        UsbSerialPort.PARITY_NONE
+                    )
+                }
+                port.dtr = false
+                port.rts = false
                 port.purgeHwBuffers(true, true)
 
-                // Query current boot mode: HC::ReadBoot (opcode 0x0D) -> [0x53, 0x04, 0x0D, 0x5A]
-                val readBootReq = byteArrayOf(0x53, 0x04, 0x0D, 0x5A)
-                port.write(readBootReq, 200)
+                val bootBefore = sendFa24Control(
+                    port = port,
+                    opcode = HexB03Constants.OPCODE_READ_BOOT,
+                    expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                    timeoutMs = 700
+                )?.payload?.firstOrNull()
 
-                val rxBuf = ByteArray(64)
-                val rxLen = port.read(rxBuf, 300)
-                val isSmartMode = rxLen >= 4 && rxBuf[0] == 0x4D.toByte() &&
-                    rxBuf[2] == 0x0D.toByte() && rxBuf[3] == 0x02.toByte()
+                android.util.Log.i(
+                    "VCDS_DUMB",
+                    "HC::ReadBoot before switch = " +
+                        (bootBefore?.let { "0x%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY")
+                )
 
-                if (isSmartMode) {
+                if (bootBefore == HexB03Constants.BOOT_MODE_SMART) {
+                    val ack = sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_SET_BOOT,
+                        payload = byteArrayOf(HexB03Constants.BOOT_MODE_LEGACY_DUMB),
+                        expectedOpcode = HexB03Constants.OPCODE_ACK,
+                        timeoutMs = 700
+                    )
+                    if (ack == null) {
+                        throw IOException("HC::SetBoot(0) did not return checksum-valid 0xFE ACK")
+                    }
+
+                    // VCDS HC::SetBoot calls HC::ReadBoot before returning. Mirror that exact
+                    // state transition instead of assuming the ACK alone changed the mux.
+                    val bootAfter = sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_READ_BOOT,
+                        expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                        timeoutMs = 700
+                    )?.payload?.firstOrNull()
+
+                    if (bootAfter != HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
+                        throw IOException(
+                            "HC::SetBoot(0) ACKed but HC::ReadBoot returned " +
+                                (bootAfter?.let { "0x%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY")
+                        )
+                    }
                     android.util.Log.i(
                         "VCDS_DUMB",
-                        "HEX adapter active in Smart Mode (0x02); switching to Legacy Dumb Mode (0x00)..."
+                        "PHONE-ONLY SMART->DUMB VERIFIED: ReadBoot=0x00"
                     )
-                    // Transmit HC::SetBoot(0): [0x53, 0x05, 0x0E, 0x00, 0x58]
-                    val setBootDumbReq = byteArrayOf(0x53, 0x05, 0x0E, 0x00, 0x58)
-                    port.write(setBootDumbReq, 200)
-
-                    val ackLen = port.read(rxBuf, 500)
-                    val ackOk = ackLen >= 4 && rxBuf[0] == 0x4D.toByte() && rxBuf[2] == 0xFE.toByte()
-                    android.util.Log.i("VCDS_DUMB", "HC::SetBoot(0) response received: ackOk=$ackOk")
+                } else if (bootBefore == HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
+                    android.util.Log.i("VCDS_DUMB", "Interface already reports Legacy Dumb Mode (0x00)")
+                } else {
+                    throw IOException(
+                        "Unable to establish FA24 boot mode before K-Line open; refusing guessed transition"
+                    )
                 }
             } catch (e: Exception) {
-                android.util.Log.w("VCDS_DUMB", "HEX smart-to-dumb mode transition attempt: ${e.message}")
+                android.util.Log.e(
+                    "VCDS_DUMB",
+                    "Automatic FA24 smart-to-dumb transition failed: ${e.message}"
+                )
+                try { port.close() } catch (_: Exception) {}
+                try { connection.close() } catch (_: Exception) {}
+                serialPort = null
+                isPortOpen = false
+                currentDevice = null
+                return false
             }
 
             port.setParameters(
