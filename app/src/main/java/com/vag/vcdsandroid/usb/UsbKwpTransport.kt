@@ -315,7 +315,13 @@ class UsbKwpTransport(private val context: Context) {
         val decoder = HexB03StreamDecoder(expectedMarker = HexB03Constants.MARKER_CABLE)
         val deadlineNs = System.nanoTime() + timeoutMs.toLong() * 1_000_000L
         val buf = ByteArray(128)
+        val txHex = request.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
 
+        android.util.Log.i(
+            "VCDS_DUMB",
+            "FA24 CTRL TX opcode=0x%02X expected=0x%02X bytes=[$txHex]"
+                .format(opcode.toInt() and 0xFF, expectedOpcode.toInt() and 0xFF)
+        )
         port.write(request, minOf(timeoutMs, 500))
 
         while (System.nanoTime() < deadlineNs) {
@@ -330,10 +336,28 @@ class UsbKwpTransport(private val context: Context) {
             }
             if (count <= 0) continue
 
-            val frames = decoder.feed(buf.copyOf(count))
+            val chunk = buf.copyOf(count)
+            val rxHex = chunk.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+            android.util.Log.i("VCDS_DUMB", "FA24 CTRL RX raw=[$rxHex]")
+
+            val frames = decoder.feed(chunk)
+            if (frames.isNotEmpty()) {
+                val decoded = frames.joinToString { frame ->
+                    "opcode=0x%02X payload=[%s]".format(
+                        frame.opcode.toInt() and 0xFF,
+                        frame.payload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+                    )
+                }
+                android.util.Log.i("VCDS_DUMB", "FA24 CTRL decoded $decoded")
+            }
             val match = frames.firstOrNull { it.opcode == expectedOpcode }
             if (match != null) return match
         }
+        android.util.Log.w(
+            "VCDS_DUMB",
+            "FA24 CTRL timeout waiting for opcode=0x%02X after ${timeoutMs}ms"
+                .format(expectedOpcode.toInt() and 0xFF)
+        )
         return null
     }
 
