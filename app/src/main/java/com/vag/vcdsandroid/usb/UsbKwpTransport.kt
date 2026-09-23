@@ -6,6 +6,7 @@ import android.content.Intent
 import android.hardware.usb.UsbDevice
 import android.hardware.usb.UsbManager
 import android.os.Build
+import android.os.Process
 import com.hoho.android.usbserial.driver.Ch34xSerialDriver
 import com.hoho.android.usbserial.driver.Cp21xxSerialDriver
 import com.hoho.android.usbserial.driver.FtdiSerialDriver
@@ -108,7 +109,24 @@ class UsbKwpTransport(private val context: Context) {
     private var isPortOpen = false
     private var bridgeServer: TcpBridgeServer? = null
 
-    fun isConnected(): Boolean = isPortOpen && serialPort != null
+    fun isConnected(): Boolean {
+        if (!isPortOpen || serialPort == null) return false
+        val dev = currentDevice ?: return false
+
+        // UsbDevice objects become stale after OTG detach/re-enumeration. Treat the
+        // old handle as dead immediately so the engine's retry loop can reopen the
+        // new /dev/bus/usb path instead of spinning on a zombie serial port.
+        val present = usbManager.deviceList.values.any {
+            it.deviceName == dev.deviceName &&
+                it.vendorId == dev.vendorId &&
+                it.productId == dev.productId
+        }
+        if (!present) {
+            markPortDead("USB device path disappeared: ${dev.deviceName}")
+            return false
+        }
+        return true
+    }
     fun isBridgeActive(): Boolean = bridgeServer?.isBridgeActive == true
 
     fun getActiveAdapterInfo(): AdapterInfo? {
@@ -451,7 +469,17 @@ class UsbKwpTransport(private val context: Context) {
             return null
         }
 
+        val tid = Process.myTid()
+        val previousPriority = try {
+            Process.getThreadPriority(tid)
+        } catch (_: Exception) {
+            Process.THREAD_PRIORITY_DEFAULT
+        }
         try {
+            try {
+                Process.setThreadPriority(Process.THREAD_PRIORITY_DISPLAY)
+            } catch (_: Exception) {}
+
             if (address !in 0..0x7F) return@synchronized failure("INVALID_7BIT_ADDRESS")
 
             // Incoming sync/key bytes use the normal session UART parameters.
@@ -577,7 +605,19 @@ class UsbKwpTransport(private val context: Context) {
         } catch (e: Exception) {
             android.util.Log.e("VCDS_SLOW_INIT", "Five-baud init exception: ${e.message}")
             failure("EXCEPTION_${e.javaClass.simpleName}")
+        } finally {
+            try {
+                Process.setThreadPriority(previousPriority)
+            } catch (_: Exception) {}
         }
+    }
+
+    private fun markPortDead(reason: String) {
+        android.util.Log.w("VCDS_USB", reason)
+        try { serialPort?.close() } catch (_: Exception) {}
+        serialPort = null
+        isPortOpen = false
+        currentDevice = null
     }
 
     private fun refreshDevice(stale: UsbDevice): UsbDevice? {
@@ -651,9 +691,14 @@ class UsbKwpTransport(private val context: Context) {
 
     private val ioLock = Any()
 
-    fun write(data: ByteArray) = synchronized(ioLock) {
+    fun write(data: ByteArray): Int = synchronized(ioLock) {
         val port = serialPort ?: throw IOException("USB port is not open")
-        port.write(data, DEFAULT_TIMEOUT_MS)
+        try {
+            port.write(data, DEFAULT_TIMEOUT_MS)
+        } catch (e: IOException) {
+            markPortDead("USB write failed; serial handle invalid: ${e.message}")
+            throw e
+        }
     }
 
     fun read(buffer: ByteArray, timeoutMs: Int = DEFAULT_TIMEOUT_MS): Int = synchronized(ioLock) {
@@ -661,8 +706,18 @@ class UsbKwpTransport(private val context: Context) {
         try {
             port.read(buffer, timeoutMs)
         } catch (e: IOException) {
-            // In usb-serial-for-android, a read timeout (no bytes ready) throws IOException.
-            // This is NORMAL in serial communication — return 0 bytes read.
+            // A timeout can surface as IOException on some usb-serial-for-android
+            // versions. Distinguish that from a physical detach by checking whether
+            // the exact UsbDevice path still exists.
+            val dev = currentDevice
+            val stillPresent = dev != null && usbManager.deviceList.values.any {
+                it.deviceName == dev.deviceName &&
+                    it.vendorId == dev.vendorId &&
+                    it.productId == dev.productId
+            }
+            if (!stillPresent) {
+                markPortDead("USB read failed after device detach/re-enumeration: ${e.message}")
+            }
             0
         } catch (e: Exception) {
             0
