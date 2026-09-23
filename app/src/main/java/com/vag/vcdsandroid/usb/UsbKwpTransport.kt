@@ -695,6 +695,7 @@ class UsbKwpTransport(private val context: Context) {
         val port = serialPort ?: throw IOException("USB port is not open")
         try {
             port.write(data, DEFAULT_TIMEOUT_MS)
+            data.size
         } catch (e: IOException) {
             markPortDead("USB write failed; serial handle invalid: ${e.message}")
             throw e
