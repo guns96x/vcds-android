@@ -59,13 +59,13 @@ if ($presentDevices) {
 
         # Extract VID and PID
         $vid = if ($devId -match "VID_([0-9A-Fa-f]{4})") { $Matches[1].ToUpper() } else { "UNKNOWN" }
-        $pid = if ($devId -match "PID_([0-9A-Fa-f]{4})") { $Matches[1].ToUpper() } else { "UNKNOWN" }
+        $devPid = if ($devId -match "PID_([0-9A-Fa-f]{4})") { $Matches[1].ToUpper() } else { "UNKNOWN" }
         $rev = if ($hwIds -join " " -match "REV_([0-9A-Fa-f]{4})") { $Matches[1].ToUpper() } else { "UNKNOWN" }
 
         # Extract serial number from instance ID (last segment after backslash)
         $serial = if ($devId -match "\\([^\\]+)$") { $Matches[1] } else { "UNKNOWN" }
 
-        $isRossTech = ($vid -eq "0403" -and $targetPids -contains $pid)
+        $isRossTech = ($vid -eq "0403" -and $targetPids -contains $devPid)
 
         $deviceObj = [ordered]@{
             name = $name
@@ -73,7 +73,7 @@ if ($presentDevices) {
             device_id = $devId
             hardware_ids = $hwIds
             vid = "0x$vid"
-            pid = "0x$pid"
+            pid = "0x$devPid"
             rev = if ($rev -ne "UNKNOWN") { "0x$rev" } else { $null }
             serial_number = $serial
             manufacturer = $mfg

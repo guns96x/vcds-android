@@ -361,6 +361,47 @@ class UsbKwpTransport(private val context: Context) {
                 }
             }
 
+            // Automated mode transition:
+            // When a Ross-Tech HEX interface (FA20/FA24/FA25) is booted in Intelligent Mode (0x02),
+            // its MCU intercepts all UART traffic and rejects raw KWP bytes.
+            // We automatically switch it to Legacy Dumb K-Line mode (0x00) via HC::SetBoot(0).
+            try {
+                port.setParameters(115_200, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                port.purgeHwBuffers(true, true)
+
+                // Query current boot mode: HC::ReadBoot (opcode 0x0D) -> [0x53, 0x04, 0x0D, 0x5A]
+                val readBootReq = byteArrayOf(0x53, 0x04, 0x0D, 0x5A)
+                port.write(readBootReq, 200)
+
+                val rxBuf = ByteArray(64)
+                val rxLen = port.read(rxBuf, 300)
+                val isSmartMode = rxLen >= 4 && rxBuf[0] == 0x4D.toByte() &&
+                    rxBuf[2] == 0x0D.toByte() && rxBuf[3] == 0x02.toByte()
+
+                if (isSmartMode) {
+                    android.util.Log.i(
+                        "VCDS_DUMB",
+                        "HEX adapter active in Smart Mode (0x02); switching to Legacy Dumb Mode (0x00)..."
+                    )
+                    // Transmit HC::SetBoot(0): [0x53, 0x05, 0x0E, 0x00, 0x58]
+                    val setBootDumbReq = byteArrayOf(0x53, 0x05, 0x0E, 0x00, 0x58)
+                    port.write(setBootDumbReq, 200)
+
+                    val ackLen = port.read(rxBuf, 500)
+                    val ackOk = ackLen >= 4 && rxBuf[0] == 0x4D.toByte() && rxBuf[2] == 0xFE.toByte()
+                    android.util.Log.i("VCDS_DUMB", "HC::SetBoot(0) response received: ackOk=$ackOk")
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("VCDS_DUMB", "HEX smart-to-dumb mode transition attempt: ${e.message}")
+            }
+
+            port.setParameters(
+                KLINE_BAUD_RATE,
+                8,
+                UsbSerialPort.STOPBITS_1,
+                UsbSerialPort.PARITY_NONE
+            )
+
             // Preserve the control-line state already used by the M2 experiment,
             // but do not infer success from it. ECU traffic is the only proof.
             port.dtr = true

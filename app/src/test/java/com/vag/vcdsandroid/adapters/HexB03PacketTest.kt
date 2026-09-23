@@ -139,6 +139,27 @@ class HexB03PacketTest {
         assertEquals(HexB03Constants.MARKER_HOST, modeFrame[0])
         assertEquals(0x0D.toByte(), modeFrame[2])
 
+        val setBootDumbFrame = CandidateB03Command.SetBootDumb.encodeFrame()
+        assertEquals(HexB03Constants.MARKER_HOST, setBootDumbFrame[0])
+        assertEquals(5.toByte(), setBootDumbFrame[1])
+        assertEquals(0x0E.toByte(), setBootDumbFrame[2])
+        assertEquals(0x00.toByte(), setBootDumbFrame[3])
+        // 0x53 ^ 0x05 ^ 0x0E ^ 0x00 = 0x58
+        assertEquals(0x58.toByte(), setBootDumbFrame[4])
+
+        val setBootSmartFrame = CandidateB03Command.SetBootSmart.encodeFrame()
+        assertEquals(HexB03Constants.MARKER_HOST, setBootSmartFrame[0])
+        assertEquals(5.toByte(), setBootSmartFrame[1])
+        assertEquals(0x0E.toByte(), setBootSmartFrame[2])
+        assertEquals(0x02.toByte(), setBootSmartFrame[3])
+        // 0x53 ^ 0x05 ^ 0x0E ^ 0x02 = 0x5A
+        assertEquals(0x5A.toByte(), setBootSmartFrame[4])
+
+        val echoFrame = CandidateB03Command.Echo10400.encodeFrame()
+        assertEquals(HexB03Constants.MARKER_HOST, echoFrame[0])
+        assertEquals(4.toByte(), echoFrame[1])
+        assertEquals(0x9A.toByte(), echoFrame[2])
+
         val keepaliveFrame = CandidateB03Command.KeepalivePing.encodeFrame()
         assertEquals(HexB03Constants.MARKER_HOST, keepaliveFrame[0])
         assertEquals(0xA0.toByte(), keepaliveFrame[2])

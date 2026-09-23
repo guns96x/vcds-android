@@ -316,4 +316,137 @@ class HexB03AdapterTest {
         assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x30, 0x01)))          // IO Control
         assertNotNull(adapter.assertReadOnlyGuardrails(byteArrayOf(0x2E.toByte(), 0x01))) // WriteDataById
     }
+
+    @Test
+    fun `setLegacyDumbMode transitions adapter from smart mode to dumb mode with verified 0xFE ACK`() = runBlocking {
+        val driver = TestHardwareDriver().apply {
+            // 1. Initial 0x0D ReadBoot query returns 0x02 (Smart mode)
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = HexB03Constants.OPCODE_READ_BOOT,
+                    payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART)
+                )
+            )
+            // 2. 0x0E SetBoot(0) response is 0xFE (ACK)
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = HexB03Constants.OPCODE_ACK
+                )
+            )
+            // 3. Verification 0x0D ReadBoot query returns 0x00 (Legacy Dumb mode)
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = HexB03Constants.OPCODE_READ_BOOT,
+                    payload = byteArrayOf(HexB03Constants.BOOT_MODE_LEGACY_DUMB)
+                )
+            )
+        }
+        val adapter = HexB03Adapter(driver)
+
+        val result = adapter.setLegacyDumbMode()
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrThrow())
+
+        // Verify wire frame sequence:
+        // 1. Query 0x0D: [0x53, 0x04, 0x0D, 0x5A]
+        // 2. SetBoot(0): [0x53, 0x05, 0x0E, 0x00, 0x58]
+        // 3. Verify 0x0D: [0x53, 0x04, 0x0D, 0x5A]
+        val expectedTx = byteArrayOf(
+            0x53, 0x04, 0x0D, 0x5A,
+            0x53, 0x05, 0x0E, 0x00, 0x58,
+            0x53, 0x04, 0x0D, 0x5A
+        )
+        assertArrayEquals(expectedTx, driver.writtenBytes.toByteArray())
+    }
+
+    @Test
+    fun `setLegacyDumbMode is no-op if adapter is already in dumb mode`() = runBlocking {
+        val driver = TestHardwareDriver().apply {
+            // Initial 0x0D ReadBoot query returns 0x00 (Already Dumb)
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = HexB03Constants.OPCODE_READ_BOOT,
+                    payload = byteArrayOf(HexB03Constants.BOOT_MODE_LEGACY_DUMB)
+                )
+            )
+        }
+        val adapter = HexB03Adapter(driver)
+
+        val result = adapter.setLegacyDumbMode()
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrThrow())
+
+        // Must ONLY have sent the 0x0D query, without sending 0x0E write
+        val expectedTx = byteArrayOf(0x53, 0x04, 0x0D, 0x5A)
+        assertArrayEquals(expectedTx, driver.writtenBytes.toByteArray())
+    }
+
+    @Test
+    fun `setLegacyDumbMode fails if SetBoot times out without 0xFE ACK`() = runBlocking {
+        val driver = TestHardwareDriver().apply {
+            // Initial 0x0D query returns 0x02
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = HexB03Constants.OPCODE_READ_BOOT,
+                    payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART)
+                )
+            )
+            // No reply to 0x0E
+        }
+        val adapter = HexB03Adapter(driver)
+
+        val result = adapter.setLegacyDumbMode(timeoutMs = 100)
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()?.message?.contains("timed out") == true)
+    }
+
+    @Test
+    fun `setIntelligentMode transitions adapter from dumb mode to smart mode`() = runBlocking {
+        val driver = TestHardwareDriver().apply {
+            // 1. Initial 0x0D query returns 0x00 (Dumb mode)
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = HexB03Constants.OPCODE_READ_BOOT,
+                    payload = byteArrayOf(HexB03Constants.BOOT_MODE_LEGACY_DUMB)
+                )
+            )
+            // 2. 0x0E SetBoot(2) returns 0xFE ACK
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = HexB03Constants.OPCODE_ACK
+                )
+            )
+            // 3. Verification 0x0D returns 0x02 (Smart mode)
+            mockReadQueue.add(
+                HexB03FrameCodec.encode(
+                    marker = HexB03Constants.MARKER_CABLE,
+                    opcode = HexB03Constants.OPCODE_READ_BOOT,
+                    payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART)
+                )
+            )
+        }
+        val adapter = HexB03Adapter(driver)
+
+        val result = adapter.setIntelligentMode()
+        assertTrue(result.isSuccess)
+        assertTrue(result.getOrThrow())
+
+        // Expected TX:
+        // 0x0D ReadBoot: [0x53, 0x04, 0x0D, 0x5A]
+        // 0x0E SetBoot(2): [0x53, 0x05, 0x0E, 0x02, 0x5A]
+        // 0x0D ReadBoot: [0x53, 0x04, 0x0D, 0x5A]
+        val expectedTx = byteArrayOf(
+            0x53, 0x04, 0x0D, 0x5A,
+            0x53, 0x05, 0x0E, 0x02, 0x5A,
+            0x53, 0x04, 0x0D, 0x5A
+        )
+        assertArrayEquals(expectedTx, driver.writtenBytes.toByteArray())
+    }
 }

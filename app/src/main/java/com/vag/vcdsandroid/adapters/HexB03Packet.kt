@@ -20,6 +20,20 @@ object HexB03Constants {
     const val MIN_FRAME_LEN: Int = 4     // Marker + Len + Opcode + XOR
     const val MAX_FRAME_LEN: Int = 255
     const val MAX_BUFFER_CAPACITY: Int = 4096
+
+    // Capture-grounded and reverse-engineered opcodes (from VCDS 26.3 x64)
+    const val OPCODE_PROBE: Byte = 0x02
+    const val OPCODE_IDENTIFY: Byte = 0x04
+    const val OPCODE_READ_BOOT: Byte = 0x0D
+    const val OPCODE_SET_BOOT: Byte = 0x0E
+    const val OPCODE_ACK: Byte = 0xFE.toByte()
+    const val OPCODE_STATUS: Byte = 0x82.toByte()
+    const val OPCODE_ECHO_10400: Byte = 0x9A.toByte()
+    const val OPCODE_KEEPALIVE: Byte = 0xA0.toByte()
+
+    // Boot / Operating modes
+    const val BOOT_MODE_LEGACY_DUMB: Byte = 0x00
+    const val BOOT_MODE_SMART: Byte = 0x02
 }
 
 data class HexB03Frame(
@@ -211,12 +225,29 @@ sealed class CandidateB03Command(
     )
 
     object ModeRead : CandidateB03Command(
-        opcode = 0x0D.toByte(),
-        description = "HYPOTHESIS: Mode read"
+        opcode = HexB03Constants.OPCODE_READ_BOOT,
+        description = "HC::ReadBoot (0x0D) - Query adapter boot / operating mode"
+    )
+
+    object SetBootDumb : CandidateB03Command(
+        opcode = HexB03Constants.OPCODE_SET_BOOT,
+        payload = byteArrayOf(HexB03Constants.BOOT_MODE_LEGACY_DUMB),
+        description = "HC::SetBoot(0) - Force legacy dumb K-Line pass-through mode"
+    )
+
+    object SetBootSmart : CandidateB03Command(
+        opcode = HexB03Constants.OPCODE_SET_BOOT,
+        payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART),
+        description = "HC::SetBoot(2) - Set intelligent / smart boot mode"
+    )
+
+    object Echo10400 : CandidateB03Command(
+        opcode = HexB03Constants.OPCODE_ECHO_10400,
+        description = "HC::Echo10400 (0x9A) - Test 10400 baud echo / pass-through"
     )
 
     object KeepalivePing : CandidateB03Command(
-        opcode = 0xA0.toByte(),
+        opcode = HexB03Constants.OPCODE_KEEPALIVE,
         description = "HYPOTHESIS: Keepalive ping"
     )
 

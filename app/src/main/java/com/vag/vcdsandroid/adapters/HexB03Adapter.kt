@@ -127,31 +127,7 @@ class HexB03Adapter(
             val started = System.currentTimeMillis()
             streamDecoder.reset()
 
-            val openResult = when (val hw = driver) {
-                is UsbFtdiDriver -> hw.openRossTechFa24()
-                else -> {
-                    // Test/fallback driver path mirrors the capture-grounded FA24 settings.
-                    val opened = hw.open(
-                        ConnectionParameters(
-                            baudRate = 9_600,
-                            dataBits = 8,
-                            stopBits = 1,
-                            parity = 0,
-                            dtr = false,
-                            rts = false
-                        )
-                    )
-                    if (opened.isSuccess) {
-                        hw.purge()
-                        hw.setBaudRate(19_200)
-                        hw.setBaudRate(115_200)
-                        hw.setDtr(false)
-                        hw.setRts(false)
-                    }
-                    opened
-                }
-            }
-
+            val openResult = openFa24Transport()
             if (openResult.isFailure) {
                 return@withContext Result.failure(
                     openResult.exceptionOrNull() ?: IllegalStateException("Unable to open FA24 interface")
@@ -159,7 +135,7 @@ class HexB03Adapter(
             }
 
             val probeFrame = sendInterfaceCommand(
-                opcode = 0x02.toByte(),
+                opcode = HexB03Constants.OPCODE_PROBE,
                 timeoutMs = timeoutMs
             ) ?: run {
                 close()
@@ -169,7 +145,7 @@ class HexB03Adapter(
             }
 
             val identifyFrame = sendInterfaceCommand(
-                opcode = 0x04.toByte(),
+                opcode = HexB03Constants.OPCODE_IDENTIFY,
                 timeoutMs = timeoutMs
             ) ?: run {
                 close()
@@ -192,7 +168,7 @@ class HexB03Adapter(
             // FA24 family sample byte-for-byte. The next two read-only control queries are
             // part of that same plaintext open sequence and do not address an ECU.
             val statusFrame = sendInterfaceCommand(
-                opcode = 0x82.toByte(),
+                opcode = HexB03Constants.OPCODE_STATUS,
                 timeoutMs = timeoutMs
             ) ?: run {
                 close()
@@ -202,7 +178,7 @@ class HexB03Adapter(
             }
 
             val modeFrame = sendInterfaceCommand(
-                opcode = 0x0D.toByte(),
+                opcode = HexB03Constants.OPCODE_READ_BOOT,
                 timeoutMs = timeoutMs
             ) ?: run {
                 close()
@@ -225,10 +201,171 @@ class HexB03Adapter(
             )
         }
 
-    private suspend fun sendInterfaceCommand(opcode: Byte, timeoutMs: Long): HexB03Frame? {
+    /**
+     * Reads current boot/operating mode from adapter via HC::ReadBoot (opcode 0x0D).
+     *
+     * Returns:
+     * - [HexB03Constants.BOOT_MODE_LEGACY_DUMB] (0x00): Legacy dumb K-Line pass-through mode
+     * - [HexB03Constants.BOOT_MODE_SMART] (0x02): Intelligent / Smart mode
+     */
+    suspend fun readBootMode(timeoutMs: Long = 1000): Result<Byte> = withContext(Dispatchers.IO) {
+        if (!driver.isConnected) {
+            val opened = openFa24Transport()
+            if (opened.isFailure) {
+                return@withContext Result.failure(
+                    opened.exceptionOrNull() ?: IllegalStateException("Unable to open FA24 transport")
+                )
+            }
+        }
+
+        val modeFrame = sendInterfaceCommand(
+            opcode = HexB03Constants.OPCODE_READ_BOOT,
+            timeoutMs = timeoutMs
+        ) ?: return@withContext Result.failure(
+            IllegalStateException("FA24 mode query timed out: no valid 0x0D reply")
+        )
+
+        if (modeFrame.payload.isEmpty()) {
+            return@withContext Result.failure(
+                IllegalStateException("FA24 mode query returned empty payload")
+            )
+        }
+
+        Result.success(modeFrame.payload[0])
+    }
+
+    /**
+     * Switches the adapter from Intelligent / Smart Mode into Legacy Dumb K-Line mode.
+     *
+     * Reverse-engineered from VCDS 26.3 x64:
+     * - HC::SetBoot (0x140083208) sends opcode 0x0E with mode parameter in dl (0x00 for dumb mode).
+     * - Wire request frame: [0x53, 0x05, 0x0E, 0x00, 0x58].
+     * - Wire reply frame:   [0x4D, 0x04, 0xFE, 0xB7] (opcode 0xFE ACK).
+     * - HC::ReadBoot (0x1400832B4) verifies the mode transition (0x0D returning payload 0x00).
+     *
+     * Once switched, the MCU ceases S/M protocol framing and acts as a transparent UART level-shifter
+     * to the OBD-II K-Line (transceiver SI9243A/L9637D), allowing standard 10400-baud KWP slow-init.
+     */
+    suspend fun setLegacyDumbMode(timeoutMs: Long = 1000): Result<Boolean> = withContext(Dispatchers.IO) {
+        if (!driver.isConnected) {
+            val opened = openFa24Transport()
+            if (opened.isFailure) {
+                return@withContext Result.failure(
+                    opened.exceptionOrNull() ?: IllegalStateException("Unable to open FA24 transport")
+                )
+            }
+        }
+
+        // 1. Check current mode; if already 0x00, avoid redundant rewrite
+        val currentMode = readBootMode(timeoutMs).getOrNull()
+        if (currentMode == HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
+            return@withContext Result.success(true)
+        }
+
+        // 2. Transmit HC::SetBoot(0)
+        val ackFrame = sendInterfaceCommand(
+            opcode = HexB03Constants.OPCODE_SET_BOOT,
+            payload = byteArrayOf(HexB03Constants.BOOT_MODE_LEGACY_DUMB),
+            expectedOpcode = HexB03Constants.OPCODE_ACK,
+            timeoutMs = timeoutMs
+        ) ?: return@withContext Result.failure(
+            IllegalStateException("HC::SetBoot(0) timed out: no 0xFE ACK reply from cable")
+        )
+
+        // 3. Verify transition with HC::ReadBoot (0x0D)
+        val verifiedMode = readBootMode(timeoutMs).getOrNull()
+        if (verifiedMode != HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
+            return@withContext Result.failure(
+                IllegalStateException(
+                    "HC::SetBoot(0) ACKed, but ReadBoot returned 0x%02X instead of 0x00"
+                        .format(verifiedMode?.toInt() ?: -1)
+                )
+            )
+        }
+
+        Result.success(true)
+    }
+
+    /**
+     * Switches the adapter back to Intelligent / Smart Mode (HC::SetBoot(2)).
+     *
+     * Wire request frame: [0x53, 0x05, 0x0E, 0x02, 0x5A].
+     * Wire reply frame:   [0x4D, 0x04, 0xFE, 0xB7] (opcode 0xFE ACK).
+     */
+    suspend fun setIntelligentMode(timeoutMs: Long = 1000): Result<Boolean> = withContext(Dispatchers.IO) {
+        if (!driver.isConnected) {
+            val opened = openFa24Transport()
+            if (opened.isFailure) {
+                return@withContext Result.failure(
+                    opened.exceptionOrNull() ?: IllegalStateException("Unable to open FA24 transport")
+                )
+            }
+        }
+
+        val currentMode = readBootMode(timeoutMs).getOrNull()
+        if (currentMode == HexB03Constants.BOOT_MODE_SMART) {
+            return@withContext Result.success(true)
+        }
+
+        val ackFrame = sendInterfaceCommand(
+            opcode = HexB03Constants.OPCODE_SET_BOOT,
+            payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART),
+            expectedOpcode = HexB03Constants.OPCODE_ACK,
+            timeoutMs = timeoutMs
+        ) ?: return@withContext Result.failure(
+            IllegalStateException("HC::SetBoot(2) timed out: no 0xFE ACK reply from cable")
+        )
+
+        val verifiedMode = readBootMode(timeoutMs).getOrNull()
+        if (verifiedMode != HexB03Constants.BOOT_MODE_SMART) {
+            return@withContext Result.failure(
+                IllegalStateException(
+                    "HC::SetBoot(2) ACKed, but ReadBoot returned 0x%02X instead of 0x02"
+                        .format(verifiedMode?.toInt() ?: -1)
+                )
+            )
+        }
+
+        Result.success(true)
+    }
+
+    private suspend fun openFa24Transport(): Result<Unit> {
+        return when (val hw = driver) {
+            is UsbFtdiDriver -> hw.openRossTechFa24()
+            else -> {
+                // Test/fallback driver path mirrors the capture-grounded FA24 settings.
+                val opened = hw.open(
+                    ConnectionParameters(
+                        baudRate = 9_600,
+                        dataBits = 8,
+                        stopBits = 1,
+                        parity = 0,
+                        dtr = false,
+                        rts = false
+                    )
+                )
+                if (opened.isSuccess) {
+                    hw.purge()
+                    hw.setBaudRate(19_200)
+                    hw.setBaudRate(115_200)
+                    hw.setDtr(false)
+                    hw.setRts(false)
+                }
+                opened
+            }
+        }
+    }
+
+    private suspend fun sendInterfaceCommand(
+        opcode: Byte,
+        payload: ByteArray = ByteArray(0),
+        expectedOpcode: Byte = opcode,
+        timeoutMs: Long
+    ): HexB03Frame? {
         val request = HexB03FrameCodec.encode(
             marker = HexB03Constants.MARKER_HOST,
-            opcode = opcode
+            opcode = opcode,
+            payload = payload
         )
         traceListener?.invoke("TX", request)
 
@@ -251,7 +388,7 @@ class HexB03Adapter(
             val chunk = readBuffer.copyOf(count)
             traceListener?.invoke("RX", chunk)
             val frames = streamDecoder.feed(chunk)
-            val matched = frames.firstOrNull { it.opcode == opcode }
+            val matched = frames.firstOrNull { it.opcode == expectedOpcode }
             if (matched != null) return matched
         }
         return null

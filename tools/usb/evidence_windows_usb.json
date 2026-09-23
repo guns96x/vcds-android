@@ -1,56 +1,40 @@
 ﻿{
-    "timestamp":  "2026-09-22T00:16:47+03:00",
+    "timestamp":  "2026-09-23T12:07:32+03:00",
     "os":  "Майкрософт Windows 11 Pro",
     "probe_type":  "windows_pnp_usb_inspection",
-    "currently_connected":  false,
-    "active_device":  null,
+    "currently_connected":  true,
+    "active_device":  [
+                          {
+                              "name":  "Ross-Tech Direct USB Interface",
+                              "description":  "Ross-Tech Direct USB Interface",
+                              "device_id":  "USB\\VID_0403\u0026PID_FA24\\RT000001",
+                              "hardware_ids":  [
+                                                   "USB\\VID_0403\u0026PID_FA24\u0026REV_0600",
+                                                   "USB\\VID_0403\u0026PID_FA24"
+                                               ],
+                              "vid":  "0x0403",
+                              "pid":  "0xFA24",
+                              "rev":  "0x0600",
+                              "serial_number":  "RT000001",
+                              "manufacturer":  "Ross-Tech",
+                              "pnp_class":  "USB",
+                              "active_service":  "RT-USB",
+                              "status":  "OK",
+                              "is_ross_tech_vid_pid":  true,
+                              "ftdi_silicon_family":  "FT232R (FT232RL / FT232RQ)"
+                          }
+                      ],
     "historical_evidence":  [
-                                {
-                                    "source_file":  "setupapi.dev.20260530_221230.log",
-                                    "detected_hardware_id":  "USB\\VID_0403\u0026PID_FA24",
-                                    "log_sample":  "\u003e\u003e\u003e  [Device Install (Hardware initiated) - USB\\VID_0403\u0026PID_FA24\\RT000001]",
-                                    "context":  [
-                                                    "\u003e\u003e\u003e  Section start 2026/05/27 15:24:53.381",
-                                                    "ump: Install needed due to device having problem code CM_PROB_NOT_CONFIGURED",
-                                                    "utl: {Select Drivers - USB\\VID_0403\u0026PID_FA24\\RT000001} 15:24:53.424",
-                                                    "utl:      Driver Node:",
-                                                    "utl:           Status         - Selected"
-                                                ]
-                                },
-                                {
-                                    "source_file":  "setupapi.dev.20260702_205821.log",
-                                    "detected_hardware_id":  "USB\\VID_0403\u0026PID_FA24",
-                                    "log_sample":  "\u003e\u003e\u003e  [Device Install (Hardware initiated) - USB\\VID_0403\u0026PID_FA24\\RT000001]",
-                                    "context":  [
-                                                    "\u003e\u003e\u003e  Section start 2026/05/30 22:21:12.291",
-                                                    "ump: Install needed due to device having problem code CM_PROB_REINSTALL",
-                                                    "utl: {Select Drivers - USB\\VID_0403\u0026PID_FA24\\RT000001} 22:21:12.356",
-                                                    "utl:      Driver Node:",
-                                                    "utl:           Status         - Selected"
-                                                ]
-                                },
-                                {
-                                    "source_file":  "setupapi.dev.20260729_222207.log",
-                                    "detected_hardware_id":  "USB\\VID_0403\u0026PID_FA24",
-                                    "log_sample":  "set: Device USB\\VID_0403\u0026PID_FA24\\RT000001 will be removed.",
-                                    "context":  [
-                                                    "set: Device USB\\VID_0403\u0026PID_FA24\\RT000001 was removed.",
-                                                    "set: Device HID\\VID_379A\u0026PID_3907\u0026MI_01\u0026COL04\\7\u0026E52145\u00260\u00260003 will be removed.",
-                                                    "set: Device HID\\VID_379A\u0026PID_3907\u0026MI_01\u0026COL04\\7\u0026E52145\u00260\u00260003 was removed.",
-                                                    "set: Device HID\\VID_379A\u0026PID_3907\u0026MI_01\u0026COL01\\7\u0026E52145\u00260\u00260000 will be removed.",
-                                                    "set: Device HID\\VID_379A\u0026PID_3907\u0026MI_01\u0026COL01\\7\u0026E52145\u00260\u00260000 was removed."
-                                                ]
-                                },
                                 {
                                     "source_file":  "setupapi.dev.log",
                                     "detected_hardware_id":  "USB\\VID_0403\u0026PID_FA24",
-                                    "log_sample":  ". set: Device USB\\VID_0403\u0026PID_FA24\\RT000001 will be removed.",
+                                    "log_sample":  "\u003e\u003e\u003e  [Device Install (Hardware initiated) - USB\\VID_0403\u0026PID_FA24\\RT000001]",
                                     "context":  [
-                                                    "",
-                                                    "\u003e\u003e\u003e  [Delete Device - USB\\VID_0403\u0026PID_FA24\\RT000001]",
-                                                    "\u003e\u003e\u003e  Section start 2026/08/30 15:58:28.294",
-                                                    "cmd: \"C:\\WINDOWS\\system32\\cleanmgr.exe\" /autocleanstoragesense /d C:",
-                                                    "\u003c\u003c\u003c  Section end 2026/08/30 15:58:28.334"
+                                                    "\u003e\u003e\u003e  Section start 2026/09/23 11:39:46.118",
+                                                    "ump: Install needed due to device having problem code CM_PROB_NOT_CONFIGURED",
+                                                    "utl: {Select Drivers - USB\\VID_0403\u0026PID_FA24\\RT000001} 11:39:46.139",
+                                                    "utl:      Driver Node:",
+                                                    "utl:           Status         - Selected"
                                                 ]
                                 },
                                 {
