@@ -52,3 +52,9 @@ Logs are stored under:
 **Not yet claimed as real-car validated:** USB KWP/KKL and direct Ross-Tech intelligent-interface probing. Those paths require a fresh stationary hardware test before road use.
 
 CI runs `testDebugUnitTest` and `assembleDebug` for pull requests.
+
+## Real-Vehicle N75 & Telemetry Measurements
+
+For verified analysis, telemetry evidence, and raw CSV logs of the N75 Duty Cycle (Charge Pressure Control) and turbo boost behavior on the target Golf 5 1.9 TDI BLS (EDC16U34), refer to:
+- 📊 **[N75 Telemetry Evidence & Measurements](docs/telemetry/n75_measurements/N75_TELEMETRY_EVIDENCE.md)**
+- 📁 **[Raw VCDS & Mobile Telemetry CSV Logs](docs/telemetry/logs/)**
