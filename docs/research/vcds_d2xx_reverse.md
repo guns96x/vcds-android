@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **Exact-sample update (2026-09-23):** M1 is now physically proven on the user's `RT000001` cable from the Samsung S24 FE. The adapter returned probe `01 60 44` and identify `ROSSTECH A89D010009` in ~20 ms. The plaintext FA24 bring-up is therefore no longer hypothetical for this sample. The encrypted smart diagnostic channel remains out of scope; M2 uses legacy dumb K-Line because the user's real-car logs prove ISO 14230-4 / KWP 5BAUD is available.
+
 # VCDS D2XX Reverse Engineering & Protocol Ledger
 
 **Document Version:** 1.1.0  
@@ -55,7 +58,7 @@ Canonical manifest extracted via `tools/vcds/d2xx_trace/pe_manifest.py` (committ
 
 ---
 
-## 3. Physical Layer & FTDI Configuration (HYPOTHESIS / CANDIDATE)
+## 3. Physical Layer & FTDI Configuration
 
 The initial connection sequence between the FTDI USB-UART bridge and the candidate MCU is hypothesized based on third-party teardowns and prior art:
 
@@ -76,7 +79,7 @@ The initial connection sequence between the FTDI USB-UART bridge and the candida
 
 ---
 
-## 4. Wire Framing Grammar (HYPOTHESIS / UNVERIFIED)
+## 4. Wire Framing Grammar
 
 Third-party prior art suggests that host PC and adapter communicate using a flat envelope:
 
@@ -103,17 +106,17 @@ $$\bigoplus_{i=0}^{\text{len}-1} \text{byte}[i] == 0$$
 
 ---
 
-## 5. Protocol Ledger & Opcode Classification (ALL UNVERIFIED HYPOTHESES)
+## 5. Protocol Ledger & Opcode Classification
 
 > [!CAUTION]
 > Every opcode below is categorized as `HYPOTHESIS / UNVERIFIED` until backed by a real committed D2XX trace (`vcds_d2xx_trace.log`) or static xref. No physical transmission is permitted from Android.
 
 | Opcode | Direction | Payload Example | Meaning / Semantics | Evidence Status | Physical TX Allowed |
 | :---: | :---: | :--- | :--- | :---: | :---: |
-| `0x02` | OUT | `[none]` | Candidate Probe / Ping | `HYPOTHESIS` | **NO (ZERO-TX)** |
-| `0x02` | IN | `01 60 44` | Candidate Probe acknowledgment | `HYPOTHESIS` | N/A |
-| `0x04` | OUT | `[none]` | Candidate Identify Query | `HYPOTHESIS` | **NO (ZERO-TX)** |
-| `0x04` | IN | `"ROSSTECH" <ver_bytes>` | Candidate Identify Response | `HYPOTHESIS` | N/A |
+| `0x02` | OUT | `[none]` | Interface Probe / Ping | `PROVEN_DYNAMIC (RT000001)` | **YES, cable-only M1** |
+| `0x02` | IN | `01 60 44` | Probe acknowledgment | `PROVEN_DYNAMIC (RT000001)` | N/A |
+| `0x04` | OUT | `[none]` | Identify Query | `PROVEN_DYNAMIC (RT000001)` | **YES, cable-only M1** |
+| `0x04` | IN | `"ROSSTECH" <ver_bytes>` | Identify Response | `PROVEN_DYNAMIC (RT000001: A89D010009)` | N/A |
 | `0x82` | OUT | `[none]` | Candidate Status Read | `HYPOTHESIS` | **NO (ZERO-TX)** |
 | `0x82` | IN | `00 00` | Candidate Status Response | `HYPOTHESIS` | N/A |
 | `0x0D` | OUT | `[none]` | Candidate Mode Query | `HYPOTHESIS` | **NO (ZERO-TX)** |
@@ -132,3 +135,24 @@ To ensure physical vehicle safety and hardware preservation:
 1. **SAFE_TRACE Mode**: The D2XX trace shim strictly traps and rejects all EEPROM modification exports (`FT_WriteEE`, `FT_EraseEE`, `FT_EE_Program*`, `FT_EE_UAWrite`, `FT_EE_WriteConfig`, `FT_EEPROM_Program`) with `FT_OTHER_ERROR`. This is documented as `SAFE_TRACE` mode. Any trace run where an EEPROM call was blocked must be flagged so that no protocol sequence is inferred from blocked calls.
 2. **Offline Codec Only**: The packet codec in Android is strictly for offline trace parsing.
 3. **Strict ZERO-TX Policy**: Any transaction request (`transact()` or `executeCandidateCommand()`) through `HexB03Adapter` strictly returns `AdapterResponse.Unsupported` without writing any bytes to the physical hardware (`writtenBytes == 0`) until verified dynamic traces promote a command to `PROVEN_DYNAMIC`.
+
+### Smart diagnostic transport blocker
+
+Independent live FA24 reverse-engineering shows that after the plaintext setup burst, ECU diagnostic traffic is carried inside per-session/per-ECU encrypted `0xB8/0xB7` blocks whose epoch key is coupled to the cable's challenge/response state. That path is not required for this project's interoperability goal and is not being reproduced.
+
+For the user's Golf 5 BLS, real ELM logs repeatedly show `ISO 14230-4 (KWP 5BAUD)` and `TP2.0 Active: false`. Therefore the selected M2 path is:
+
+```
+S24 FE -> FA24 in legacy dumb mode -> raw K-Line -> 5-baud init -> ECU 01
+```
+
+The current implementation now includes:
+- direct legacy HEX K-Line open,
+- FTDI low-latency configuration,
+- ISO 14230 five-baud bit timing,
+- W1/W2/W3/W4 timing gates,
+- checksum-valid reply validation from source address `0x01`,
+- retry quiet windows,
+- idle TesterPresent keepalive,
+- USB detach/re-enumeration detection and reopen support.
+
