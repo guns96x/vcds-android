@@ -576,7 +576,7 @@
                         android:layout_width="match_parent"
                         android:layout_height="44dp"
                         android:layout_marginTop="8dp"
-                        android:text="SEND LAST LOG TO GITHUB"
+                        android:text="SEND LAST LOG TO GITHUB · HOLD = SHARE DIAG LOG"
                         android:textColor="@color/text_primary"
                         android:textSize="12sp"
                         android:textStyle="bold"

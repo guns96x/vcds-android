@@ -209,9 +209,75 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Cable plugged in while the app is already open (singleTop activity). */
+    private val usbAttachedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) handleUsbAttached(intent)
+        }
+    }
+
+    private var autoConnectJob: kotlinx.coroutines.Job? = null
+    @Volatile private var connectInProgress = false
+
+    /**
+     * Plug-and-connect: a cable attach (system launch intent, onNewIntent or the
+     * runtime broadcast) starts the connection by itself, so the user never has
+     * to close the app or re-plug the cable just to make it connect.
+     */
+    private fun handleUsbAttached(intent: Intent) {
+        val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+        }
+        if (device != null) currentDevice = device
+        DiagLog.i("VCDS_USB", "Cable attached: ${device?.let { "%04X:%04X".format(it.vendorId, it.productId) }}; auto-connect")
+        scheduleAutoConnect()
+    }
+
+    /**
+     * The FA24 must be plugged into the phone first (plugged into the car first it
+     * never enumerates), but its interface MCU only comes alive from car power.
+     * So after the USB attach, wait until the cable answers (smart frame or K-Line
+     * echo) and only then connect. The user just plugs phone -> car; no taps.
+     */
+    private fun scheduleAutoConnect(delayMs: Long = 1_500) {
+        if (connectionMode != AppConnectionMode.USB_HARDWARE) return
+        autoConnectJob?.cancel()
+        autoConnectJob = lifecycleScope.launch {
+            delay(delayMs)
+            val dev = currentDevice ?: transport.findAvailableDevice() ?: return@launch
+            if (!transport.hasPermission(dev)) {
+                // Permission dialog first; its receiver calls performConnect().
+                performConnect()
+                return@launch
+            }
+            val deadlineMs = System.currentTimeMillis() + 120_000L
+            while (isActive && System.currentTimeMillis() < deadlineMs) {
+                if (isCurrentModeConnected() || connectInProgress) return@launch
+                val powered = withContext(Dispatchers.IO) { transport.isCablePoweredByCar(dev) }
+                if (powered) {
+                    DiagLog.i("VCDS_USB", "Cable answers (car power present); auto-connect")
+                    performConnect()
+                    return@launch
+                }
+                binding.tvSubStatus.text = "Cable detected. Now plug it into the car OBD port (ignition ON)..."
+                delay(1_000)
+            }
+            binding.tvSubStatus.text = "Cable silent for 2 min: plug it into the car, then press Connect"
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) handleUsbAttached(intent)
+    }
+
     private val usbDetachedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == UsbManager.ACTION_USB_DEVICE_DETACHED) {
+                autoConnectJob?.cancel()
                 currentDevice = null
                 performDisconnect()
                 updateStatusUI()
@@ -231,6 +297,12 @@ class MainActivity : AppCompatActivity() {
 
         val permFilter = IntentFilter(UsbKwpTransport.ACTION_USB_PERMISSION)
         val detachFilter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        ContextCompat.registerReceiver(
+            this,
+            usbAttachedReceiver,
+            IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         ContextCompat.registerReceiver(
             this,
             usbPermissionReceiver,
@@ -260,6 +332,14 @@ class MainActivity : AppCompatActivity() {
         setupListeners()
         switchConnectionMode(AppConnectionMode.USB_HARDWARE)
         startUiTicker()
+
+        // Launched by plugging the cable in, or opened with the cable already
+        // attached: connect without any extra tap or re-plug.
+        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
+            handleUsbAttached(intent)
+        } else if (savedInstanceState == null && transport.findAvailableDevice() != null) {
+            scheduleAutoConnect(delayMs = 800)
+        }
     }
 
     override fun onStart() {
@@ -304,6 +384,9 @@ class MainActivity : AppCompatActivity() {
         try {
             unregisterReceiver(usbDetachedReceiver)
         } catch (_: Exception) {}
+        try {
+            unregisterReceiver(usbAttachedReceiver)
+        } catch (_: Exception) {}
         super.onDestroy()
     }
 
@@ -314,6 +397,8 @@ class MainActivity : AppCompatActivity() {
 
         // Connect button
         binding.btnConnect.setOnClickListener {
+            // A manual tap takes over from the waiting auto-connect loop.
+            autoConnectJob?.cancel()
             val isConnected =
                 activeB03Adapter?.driver?.isConnected == true ||
                     engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING
@@ -335,6 +420,10 @@ class MainActivity : AppCompatActivity() {
 
         // Log toggle button
         binding.btnUploadGitHub.setOnClickListener { onUploadLatestLogClicked() }
+        binding.btnUploadGitHub.setOnLongClickListener {
+            shareDiagnosticLog()
+            true
+        }
 
         binding.btnToggleLog.setOnClickListener {
             if (recordingStartRequested.get() || recordingStopRequested.get()) {
@@ -404,6 +493,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performConnect() {
+        if (connectInProgress) return
         if (connectionMode == AppConnectionMode.SIMULATOR_DEMO && BuildConfig.DEBUG) {
             lifecycleScope.launch {
                 engine.connect(null)
@@ -458,6 +548,7 @@ class MainActivity : AppCompatActivity() {
                 DiagLog.i("B03_M1", "$direction $hex")
             }
 
+            connectInProgress = true
             lifecycleScope.launch {
                 binding.btnConnect.isEnabled = false
                 binding.tvSubStatus.text = "Opening Ross-Tech interface (Smart Mode)..."
@@ -493,7 +584,7 @@ class MainActivity : AppCompatActivity() {
                         showRossTechFailedDialog(adapter, dev, identity, error)
                     }
                 )
-            }
+            }.invokeOnCompletion { connectInProgress = false }
             return
         }
 
@@ -2383,6 +2474,67 @@ class MainActivity : AppCompatActivity() {
         return files.filter { it.name.startsWith(preferredPrefix) }
             .maxByOrNull { it.lastModified() }
             ?: files.maxByOrNull { it.lastModified() }
+    }
+
+    /**
+     * Intelligent-mode M2 gate: the interface MCU wakes ECU 01 (opcode 0x84,
+     * spec V2 on audit/vcds-ghidra-proof, PROVEN_STATIC). The 0x55 sync and the
+     * key bytes in the reply are produced by the ECU itself, so they prove the
+     * engine answered. No diagnostic service is sent: the adapter framing for
+     * KWP services is UNKNOWN (quarantined by the red-team audit).
+     */
+    private suspend fun runSmartEngineWakeUp(adapter: HexB03Adapter, identityText: String) {
+        binding.tvSubStatus.text = "Smart mode: waking 01-Engine (0x84, ~3 s)..."
+        val init = adapter.init5BaudKLine(0x01)
+        DiagLog.i("B03_M2", "0x84 init result:\n${init.describe()}")
+
+        val woke = init.success?.reply
+        val title = if (woke != null) "01-ENGINE RESPONDED (SMART)" else "01-ENGINE NOT VERIFIED (SMART)"
+        binding.tvSubStatus.text = if (woke != null) "01-Engine answered 5-baud init" else "01-Engine not verified (smart)"
+        val verdict = if (woke != null) {
+            "ECU 01 answered: sync 55, KB1=%02X KB2=%02X (%s).".format(
+                woke.keyByte1, woke.keyByte2,
+                if (woke.keyByte2 == 0x8A) "KW1281" else "KWP2000"
+            ) + " M2 link proven. Reading groups needs the next step (data framing is not proven yet)."
+        } else {
+            "No 0x55 from the ECU. Check ignition ON and that the cable sits fully in the OBD port."
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(
+                "Interface: $identityText\n\n" +
+                    "5-baud init by cable (0x84):\n${init.describe()}\n\n" +
+                    verdict
+            )
+            .setPositiveButton("OK", null)
+            .show()
+    }
+
+    /**
+     * Shares connection_diagnostics.log through the Android share sheet, so a
+     * field connection attempt can be sent without configuring a GitHub token.
+     */
+    private fun shareDiagnosticLog() {
+        val file = DiagLog.currentFile()
+        if (file == null || !file.exists() || file.length() == 0L) {
+            Toast.makeText(this, "No diagnostic log recorded yet.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                this, "$packageName.logs", file
+            )
+            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                putExtra(android.content.Intent.EXTRA_SUBJECT, file.name)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(android.content.Intent.createChooser(intent, "Share ${file.name}"))
+        } catch (e: Exception) {
+            DiagLog.e("DIAG_LOG", "Share failed: ${e.message}")
+            Toast.makeText(this, "Share failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     /**

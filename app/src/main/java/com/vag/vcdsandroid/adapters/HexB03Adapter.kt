@@ -497,6 +497,64 @@ class HexB03Adapter(
         )
     }
 
+    /**
+     * Smart-mode K-Line wake-up of [address] performed by the interface MCU
+     * (opcode 0x84, see [Hex5BaudInit]). Requires a live link from [probeInterface].
+     *
+     * Read-only towards the car: the MCU sends the 5-baud address and completes
+     * the key-byte handshake; no diagnostic service is sent. Each address-byte
+     * variant is tried once and every reply is kept as evidence.
+     */
+    suspend fun init5BaudKLine(address: Int = 0x01): Hex5BaudInitResult = withContext(Dispatchers.IO) {
+        val attempts = ArrayList<Hex5BaudAttempt>(2)
+        for (addressByte in Hex5BaudInit.addressByteVariants(address)) {
+            val request = Hex5BaudInit.encodeRequest(addressByte)
+            val (match, frames, raw) = sendAndCollect(
+                request = request,
+                isReply = { it.opcode == Hex5BaudInit.OPCODE_5BAUD_INIT },
+                timeoutMs = Hex5BaudInit.TIMEOUT_MS + 300L
+            )
+            val reply = match?.let { Hex5BaudInit.parseReply(it.payload) }
+            attempts += Hex5BaudAttempt(addressByte, request, frames, raw, reply)
+            if (reply != null) break
+            // ISO 9141 W5: keep the K-Line idle before the next wake-up attempt.
+            delay(2_600)
+        }
+        Hex5BaudInitResult(address, attempts)
+    }
+
+    /** Writes [request] and keeps every decoded frame and raw byte until [isReply] matches. */
+    private suspend fun sendAndCollect(
+        request: ByteArray,
+        isReply: (HexB03Frame) -> Boolean,
+        timeoutMs: Long
+    ): Triple<HexB03Frame?, List<HexB03Frame>, ByteArray> {
+        val frames = ArrayList<HexB03Frame>()
+        val raw = java.io.ByteArrayOutputStream()
+        traceListener?.invoke("TX", request)
+        if (driver.write(request) != request.size) return Triple(null, frames, raw.toByteArray())
+
+        val deadlineNs = System.nanoTime() + timeoutMs * 1_000_000L
+        val readBuffer = ByteArray(512)
+        while (System.nanoTime() < deadlineNs) {
+            val remainingMs = ((deadlineNs - System.nanoTime()) / 1_000_000L).coerceAtLeast(1L)
+            val count = driver.read(readBuffer, minOf(100L, remainingMs))
+            if (count < 0) break
+            if (count == 0) {
+                delay(2)
+                continue
+            }
+            val chunk = readBuffer.copyOf(count)
+            traceListener?.invoke("RX", chunk)
+            if (raw.size() < 256) raw.write(chunk, 0, minOf(chunk.size, 256 - raw.size()))
+            val decoded = streamDecoder.feed(chunk)
+            frames += decoded
+            val match = decoded.firstOrNull(isReply)
+            if (match != null) return Triple(match, frames, raw.toByteArray())
+        }
+        return Triple(null, frames, raw.toByteArray())
+    }
+
     suspend fun openFa24Transport(): Result<Unit> {
         return when (val hw = driver) {
             is UsbFtdiDriver -> {

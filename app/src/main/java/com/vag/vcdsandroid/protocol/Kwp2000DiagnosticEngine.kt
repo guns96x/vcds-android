@@ -3,6 +3,7 @@ package com.vag.vcdsandroid.protocol
 import android.content.Context
 import android.hardware.usb.UsbDevice
 import android.util.Log
+import com.vag.vcdsandroid.diagnostics.DiagLog
 import com.vag.vcdsandroid.model.FaultCode
 import com.vag.vcdsandroid.model.MeasuringGroup
 import com.vag.vcdsandroid.usb.FiveBaudSlowInitResult
@@ -50,6 +51,10 @@ class Kwp2000DiagnosticEngine(
     var lastEcuVerificationPayload: ByteArray? = null
         private set
     var lastSlowInitResult: FiveBaudSlowInitResult? = null
+        private set
+
+    /** Result of the OBD address 0x33 control init run after ECU 01 stays silent. */
+    var lastObdControlInitResult: FiveBaudSlowInitResult? = null
         private set
 
     private var targetEcuAddress: Byte = 0x01
@@ -117,6 +122,8 @@ class Kwp2000DiagnosticEngine(
             lastEcuIdentityPayload = null
             lastEcuVerificationPayload = null
             lastSlowInitResult = null
+            lastObdControlInitResult = null
+            val slowInitHistory = ArrayList<FiveBaudSlowInitResult>(3)
             stopKeepAlive()
 
             if (mode == TransportMode.SIMULATOR_DEMO) {
@@ -128,7 +135,7 @@ class Kwp2000DiagnosticEngine(
             // Auto-retry loop: Samsung S24 FE can kill OTG VBUS mid-operation
             for (attempt in 1..3) {
                 try {
-                    Log.i("VCDS_PROBE", "=== Connection attempt $attempt/3 ===")
+                    DiagLog.i("VCDS_PROBE", "=== Connection attempt $attempt/3 ===")
 
                     // Derive adapter identity from targetDevice or available device before connecting
                     val effectiveDevice = targetDevice ?: transport.findAvailableDevice()
@@ -149,7 +156,7 @@ class Kwp2000DiagnosticEngine(
                     if (!transport.isConnected()) {
                         // On retry, disconnect cleanly first to release stale handles
                         if (attempt > 1) {
-                            Log.i("VCDS_PROBE", "Reconnecting USB (attempt $attempt)...")
+                            DiagLog.i("VCDS_PROBE", "Reconnecting USB (attempt $attempt)...")
                             try { transport.disconnect() } catch (_: Exception) {}
                             delay(500) // Let Samsung re-enumerate USB
                         }
@@ -181,20 +188,30 @@ class Kwp2000DiagnosticEngine(
                         // Do not try direct StartCommunication or fast-init first: those can
                         // disturb the ECU timing state and make the known-good slow init fail.
                         if (attempt > 1) {
-                            Log.i(
+                            DiagLog.i(
                                 "VCDS_SLOW_INIT",
                                 "Quiet gap before slow-init retry: ${KwpSlowInit.RETRY_QUIET_MS} ms"
                             )
                             delay(KwpSlowInit.RETRY_QUIET_MS)
                         }
 
-                        val slow = transport.performFiveBaudSlowInit(targetEcuAddress.toInt() and 0xFF)
+                        // The HEX DTR wiring is not proven on this PCB. Attempts 1-2 keep
+                        // DTR clear (interface MCU running, as in the proven M1 link);
+                        // attempt 3 asserts DTR, the legacy third-party KKL convention.
+                        val dtrAsserted = KwpSlowInit.dtrAssertedForAttempt(attempt)
+                        val rtsAsserted = KwpSlowInit.rtsAssertedForAttempt(attempt)
+                        val slow = transport.performFiveBaudSlowInit(
+                            address = targetEcuAddress.toInt() and 0xFF,
+                            dtrAsserted = dtrAsserted,
+                            rtsAsserted = rtsAsserted
+                        )
                         lastSlowInitResult = slow
+                        slowInitHistory += slow
 
                         val ignoredHex = slow.ignoredBeforeSync.joinToString(" ") {
                             "%02X".format(it.toInt() and 0xFF)
                         }
-                        Log.i(
+                        DiagLog.i(
                             "VCDS_SLOW_INIT",
                             "attempt=$attempt success=${slow.success} stage=${slow.failureStage ?: "OK"} " +
                                 "sync=${slow.syncByte?.let { "%02X".format(it) } ?: "--"} " +
@@ -202,7 +219,9 @@ class Kwp2000DiagnosticEngine(
                                 "kb2=${slow.keyByte2?.let { "%02X".format(it) } ?: "--"} " +
                                 "addrComp=${slow.addressComplement?.let { "%02X".format(it) } ?: "--"} " +
                                 "w4=${slow.w4SendDelayMs ?: -1}ms elapsed=${slow.elapsedMs}ms " +
-                                "ignored=[$ignoredHex]"
+                                "dtr=${if (slow.dtrAsserted) "ON" else "OFF"} " +
+                                "rts=${if (slow.rtsAsserted) "ON" else "OFF"} " +
+                                "klineEcho=${slow.klineEchoSeen} ignored=[$ignoredHex]"
                         )
 
                         if (slow.success) {
@@ -224,7 +243,7 @@ class Kwp2000DiagnosticEngine(
                                 state = DiagState.CONNECTED
                                 startIdleKeepAlive()
 
-                                Log.i(
+                                DiagLog.i(
                                     "VCDS_PROBE",
                                     "01-Engine verified by ECU KWP frame=" +
                                         verification.joinToString(" ") {
@@ -246,11 +265,20 @@ class Kwp2000DiagnosticEngine(
                             return@withContext false
                         }
 
-                        lastError =
-                            "01-Engine slow init failed at ${slow.failureStage ?: "UNKNOWN"} " +
-                                "(sync=${slow.syncByte?.let { "%02X".format(it) } ?: "--"}, " +
-                                "KB1=${slow.keyByte1?.let { "%02X".format(it) } ?: "--"}, " +
-                                "KB2=${slow.keyByte2?.let { "%02X".format(it) } ?: "--"})."
+                        lastError = KwpSlowInit.describeFailure(
+                            stage = slow.failureStage,
+                            sync = slow.syncByte,
+                            key1 = slow.keyByte1,
+                            key2 = slow.keyByte2,
+                            klineEchoSeen = slow.klineEchoSeen,
+                            dtrAsserted = slow.dtrAsserted
+                        )
+
+                        if (slow.isKw1281Keywords) {
+                            // Retrying cannot change the ECU's protocol.
+                            state = DiagState.ERROR
+                            return@withContext false
+                        }
 
                         if (attempt < 3) {
                             // Keep the same USB handle/OBD power. The next iteration waits
@@ -258,6 +286,44 @@ class Kwp2000DiagnosticEngine(
                             continue
                         }
 
+                        // ECU 01 never sent sync. The car is proven to answer a five-baud
+                        // init on the OBD address 0x33 (ELM: ISO 14230-4 KWP 5BAUD). One
+                        // read-only control init on 0x33 separates "cable/K-Line path
+                        // broken" from "ECU does not accept address 01 on K-Line".
+                        // Only the handshake is performed; no OBD service is sent.
+                        if (slowInitHistory.all { it.failureStage == "WAIT_SYNC_55" }) {
+                            val controlProfile = slowInitHistory.firstOrNull { it.klineEchoSeen }
+                            val controlDtr = controlProfile?.dtrAsserted ?: false
+                            val controlRts = controlProfile?.rtsAsserted ?: false
+                            delay(KwpSlowInit.RETRY_QUIET_MS)
+                            val control = transport.performFiveBaudSlowInit(
+                                address = KwpSlowInit.OBD_FUNCTIONAL_ADDRESS,
+                                dtrAsserted = controlDtr,
+                                rtsAsserted = controlRts
+                            )
+                            lastObdControlInitResult = control
+                            DiagLog.i(
+                                "VCDS_SLOW_INIT",
+                                "OBD control init addr=33 success=${control.success} " +
+                                    "stage=${control.failureStage ?: "OK"} " +
+                                    "kb1=${control.keyByte1?.let { "%02X".format(it) } ?: "--"} " +
+                                    "kb2=${control.keyByte2?.let { "%02X".format(it) } ?: "--"} " +
+                                    "dtr=${if (control.dtrAsserted) "ON" else "OFF"} " +
+                                    "klineEcho=${control.klineEchoSeen}"
+                            )
+                        }
+
+                        lastError = KwpSlowInit.summarizeAttempts(
+                            attempts = slowInitHistory.map {
+                                KwpSlowInit.AttemptSummary(
+                                    it.dtrAsserted, it.failureStage, it.klineEchoSeen, it.ignoredBeforeSync,
+                                    rtsAsserted = it.rtsAsserted
+                                )
+                            },
+                            lastFailure = lastError ?: "",
+                            obdControlSuccess = lastObdControlInitResult?.success,
+                            obdControlStage = lastObdControlInitResult?.failureStage
+                        ) + "\nCable: ${transport.lastBootModeReport}"
                         state = DiagState.ERROR
                         return@withContext false
                     }
@@ -299,7 +365,7 @@ class Kwp2000DiagnosticEngine(
                     }
 
                     if (attempt < 3 && !transport.isConnected()) {
-                        Log.i("VCDS_PROBE", "Port dead after attempt $attempt, retrying...")
+                        DiagLog.i("VCDS_PROBE", "Port dead after attempt $attempt, retrying...")
                         delay(800)
                         continue
                     }
@@ -315,7 +381,7 @@ class Kwp2000DiagnosticEngine(
                     return@withContext false
 
                 } catch (e: Exception) {
-                    Log.e("VCDS_PROBE", "Connection attempt $attempt error: ${e.message}")
+                    DiagLog.e("VCDS_PROBE", "Connection attempt $attempt error: ${e.message}")
                     if (attempt < 3) {
                         delay(800)
                         continue
@@ -333,7 +399,7 @@ class Kwp2000DiagnosticEngine(
     }
 
     private suspend fun tryRossTechCanInit(target: Byte): Boolean {
-        Log.w("VCDS_PROBE", "Ross-Tech B03 ZERO-TX enforced: physical ECU probe disabled pending live trace verification")
+        DiagLog.w("VCDS_PROBE", "Ross-Tech B03 ZERO-TX enforced: physical ECU probe disabled pending live trace verification")
         return false
     }
 
@@ -341,13 +407,13 @@ class Kwp2000DiagnosticEngine(
         val sb = StringBuilder()
         if (!transport.isConnected()) {
             val msg = "USB adapter is not connected or open."
-            Log.w("VCDS_PROBE", msg)
+            DiagLog.w("VCDS_PROBE", msg)
             return@withContext msg
         }
         val info = transport.getActiveAdapterInfo()
         if (info?.isRossTechIntelligent == true) {
             val msg = "ZERO-TX enforced: bruteForceSweep is disabled for Ross-Tech adapter pending live trace verification."
-            Log.w("VCDS_PROBE", msg)
+            DiagLog.w("VCDS_PROBE", msg)
             return@withContext msg
         }
         val bauds = listOf(500000, 250000, 115200, 38400, 10400)
@@ -367,7 +433,7 @@ class Kwp2000DiagnosticEngine(
                 transport.setDtr(true)
                 transport.purge()
                 delay(50)
-                Log.i("VCDS_PROBE", "=== Testing baud $baud ===")
+                DiagLog.i("VCDS_PROBE", "=== Testing baud $baud ===")
                 sb.append("=== BAUD $baud ===\n")
 
                 for ((name, packet) in probes) {
@@ -375,27 +441,27 @@ class Kwp2000DiagnosticEngine(
                         transport.purge()
                         transport.write(packet)
                         val hexTx = packet.joinToString(" ") { "%02X".format(it) }
-                        Log.i("VCDS_PROBE", "TX [$name]: $hexTx")
+                        DiagLog.i("VCDS_PROBE", "TX [$name]: $hexTx")
 
                         val buf = ByteArray(128)
                         val readCount = transport.read(buf, 250)
                         if (readCount > 0) {
                             val hexRx = buf.take(readCount).joinToString(" ") { "%02X".format(it) }
-                            Log.i("VCDS_PROBE", "  -> RX ($readCount bytes): $hexRx")
+                            DiagLog.i("VCDS_PROBE", "  -> RX ($readCount bytes): $hexRx")
                             sb.append("  $name: RX $hexRx\n")
                         } else {
-                            Log.i("VCDS_PROBE", "  -> RX: (timeout/silence)")
+                            DiagLog.i("VCDS_PROBE", "  -> RX: (timeout/silence)")
                             sb.append("  $name: (no reply)\n")
                         }
                     } catch (e: Exception) {
-                        Log.w("VCDS_PROBE", "Probe $name error: ${e.message}")
+                        DiagLog.w("VCDS_PROBE", "Probe $name error: ${e.message}")
                         sb.append("  $name: ERR ${e.message}\n")
                     }
                     delay(30)
                 }
             }
         } catch (e: Exception) {
-            Log.e("VCDS_PROBE", "bruteForceSweep fatal: ${e.message}")
+            DiagLog.e("VCDS_PROBE", "bruteForceSweep fatal: ${e.message}")
             sb.append("Sweep aborted: ${e.message}\n")
         }
         return@withContext sb.toString()
@@ -444,10 +510,10 @@ class Kwp2000DiagnosticEngine(
                                 }
                             )
                         } else {
-                            Log.w("VCDS_KEEPALIVE", "TesterPresent timeout; keeping USB open")
+                            DiagLog.w("VCDS_KEEPALIVE", "TesterPresent timeout; keeping USB open")
                         }
                     } catch (e: Exception) {
-                        Log.w("VCDS_KEEPALIVE", "Keepalive error: ${e.message}")
+                        DiagLog.w("VCDS_KEEPALIVE", "Keepalive error: ${e.message}")
                     }
                 }
             }
@@ -538,6 +604,8 @@ class Kwp2000DiagnosticEngine(
             if (nowNs >= deadlineNs) break
 
             val remainingMs = ((deadlineNs - nowNs) / 1_000_000L).coerceAtLeast(1L).toInt()
+            // FTDI reads need a packet-sized buffer; never shrink it near the end.
+            if (maxBytes - used < 64) break
             val chunk = ByteArray(minOf(128, maxBytes - used))
             val count = transport.read(chunk, minOf(80, remainingMs))
 

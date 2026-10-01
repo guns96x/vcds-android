@@ -19,6 +19,8 @@ import com.vag.vcdsandroid.adapters.HexB03Constants
 import com.vag.vcdsandroid.adapters.HexB03Frame
 import com.vag.vcdsandroid.adapters.HexB03FrameCodec
 import com.vag.vcdsandroid.adapters.HexB03StreamDecoder
+import com.vag.vcdsandroid.diagnostics.DiagLog
+import com.vag.vcdsandroid.protocol.KLineByteReader
 import com.vag.vcdsandroid.protocol.KwpSlowInit
 import java.io.IOException
 
@@ -43,8 +45,20 @@ data class FiveBaudSlowInitResult(
     val failureStage: String? = null,
     val ignoredBeforeSync: ByteArray = byteArrayOf(),
     val w4SendDelayMs: Long? = null,
-    val elapsedMs: Long = 0L
-)
+    val elapsedMs: Long = 0L,
+    val dtrAsserted: Boolean = false,
+    val rtsAsserted: Boolean = false
+) {
+    /**
+     * Bytes seen while the address was being clocked out. On a transparent
+     * K-Line the tester's own BREAK periods come back as 0x00/garbage bytes, so
+     * an empty list at WAIT_SYNC_55 means the interface did not loop the line.
+     */
+    val klineEchoSeen: Boolean get() = ignoredBeforeSync.isNotEmpty()
+
+    /** VAG KW1281 keywords (01 8A): the ECU does not speak KWP2000 here. */
+    val isKw1281Keywords: Boolean get() = keyByte1 == 0x01 && keyByte2 == 0x8A
+}
 
 /**
  * Low-level USB OTG transport wrapper for K-Line / KWP2000 communication.
@@ -112,6 +126,21 @@ class UsbKwpTransport(private val context: Context) {
     private var currentDevice: UsbDevice? = null
     private var isPortOpen = false
     private var bridgeServer: TcpBridgeServer? = null
+
+    /**
+     * Short record of what HC::ReadBoot / HC::SetBoot did in the last
+     * [connectDumbRossTech], e.g. "ReadBoot=NO_REPLY rx[53 04 0D 5A]".
+     * Shown on screen so a field run can be diagnosed from a screenshot.
+     */
+    @Volatile var lastBootModeReport: String = "not run"
+        private set
+
+    /** First raw bytes received by the last FA24 control request (frame or not). */
+    private val lastFa24RawRx = ArrayList<Byte>(16)
+
+    private fun rawRxHex(): String =
+        if (lastFa24RawRx.isEmpty()) "none"
+        else lastFa24RawRx.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
 
     fun isConnected(): Boolean {
         if (!isPortOpen || serialPort == null) return false
@@ -187,7 +216,7 @@ class UsbKwpTransport(private val context: Context) {
         // framing is opened by HexB03Adapter, never by guessing a 500 kbaud UART.
         val initialBaud = baudRate ?: KLINE_BAUD_RATE
 
-        android.util.Log.i("VCDS_USB", "connect(): VID:PID=${info.vidPidHex} name=${info.displayName} devName=${deviceToOpen.deviceName}")
+        DiagLog.i("VCDS_USB", "connect(): VID:PID=${info.vidPidHex} name=${info.displayName} devName=${deviceToOpen.deviceName}")
 
         val prober = createProber()
         // Re-probe with fresh device reference
@@ -203,14 +232,14 @@ class UsbKwpTransport(private val context: Context) {
 
         // Check permission before trying to open
         if (!usbManager.hasPermission(driver.device)) {
-            android.util.Log.w("VCDS_USB", "No USB permission for ${driver.device.deviceName}")
+            DiagLog.w("VCDS_USB", "No USB permission for ${driver.device.deviceName}")
             return false
         }
 
         val connection = try {
             usbManager.openDevice(driver.device)
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_USB", "openDevice() failed: ${e.message}, retrying with fresh scan...")
+            DiagLog.e("VCDS_USB", "openDevice() failed: ${e.message}, retrying with fresh scan...")
             // One more attempt: re-scan and get completely fresh UsbDevice
             val freshDev = findAvailableDevice() ?: return false
             currentDevice = freshDev
@@ -218,13 +247,13 @@ class UsbKwpTransport(private val context: Context) {
             try {
                 usbManager.openDevice(freshDriver.device)
             } catch (e2: Exception) {
-                android.util.Log.e("VCDS_USB", "openDevice() retry also failed: ${e2.message}")
+                DiagLog.e("VCDS_USB", "openDevice() retry also failed: ${e2.message}")
                 null
             }
         }
 
         if (connection == null) {
-            android.util.Log.e("VCDS_USB", "openDevice() returned null")
+            DiagLog.e("VCDS_USB", "openDevice() returned null")
             return false
         }
 
@@ -264,15 +293,15 @@ class UsbKwpTransport(private val context: Context) {
             port.rts = false
             serialPort = port
             isPortOpen = true
-            android.util.Log.i("VCDS_USB", "Serial port opened OK at $initialBaud baud")
+            DiagLog.i("VCDS_USB", "Serial port opened OK at $initialBaud baud")
 
             // FTDI latency timer: reduce default 16ms buffer delay to 1ms for high-speed diagnostic response
             if (deviceToOpen.vendorId == 0x0403) {
                 try {
                     val res = connection.controlTransfer(0x40, 0x09, 1, 1, null, 0, 500)
-                    android.util.Log.i("VCDS_USB", "FTDI Latency Timer set to 1ms (result=$res)")
+                    DiagLog.i("VCDS_USB", "FTDI Latency Timer set to 1ms (result=$res)")
                 } catch (e: Exception) {
-                    android.util.Log.w("VCDS_USB", "Could not set FTDI latency timer: ${e.message}")
+                    DiagLog.w("VCDS_USB", "Could not set FTDI latency timer: ${e.message}")
                 }
             }
 
@@ -283,7 +312,7 @@ class UsbKwpTransport(private val context: Context) {
 
             return true
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_USB", "Port open failed: ${e.message}")
+            DiagLog.e("VCDS_USB", "Port open failed: ${e.message}")
             try {
                 port.close()
             } catch (_: Exception) {}
@@ -315,9 +344,10 @@ class UsbKwpTransport(private val context: Context) {
         val decoder = HexB03StreamDecoder(expectedMarker = HexB03Constants.MARKER_CABLE)
         val deadlineNs = System.nanoTime() + timeoutMs.toLong() * 1_000_000L
         val buf = ByteArray(128)
+        lastFa24RawRx.clear()
         val txHex = request.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
 
-        android.util.Log.i(
+        DiagLog.i(
             "VCDS_DUMB",
             "FA24 CTRL TX opcode=0x%02X expected=0x%02X bytes=[$txHex]"
                 .format(opcode.toInt() and 0xFF, expectedOpcode.toInt() and 0xFF)
@@ -337,8 +367,9 @@ class UsbKwpTransport(private val context: Context) {
             if (count <= 0) continue
 
             val chunk = buf.copyOf(count)
+            for (b in chunk) if (lastFa24RawRx.size < 16) lastFa24RawRx.add(b)
             val rxHex = chunk.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
-            android.util.Log.i("VCDS_DUMB", "FA24 CTRL RX raw=[$rxHex]")
+            DiagLog.i("VCDS_DUMB", "FA24 CTRL RX raw=[$rxHex]")
 
             val frames = decoder.feed(chunk)
             if (frames.isNotEmpty()) {
@@ -348,12 +379,12 @@ class UsbKwpTransport(private val context: Context) {
                         frame.payload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
                     )
                 }
-                android.util.Log.i("VCDS_DUMB", "FA24 CTRL decoded $decoded")
+                DiagLog.i("VCDS_DUMB", "FA24 CTRL decoded $decoded")
             }
             val match = frames.firstOrNull { it.opcode == expectedOpcode }
             if (match != null) return match
         }
-        android.util.Log.w(
+        DiagLog.w(
             "VCDS_DUMB",
             "FA24 CTRL timeout waiting for opcode=0x%02X after ${timeoutMs}ms"
                 .format(expectedOpcode.toInt() and 0xFF)
@@ -366,6 +397,153 @@ class UsbKwpTransport(private val context: Context) {
      * This is critical on Samsung devices where the /dev/bus/usb path changes
      * after the USB chooser dialog remounts the device.
      */
+    /**
+     * True when the cable answers anything to one ReadBoot S-frame: a smart
+     * reply frame or (dumb mode) the K-Line echo of the request.
+     *
+     * Field evidence 2026-10-01: with only USB connected the FA24 returned
+     * nothing at all, while the same request echoed back seconds later once the
+     * cable was in the OBD port. The interface MCU/transceiver is powered by the
+     * car (pin 16), so every cable test must wait for this before running.
+     * Opens and closes its own port; safe to poll.
+     */
+    fun isCablePoweredByCar(targetDevice: UsbDevice? = null): Boolean {
+        if (isPortOpen) return true
+        var device = targetDevice ?: findAvailableDevice() ?: return false
+        device = refreshDevice(device) ?: device
+        if (!usbManager.hasPermission(device)) return false
+        val driver = createProber().probeDevice(device) ?: FtdiSerialDriver(device)
+        if (driver.ports.isEmpty()) return false
+        val connection = try { usbManager.openDevice(driver.device) } catch (_: Exception) { null } ?: return false
+        val port = driver.ports[0]
+        return try {
+            port.open(connection)
+            if (port is FtdiSerialDriver.FtdiSerialPort) {
+                try { port.setLatencyTimer(1) } catch (_: Exception) {}
+            }
+            port.setParameters(115_200, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            port.dtr = false
+            port.rts = false
+            port.purgeHwBuffers(true, true)
+            val frame = sendFa24Control(
+                port = port,
+                opcode = HexB03Constants.OPCODE_READ_BOOT,
+                expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                timeoutMs = 250
+            )
+            frame != null || lastFa24RawRx.isNotEmpty()
+        } catch (_: Exception) {
+            false
+        } finally {
+            try { port.close() } catch (_: Exception) {}
+            try { connection.close() } catch (_: Exception) {}
+        }
+    }
+
+    data class IntelligentRestoreResult(val restored: Boolean, val report: String)
+
+    /**
+     * Tries to bring a FA24 that boots in dumb mode back to intelligent mode
+     * (HC::SetBoot(2)) without Windows VCDS.
+     *
+     * In dumb mode the MCU echoes S-frames instead of answering, so ReadBoot is
+     * polled under several entry conditions: plain 115200, after a DTR or RTS
+     * reset pulse (DTR# is believed to drive the ATmega reset, INFERRED), and at
+     * 9600. SetBoot(2) is sent ONLY after the cable answered with a checksum-valid
+     * ReadBoot frame reporting 0x00; otherwise nothing is written to the cable.
+     */
+    fun tryRestoreIntelligentMode(targetDevice: UsbDevice? = null): IntelligentRestoreResult {
+        disconnect()
+        val report = StringBuilder()
+        var device = targetDevice ?: findAvailableDevice()
+            ?: return IntelligentRestoreResult(false, "no USB device")
+        device = refreshDevice(device) ?: device
+        if (device.vendorId != 0x0403 || device.productId != 0xFA24) {
+            return IntelligentRestoreResult(false, "not a 0403:FA24 cable")
+        }
+        if (!usbManager.hasPermission(device)) {
+            return IntelligentRestoreResult(false, "no USB permission")
+        }
+        val driver = createProber().probeDevice(device) ?: FtdiSerialDriver(device)
+        if (driver.ports.isEmpty()) return IntelligentRestoreResult(false, "no serial port")
+        val connection = try {
+            usbManager.openDevice(driver.device)
+        } catch (_: Exception) {
+            null
+        } ?: return IntelligentRestoreResult(false, "openDevice failed")
+        val port = driver.ports[0]
+
+        fun hexOf(b: Byte?) = b?.let { "%02X".format(it.toInt() and 0xFF) } ?: "none"
+
+        try {
+            port.open(connection)
+            if (port is FtdiSerialDriver.FtdiSerialPort) {
+                try { port.setLatencyTimer(1) } catch (_: Exception) {}
+            }
+            // (label, baud, reset line pulsed before polling)
+            val profiles = listOf(
+                Triple("115200", 115_200, null),
+                Triple("9600", 9_600, null),
+                Triple("115200+DTR", 115_200, "DTR"),
+                Triple("9600+DTR", 9_600, "DTR"),
+                Triple("115200+RTS", 115_200, "RTS")
+            )
+            for ((label, baud, pulse) in profiles) {
+                port.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                port.dtr = false
+                port.rts = false
+                port.purgeHwBuffers(true, true)
+                when (pulse) {
+                    "DTR" -> { port.dtr = true; Thread.sleep(50); port.dtr = false }
+                    "RTS" -> { port.rts = true; Thread.sleep(50); port.rts = false }
+                }
+
+                // Poll quickly: a freshly reset MCU may only listen briefly.
+                var mode: Byte? = null
+                val deadline = System.nanoTime() + 800L * 1_000_000L
+                while (mode == null && System.nanoTime() < deadline) {
+                    mode = sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_READ_BOOT,
+                        expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                        timeoutMs = 60
+                    )?.payload?.firstOrNull()
+                }
+                report.append("$label: ReadBoot=${hexOf(mode)} rx[${rawRxHex()}]; ")
+
+                if (mode == HexB03Constants.BOOT_MODE_SMART) {
+                    return IntelligentRestoreResult(true, report.append("already intelligent").toString())
+                }
+                if (mode == HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
+                    val ack = sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_SET_BOOT,
+                        payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART),
+                        expectedOpcode = HexB03Constants.OPCODE_ACK,
+                        timeoutMs = 700
+                    )
+                    val after = sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_READ_BOOT,
+                        expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                        timeoutMs = 700
+                    )?.payload?.firstOrNull()
+                    report.append("SetBoot(2) ${if (ack != null) "ACK" else "NO_ACK"} -> ReadBoot=${hexOf(after)}")
+                    return IntelligentRestoreResult(after == HexB03Constants.BOOT_MODE_SMART, report.toString())
+                }
+            }
+            return IntelligentRestoreResult(false, report.toString().trimEnd())
+        } catch (e: Exception) {
+            report.append("error: ${e.message}")
+            return IntelligentRestoreResult(false, report.toString())
+        } finally {
+            try { port.dtr = false } catch (_: Exception) {}
+            try { port.close() } catch (_: Exception) {}
+            try { connection.close() } catch (_: Exception) {}
+            DiagLog.i("VCDS_DUMB", "Intelligent-mode restore: $report")
+        }
+    }
+
     /**
      * Opens a legacy Ross-Tech HEX interface for the M2 direct K-Line experiment.
      *
@@ -380,6 +558,7 @@ class UsbKwpTransport(private val context: Context) {
      */
     fun connectDumbRossTech(targetDevice: UsbDevice? = null): Boolean {
         disconnect()
+        lastBootModeReport = "not run"
 
         var deviceToOpen = targetDevice ?: findAvailableDevice() ?: return false
         deviceToOpen = refreshDevice(deviceToOpen) ?: deviceToOpen
@@ -387,7 +566,7 @@ class UsbKwpTransport(private val context: Context) {
         if (deviceToOpen.vendorId != 0x0403 ||
             deviceToOpen.productId !in setOf(0xFA20, 0xFA24, 0xFA25)
         ) {
-            android.util.Log.w(
+            DiagLog.w(
                 "VCDS_DUMB",
                 "Direct K-Line open refused for non-legacy Ross-Tech VID:PID=%04X:%04X"
                     .format(deviceToOpen.vendorId, deviceToOpen.productId)
@@ -396,7 +575,7 @@ class UsbKwpTransport(private val context: Context) {
         }
 
         if (!usbManager.hasPermission(deviceToOpen)) {
-            android.util.Log.w("VCDS_DUMB", "No USB permission for direct K-Line open")
+            DiagLog.w("VCDS_DUMB", "No USB permission for direct K-Line open")
             return false
         }
 
@@ -408,7 +587,7 @@ class UsbKwpTransport(private val context: Context) {
         val connection = try {
             usbManager.openDevice(serialDriver.device)
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_DUMB", "openDevice failed: ${e.message}")
+            DiagLog.e("VCDS_DUMB", "openDevice failed: ${e.message}")
             null
         } ?: return false
 
@@ -426,11 +605,11 @@ class UsbKwpTransport(private val context: Context) {
                 try {
                     port.setLatencyTimer(2)
                 } catch (e: Exception) {
-                    android.util.Log.w("VCDS_DUMB", "Could not set FTDI latency: ${e.message}")
+                    DiagLog.w("VCDS_DUMB", "Could not set FTDI latency: ${e.message}")
                 }
             }
 
-            // Automated mode transition recovered from VCDS HC::SetBoot / HC::ReadBoot.
+            // Read-only mode check via HC::ReadBoot. The phone never changes the boot mode.
             // Use the exact FA24 intelligent-link bring-up before issuing framed commands.
             try {
                 port.purgeHwBuffers(true, true)
@@ -449,59 +628,58 @@ class UsbKwpTransport(private val context: Context) {
                 port.rts = false
                 port.purgeHwBuffers(true, true)
 
-                val bootBefore = sendFa24Control(
-                    port = port,
-                    opcode = HexB03Constants.OPCODE_READ_BOOT,
-                    expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
-                    timeoutMs = 700
-                )?.payload?.firstOrNull()
-
-                android.util.Log.i(
-                    "VCDS_DUMB",
-                    "HC::ReadBoot before switch = " +
-                        (bootBefore?.let { "0x%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY")
-                )
-
-                if (bootBefore == HexB03Constants.BOOT_MODE_SMART) {
-                    val ack = sendFa24Control(
-                        port = port,
-                        opcode = HexB03Constants.OPCODE_SET_BOOT,
-                        payload = byteArrayOf(HexB03Constants.BOOT_MODE_LEGACY_DUMB),
-                        expectedOpcode = HexB03Constants.OPCODE_ACK,
-                        timeoutMs = 700
-                    )
-                    if (ack == null) {
-                        throw IOException("HC::SetBoot(0) did not return checksum-valid 0xFE ACK")
-                    }
-
-                    // VCDS HC::SetBoot calls HC::ReadBoot before returning. Mirror that exact
-                    // state transition instead of assuming the ACK alone changed the mux.
-                    val bootAfter = sendFa24Control(
+                // One retry: the first framed request after open can be lost while
+                // the MCU settles. A cable that never answers is handled below.
+                val bootBefore = (
+                    sendFa24Control(
                         port = port,
                         opcode = HexB03Constants.OPCODE_READ_BOOT,
                         expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
                         timeoutMs = 700
+                    ) ?: sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_READ_BOOT,
+                        expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                        timeoutMs = 700
+                    )
                     )?.payload?.firstOrNull()
 
-                    if (bootAfter != HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
-                        throw IOException(
-                            "HC::SetBoot(0) ACKed but HC::ReadBoot returned " +
-                                (bootAfter?.let { "0x%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY")
-                        )
-                    }
-                    android.util.Log.i(
-                        "VCDS_DUMB",
-                        "PHONE-ONLY SMART->DUMB VERIFIED: ReadBoot=0x00"
-                    )
+                lastBootModeReport = "ReadBoot=" +
+                    (bootBefore?.let { "%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY rx[${rawRxHex()}]")
+                DiagLog.i(
+                    "VCDS_DUMB",
+                    "HC::ReadBoot before switch = " +
+                        (bootBefore?.let { "0x%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY") +
+                        " rawRx=[${rawRxHex()}]"
+                )
+
+                if (bootBefore == HexB03Constants.BOOT_MODE_SMART) {
+                    // The cable answers in intelligent mode, which is the mode VCDS uses
+                    // (VCDS.CFG HexIntel=1). Never rewrite its boot mode from the phone:
+                    // SetBoot(0) persists across re-plug and needs Windows VCDS to undo.
+                    // The smart path (opcode 0x84) is used instead of direct K-Line.
+                    lastBootModeReport += " (smart; dumb path not used)"
+                    throw IOException("Cable is in intelligent mode; direct K-Line path skipped")
                 } else if (bootBefore == HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
-                    android.util.Log.i("VCDS_DUMB", "Interface already reports Legacy Dumb Mode (0x00)")
+                    DiagLog.i("VCDS_DUMB", "Interface already reports Legacy Dumb Mode (0x00)")
+                } else if (bootBefore == null) {
+                    // A cable already booted in dumb mode (e.g. set once in Windows VCDS)
+                    // is a transparent K-Line and cannot answer S-frames at all. Nothing
+                    // is switched here; the five-baud init that follows is the only
+                    // proof, so continue without claiming any mode.
+                    DiagLog.w(
+                        "VCDS_DUMB",
+                        "No HC::ReadBoot reply: cable may already be transparent (dumb). " +
+                            "Mode UNVERIFIED; the ECU slow init decides."
+                    )
                 } else {
                     throw IOException(
-                        "Unable to establish FA24 boot mode before K-Line open; refusing guessed transition"
+                        "HC::ReadBoot returned unknown mode 0x%02X; refusing guessed transition"
+                            .format(bootBefore.toInt() and 0xFF)
                     )
                 }
             } catch (e: Exception) {
-                android.util.Log.e(
+                DiagLog.e(
                     "VCDS_DUMB",
                     "Automatic FA24 smart-to-dumb transition failed: ${e.message}"
                 )
@@ -520,7 +698,8 @@ class UsbKwpTransport(private val context: Context) {
                 UsbSerialPort.PARITY_NONE
             )
 
-            // Ensure DTR# is high (dtr=false) so ATmega162 reset is not held active.
+            // Keep the interface MCU running: the proven M1 control link uses DTR
+            // clear, and DTR# is believed to drive the ATmega reset.
             port.dtr = false
             port.rts = false
             try { port.setBreak(false) } catch (_: Exception) {}
@@ -528,13 +707,13 @@ class UsbKwpTransport(private val context: Context) {
 
             serialPort = port
             isPortOpen = true
-            android.util.Log.i(
+            DiagLog.i(
                 "VCDS_DUMB",
                 "K-Line serial path OPEN at $KLINE_BAUD_RATE baud; no echo probe sent"
             )
             return true
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_DUMB", "Direct K-Line open failed: ${e.message}")
+            DiagLog.e("VCDS_DUMB", "Direct K-Line open failed: ${e.message}")
             try { port.close() } catch (_: Exception) {}
             try { connection.close() } catch (_: Exception) {}
             serialPort = null
@@ -559,15 +738,28 @@ class UsbKwpTransport(private val context: Context) {
      * No diagnostic service is sent here. A successful result proves the physical
      * ECU at [address] completed the slow-init handshake.
      */
-    fun performFiveBaudSlowInit(address: Int = 0x01): FiveBaudSlowInitResult = synchronized(ioLock) {
+    fun performFiveBaudSlowInit(
+        address: Int = 0x01,
+        dtrAsserted: Boolean = false,
+        rtsAsserted: Boolean = false
+    ): FiveBaudSlowInitResult = synchronized(ioLock) {
         val port = serialPort ?: return@synchronized FiveBaudSlowInitResult(
             success = false,
             address = address,
-            failureStage = "PORT_NOT_OPEN"
+            failureStage = "PORT_NOT_OPEN",
+            dtrAsserted = dtrAsserted,
+            rtsAsserted = rtsAsserted
         )
 
         val startedNs = System.nanoTime()
         val ignored = ArrayList<Byte>(16)
+        val reader = KLineByteReader(readChunk = { buf, timeoutMs ->
+            try {
+                port.read(buf, timeoutMs)
+            } catch (_: IOException) {
+                0
+            }
+        })
 
         fun elapsedMs(): Long = (System.nanoTime() - startedNs) / 1_000_000L
 
@@ -589,7 +781,9 @@ class UsbKwpTransport(private val context: Context) {
                 failureStage = stage,
                 ignoredBeforeSync = ignored.toByteArray(),
                 w4SendDelayMs = w4,
-                elapsedMs = elapsedMs()
+                elapsedMs = elapsedMs(),
+                dtrAsserted = dtrAsserted,
+                rtsAsserted = rtsAsserted
             )
         }
 
@@ -610,22 +804,9 @@ class UsbKwpTransport(private val context: Context) {
             }
         }
 
-        fun readOneUntil(deadlineNs: Long): Int? {
-            val one = ByteArray(1)
-            while (System.nanoTime() < deadlineNs) {
-                val remainingMs = ((deadlineNs - System.nanoTime()) / 1_000_000L)
-                    .coerceAtLeast(1L)
-                    .coerceAtMost(5L)
-                    .toInt()
-                val n = try {
-                    port.read(one, remainingMs)
-                } catch (_: Exception) {
-                    0
-                }
-                if (n > 0) return one[0].toInt() and 0xFF
-            }
-            return null
-        }
+        // A 1-byte USB read is rejected by the FTDI driver, so bytes are always
+        // read in whole packets and served from a queue.
+        fun readOneUntil(deadlineNs: Long): Int? = reader.readByteUntil(deadlineNs)
 
         val tid = Process.myTid()
         val previousPriority = try {
@@ -647,10 +828,11 @@ class UsbKwpTransport(private val context: Context) {
                 UsbSerialPort.STOPBITS_1,
                 UsbSerialPort.PARITY_NONE
             )
-            port.dtr = false
-            port.rts = false
+            port.dtr = dtrAsserted
+            port.rts = rtsAsserted
             port.setBreak(false)
             port.purgeHwBuffers(true, true)
+            reader.clear()
 
             // Leave the bus quiet after the raw echo/probe before initiating a
             // real controller wake-up. This comfortably exceeds W0 and avoids
@@ -691,8 +873,7 @@ class UsbKwpTransport(private val context: Context) {
             }
             if (sync != 0x55) return@synchronized failure("WAIT_SYNC_55")
 
-            // Read one byte at a time so no key byte is accidentally consumed in
-            // the same USB read as the sync byte. Low FTDI latency is essential.
+            // Sync and key bytes may share one USB packet; the reader queues them.
             val key1 = readOneUntil(
                 System.nanoTime() + (KwpSlowInit.W2_KEY1_MAX_MS + 10L) * 1_000_000L
             ) ?: return@synchronized failure("WAIT_KEY1", sync = sync)
@@ -701,8 +882,15 @@ class UsbKwpTransport(private val context: Context) {
                 System.nanoTime() + (KwpSlowInit.W3_KEY2_MAX_MS + 10L) * 1_000_000L
             ) ?: return@synchronized failure("WAIT_KEY2", sync = sync, key1 = key1)
 
+            if (key1 == 0x01 && key2 == 0x8A) {
+                // KW1281 keywords: this engine only speaks KWP2000. Do not send the
+                // complement; the ECU drops the session on its own.
+                return@synchronized failure("KW1281_KEYWORDS", sync = sync, key1 = key1, key2 = key2)
+            }
+
             // W4 is the critical part. Do no logging/string formatting here.
-            val lastKeyReadNs = System.nanoTime()
+            // Measure from when KB2 actually arrived, not from when it was dequeued.
+            val lastKeyReadNs = reader.lastChunkNs
             val earliestComplementNs =
                 lastKeyReadNs + KwpSlowInit.W4_COMPLEMENT_MIN_MS * 1_000_000L
             val latestComplementNs =
@@ -758,10 +946,12 @@ class UsbKwpTransport(private val context: Context) {
                 sessionBaud = KwpSlowInit.PRIMARY_SESSION_BAUD,
                 ignoredBeforeSync = ignored.toByteArray(),
                 w4SendDelayMs = w4DelayMs,
-                elapsedMs = elapsedMs()
+                elapsedMs = elapsedMs(),
+                dtrAsserted = dtrAsserted,
+                rtsAsserted = rtsAsserted
             )
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_SLOW_INIT", "Five-baud init exception: ${e.message}")
+            DiagLog.e("VCDS_SLOW_INIT", "Five-baud init exception: ${e.message}")
             failure("EXCEPTION_${e.javaClass.simpleName}")
         } finally {
             try {
@@ -771,7 +961,7 @@ class UsbKwpTransport(private val context: Context) {
     }
 
     private fun markPortDead(reason: String) {
-        android.util.Log.w("VCDS_USB", reason)
+        DiagLog.w("VCDS_USB", reason)
         try { serialPort?.close() } catch (_: Exception) {}
         serialPort = null
         isPortOpen = false
@@ -782,7 +972,7 @@ class UsbKwpTransport(private val context: Context) {
         for (dev in usbManager.deviceList.values) {
             if (dev.vendorId == stale.vendorId && dev.productId == stale.productId) {
                 if (dev.deviceName != stale.deviceName) {
-                    android.util.Log.w("VCDS_USB", "USB device path changed: ${stale.deviceName} -> ${dev.deviceName}")
+                    DiagLog.w("VCDS_USB", "USB device path changed: ${stale.deviceName} -> ${dev.deviceName}")
                 }
                 return dev
             }
@@ -879,6 +1069,9 @@ class UsbKwpTransport(private val context: Context) {
             }
             0
         } catch (e: Exception) {
+            // e.g. IllegalArgumentException for a too-small FTDI buffer: a code
+            // bug, not a timeout. Never swallow it silently.
+            DiagLog.e("VCDS_USB", "USB read rejected: ${e.javaClass.simpleName}: ${e.message}")
             0
         }
     }
