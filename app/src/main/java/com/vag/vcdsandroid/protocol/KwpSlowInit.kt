@@ -92,7 +92,8 @@ object KwpSlowInit {
                 "No K-Line echo at all: the interface is not passing K-Line " +
                     "(still in intelligent mode, or no power on OBD pin 16)."
             stage == "WAIT_SYNC_55" ->
-                "K-Line echo seen but no 0x55 sync: ignition off, or ECU 01 is not on K-Line."
+                "Echo seen but no 0x55 sync. The echo can come from the cable itself, " +
+                    "so it does not prove the signal reached the car's K-Line."
             stage == "W4_MISSED" ->
                 "ECU keywords received but the phone answered outside the 25-50 ms W4 window."
             stage == "WAIT_ADDRESS_COMPLEMENT" ->
