@@ -208,9 +208,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Cable plugged in while the app is already open (singleTop activity). */
+    private val usbAttachedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) handleUsbAttached(intent)
+        }
+    }
+
+    private var autoConnectJob: kotlinx.coroutines.Job? = null
+    @Volatile private var connectInProgress = false
+
+    /**
+     * Plug-and-connect: a cable attach (system launch intent, onNewIntent or the
+     * runtime broadcast) starts the connection by itself, so the user never has
+     * to close the app or re-plug the cable just to make it connect.
+     */
+    private fun handleUsbAttached(intent: Intent) {
+        val device: UsbDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE, UsbDevice::class.java)
+        } else {
+            @Suppress("DEPRECATION")
+            intent.getParcelableExtra(UsbManager.EXTRA_DEVICE)
+        }
+        if (device != null) currentDevice = device
+        DiagLog.i("VCDS_USB", "Cable attached: ${device?.let { "%04X:%04X".format(it.vendorId, it.productId) }}; auto-connect")
+        scheduleAutoConnect()
+    }
+
+    private fun scheduleAutoConnect(delayMs: Long = 1_500) {
+        if (connectionMode != AppConnectionMode.USB_HARDWARE) return
+        autoConnectJob?.cancel()
+        autoConnectJob = lifecycleScope.launch {
+            // Let the cable MCU finish booting after VBUS comes up.
+            delay(delayMs)
+            if (isCurrentModeConnected() || connectInProgress) return@launch
+            if ((currentDevice ?: transport.findAvailableDevice()) == null) return@launch
+            performConnect()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        if (intent.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) handleUsbAttached(intent)
+    }
+
     private val usbDetachedReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == UsbManager.ACTION_USB_DEVICE_DETACHED) {
+                autoConnectJob?.cancel()
                 currentDevice = null
                 performDisconnect()
                 updateStatusUI()
@@ -230,6 +275,12 @@ class MainActivity : AppCompatActivity() {
 
         val permFilter = IntentFilter(UsbKwpTransport.ACTION_USB_PERMISSION)
         val detachFilter = IntentFilter(UsbManager.ACTION_USB_DEVICE_DETACHED)
+        ContextCompat.registerReceiver(
+            this,
+            usbAttachedReceiver,
+            IntentFilter(UsbManager.ACTION_USB_DEVICE_ATTACHED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         ContextCompat.registerReceiver(
             this,
             usbPermissionReceiver,
@@ -259,6 +310,14 @@ class MainActivity : AppCompatActivity() {
         setupListeners()
         switchConnectionMode(AppConnectionMode.USB_HARDWARE)
         startUiTicker()
+
+        // Launched by plugging the cable in, or opened with the cable already
+        // attached: connect without any extra tap or re-plug.
+        if (intent?.action == UsbManager.ACTION_USB_DEVICE_ATTACHED) {
+            handleUsbAttached(intent)
+        } else if (savedInstanceState == null && transport.findAvailableDevice() != null) {
+            scheduleAutoConnect(delayMs = 800)
+        }
     }
 
     override fun onStart() {
@@ -302,6 +361,9 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {}
         try {
             unregisterReceiver(usbDetachedReceiver)
+        } catch (_: Exception) {}
+        try {
+            unregisterReceiver(usbAttachedReceiver)
         } catch (_: Exception) {}
         super.onDestroy()
     }
@@ -407,6 +469,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun performConnect() {
+        if (connectInProgress) return
         if (connectionMode == AppConnectionMode.SIMULATOR_DEMO && BuildConfig.DEBUG) {
             lifecycleScope.launch {
                 engine.connect(null)
@@ -454,6 +517,7 @@ class MainActivity : AppCompatActivity() {
                 DiagLog.i("B03_M1", "$direction $hex")
             }
 
+            connectInProgress = true
             lifecycleScope.launch {
                 binding.btnConnect.isEnabled = false
                 binding.tvSubStatus.text = "Checking HEX interface (intelligent mode)..."
@@ -561,7 +625,7 @@ class MainActivity : AppCompatActivity() {
                     )
                     .setPositiveButton("OK", null)
                     .show()
-            }
+            }.invokeOnCompletion { connectInProgress = false }
             return
         }
 
