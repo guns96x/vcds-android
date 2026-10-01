@@ -41,6 +41,12 @@ Found by code review, not by a car log. Status: **UNVERIFIED on hardware**.
 - The phone restore attempt ran ~1.5 s after the USB attach, before OBD was connected. It got **no bytes at all** (`rx[none]`) on 115200, 115200+DTR, 9600+DTR and 115200+RTS. A few seconds later, after the cable went into the car, the same ReadBoot echoed `53 04 0D 5A`. INFERRED: the interface MCU/transceiver is powered from OBD pin 16, not from USB. That restore attempt is therefore **inconclusive**, not a failure.
 - The app now waits after the attach until the cable answers (a frame or the echo) before it connects.
 
+### Phone cannot leave dumb mode (2026-10-01 13:45, with OBD power)
+
+- Restore attempt with car power: 115200, 115200+DTR pulse, 9600+DTR pulse and 115200+RTS pulse all returned only the echo `53 04 0D 5A`. No ReadBoot frame came back, so no SetBoot was sent.
+- The direct K-Line path is unchanged: echo `[00 00]`, no sync from 01 or 33. The echo needs car power. A dumb-mode route to a K-Line the engine is not on (Dual-K cable) is a hypothesis, UNVERIFIED.
+- Blocker: intelligent mode must be restored once in Windows VCDS. `tools/vcds/d2xx_trace/capture_vcds_engine_session.ps1` records that restore (D), 01-Engine in intelligent mode (E, wire proof for 0x84) and group 011 (F).
+
 Next car test, stationary, ignition on: Connect, then save `connection_diagnostics.log` with the `VCDS_DUMB`, `VCDS_SLOW_INIT` and `B03_M2` lines.
 
 Read this before changing the project.
