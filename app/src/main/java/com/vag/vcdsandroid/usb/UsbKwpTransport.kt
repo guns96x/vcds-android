@@ -397,6 +397,109 @@ class UsbKwpTransport(private val context: Context) {
      * This is critical on Samsung devices where the /dev/bus/usb path changes
      * after the USB chooser dialog remounts the device.
      */
+    data class IntelligentRestoreResult(val restored: Boolean, val report: String)
+
+    /**
+     * Tries to bring a FA24 that boots in dumb mode back to intelligent mode
+     * (HC::SetBoot(2)) without Windows VCDS.
+     *
+     * In dumb mode the MCU echoes S-frames instead of answering, so ReadBoot is
+     * polled under several entry conditions: plain 115200, after a DTR or RTS
+     * reset pulse (DTR# is believed to drive the ATmega reset, INFERRED), and at
+     * 9600. SetBoot(2) is sent ONLY after the cable answered with a checksum-valid
+     * ReadBoot frame reporting 0x00; otherwise nothing is written to the cable.
+     */
+    fun tryRestoreIntelligentMode(targetDevice: UsbDevice? = null): IntelligentRestoreResult {
+        disconnect()
+        val report = StringBuilder()
+        var device = targetDevice ?: findAvailableDevice()
+            ?: return IntelligentRestoreResult(false, "no USB device")
+        device = refreshDevice(device) ?: device
+        if (device.vendorId != 0x0403 || device.productId != 0xFA24) {
+            return IntelligentRestoreResult(false, "not a 0403:FA24 cable")
+        }
+        if (!usbManager.hasPermission(device)) {
+            return IntelligentRestoreResult(false, "no USB permission")
+        }
+        val driver = createProber().probeDevice(device) ?: FtdiSerialDriver(device)
+        if (driver.ports.isEmpty()) return IntelligentRestoreResult(false, "no serial port")
+        val connection = try {
+            usbManager.openDevice(driver.device)
+        } catch (_: Exception) {
+            null
+        } ?: return IntelligentRestoreResult(false, "openDevice failed")
+        val port = driver.ports[0]
+
+        fun hexOf(b: Byte?) = b?.let { "%02X".format(it.toInt() and 0xFF) } ?: "none"
+
+        try {
+            port.open(connection)
+            if (port is FtdiSerialDriver.FtdiSerialPort) {
+                try { port.setLatencyTimer(1) } catch (_: Exception) {}
+            }
+            // (label, baud, reset line pulsed before polling)
+            val profiles = listOf(
+                Triple("115200", 115_200, null),
+                Triple("115200+DTR", 115_200, "DTR"),
+                Triple("9600+DTR", 9_600, "DTR"),
+                Triple("115200+RTS", 115_200, "RTS")
+            )
+            for ((label, baud, pulse) in profiles) {
+                port.setParameters(baud, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+                port.dtr = false
+                port.rts = false
+                port.purgeHwBuffers(true, true)
+                when (pulse) {
+                    "DTR" -> { port.dtr = true; Thread.sleep(50); port.dtr = false }
+                    "RTS" -> { port.rts = true; Thread.sleep(50); port.rts = false }
+                }
+
+                // Poll quickly: a freshly reset MCU may only listen briefly.
+                var mode: Byte? = null
+                val deadline = System.nanoTime() + 800L * 1_000_000L
+                while (mode == null && System.nanoTime() < deadline) {
+                    mode = sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_READ_BOOT,
+                        expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                        timeoutMs = 60
+                    )?.payload?.firstOrNull()
+                }
+                report.append("$label: ReadBoot=${hexOf(mode)} rx[${rawRxHex()}]; ")
+
+                if (mode == HexB03Constants.BOOT_MODE_SMART) {
+                    return IntelligentRestoreResult(true, report.append("already intelligent").toString())
+                }
+                if (mode == HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
+                    val ack = sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_SET_BOOT,
+                        payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART),
+                        expectedOpcode = HexB03Constants.OPCODE_ACK,
+                        timeoutMs = 700
+                    )
+                    val after = sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_READ_BOOT,
+                        expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                        timeoutMs = 700
+                    )?.payload?.firstOrNull()
+                    report.append("SetBoot(2) ${if (ack != null) "ACK" else "NO_ACK"} -> ReadBoot=${hexOf(after)}")
+                    return IntelligentRestoreResult(after == HexB03Constants.BOOT_MODE_SMART, report.toString())
+                }
+            }
+            return IntelligentRestoreResult(false, report.toString().trimEnd())
+        } catch (e: Exception) {
+            report.append("error: ${e.message}")
+            return IntelligentRestoreResult(false, report.toString())
+        } finally {
+            try { port.dtr = false } catch (_: Exception) {}
+            try { port.close() } catch (_: Exception) {}
+            try { connection.close() } catch (_: Exception) {}
+            DiagLog.i("VCDS_DUMB", "Intelligent-mode restore: $report")
+        }
+    }
+
     /**
      * Opens a legacy Ross-Tech HEX interface for the M2 direct K-Line experiment.
      *

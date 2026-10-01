@@ -475,6 +475,25 @@ class MainActivity : AppCompatActivity() {
                 val smartFailure = probeResult.exceptionOrNull()?.message ?: "Unknown interface error"
                 DiagLog.w("B03_M1", "Smart probe silent: $smartFailure")
 
+                // 1b. The cable may still boot in dumb mode from an earlier build.
+                //     Try to restore intelligent mode from the phone (write only
+                //     after the cable answered ReadBoot with a valid frame).
+                binding.tvSubStatus.text = "Smart mode silent; trying to restore intelligent mode..."
+                val restore = withContext(Dispatchers.IO) { transport.tryRestoreIntelligentMode(dev) }
+                if (restore.restored) {
+                    val retry = adapter.probeInterface().getOrNull()
+                    if (retry != null) {
+                        activeB03Adapter = adapter
+                        activeB03Identity = retry.identityText
+                        currentDevice = dev
+                        DiagLog.i("B03_M1", "Intelligent mode restored: ${restore.report}")
+                        runSmartEngineWakeUp(adapter, retry.identityText)
+                        binding.btnConnect.isEnabled = true
+                        updateStatusUI()
+                        return@launch
+                    }
+                }
+
                 // 2. Smart probe silent: the cable may be booted in dumb (transparent)
                 //    mode. Try direct K-Line; the phone never changes the boot mode.
                 binding.tvSubStatus.text = "Smart mode silent; trying direct K-Line..."
@@ -530,9 +549,14 @@ class MainActivity : AppCompatActivity() {
                         "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
                             "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
                             "Intelligent-mode probe: $smartFailure\n\n" +
+                            "Phone restore attempt: ${restore.report}\n\n" +
                             "Direct K-Line: $directKLineFailure\n\n" +
+                            (if (restore.restored) {
+                                "Intelligent mode was restored (ReadBoot=02) but the probe still failed: " +
+                                    "unplug the cable from phone and car, plug it back, press Connect again.\n\n"
+                            } else "") +
                             "The cable boots in dumb mode (an earlier app build switched it). " +
-                            "Restore it once on Windows: VCDS -> Options -> tick " +
+                            "If the phone restore failed, restore it once on Windows: VCDS -> Options -> tick " +
                             "'Boot in intelligent mode' -> Test -> Save. Then reconnect it to the phone."
                     )
                     .setPositiveButton("OK", null)
