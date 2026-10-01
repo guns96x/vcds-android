@@ -106,8 +106,13 @@ class UsbFtdiDriver(
         try {
             setDtr(true)
             kotlinx.coroutines.delay(assertDurationMs)
-            setDtr(false)
-            kotlinx.coroutines.delay(recoveryMs)
-        } catch (_: Exception) {}
+        } finally {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {
+                try {
+                    setDtr(false)
+                } catch (_: Exception) {}
+            }
+        }
+        kotlinx.coroutines.delay(recoveryMs)
     }
 }

@@ -520,9 +520,8 @@ class UsbKwpTransport(private val context: Context) {
                 UsbSerialPort.PARITY_NONE
             )
 
-            // Preserve the control-line state already used by the M2 experiment,
-            // but do not infer success from it. ECU traffic is the only proof.
-            port.dtr = true
+            // Ensure DTR# is high (dtr=false) so ATmega162 reset is not held active.
+            port.dtr = false
             port.rts = false
             try { port.setBreak(false) } catch (_: Exception) {}
             port.purgeHwBuffers(true, true)
@@ -648,7 +647,7 @@ class UsbKwpTransport(private val context: Context) {
                 UsbSerialPort.STOPBITS_1,
                 UsbSerialPort.PARITY_NONE
             )
-            port.dtr = true
+            port.dtr = false
             port.rts = false
             port.setBreak(false)
             port.purgeHwBuffers(true, true)

@@ -28,6 +28,7 @@ object HexB03Constants {
     const val OPCODE_SET_BOOT: Byte = 0x0E
     const val OPCODE_ACK: Byte = 0xFE.toByte()
     const val OPCODE_STATUS: Byte = 0x82.toByte()
+    const val OPCODE_INIT_5BAUD: Byte = 0x84.toByte()
     const val OPCODE_ECHO_10400: Byte = 0x9A.toByte()
     const val OPCODE_KEEPALIVE: Byte = 0xA0.toByte()
 
@@ -250,6 +251,30 @@ sealed class CandidateB03Command(
         opcode = HexB03Constants.OPCODE_KEEPALIVE,
         description = "HYPOTHESIS: Keepalive ping"
     )
+
+    class Init5Baud(val targetAddress: Int = 0x01) : CandidateB03Command(
+        opcode = HexB03Constants.OPCODE_INIT_5BAUD,
+        payload = encode5BaudPayload(targetAddress),
+        description = "HC::Init5Baud (0x84) - Autonomous 5-baud wake-up by adapter MCU"
+    ) {
+        companion object {
+            fun encode5BaudPayload(address: Int): ByteArray {
+                var bitCount = 0
+                var temp = address and 0xFF
+                for (i in 0 until 8) {
+                    if ((temp and 1) != 0) bitCount++
+                    temp = temp shr 1
+                }
+                val parityAddr = if (address != 0x33 && (bitCount % 2 == 0)) {
+                    (address or 0x80).toByte()
+                } else {
+                    address.toByte()
+                }
+                // Canonical FUN_14007e3b4: Opcode 0x84, address (odd parity), flags (0x00), 0x03
+                return byteArrayOf(parityAddr, 0x00.toByte(), 0x03.toByte())
+            }
+        }
+    }
 
     fun encodeFrame(): ByteArray {
         return HexB03FrameCodec.encode(

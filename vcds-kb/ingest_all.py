@@ -44,7 +44,16 @@ KNOWN_SEMANTICS = {
     "0x140112160": ("vcds_ftdi_init_channel", "TRANSPORT", "PROVEN_STATIC"),
     "0x14011FEB8": ("vcds_security_challenge_verify", "SECURITY", "PROVEN_STATIC"),
     "0x14005911C": ("BlockDlg::OnGraph", "UI", "PROVEN_STATIC"),
-    "0x14007CA6C": ("vcds_transport_ctor", "TRANSPORT", "PROVEN_STATIC")
+    "0x14007CA6C": ("vcds_transport_ctor", "TRANSPORT", "PROVEN_STATIC"),
+    "0x140083208": ("HC::SetBoot", "TRANSPORT", "PROVEN_STATIC"),
+    "0x1400832B4": ("HC::ReadBoot", "TRANSPORT", "PROVEN_STATIC"),
+    "0x140083358": ("HC::GC", "TRANSPORT", "PROVEN_STATIC"),
+    "0x14008347C": ("HC::GCr", "TRANSPORT", "PROVEN_STATIC"),
+    "0x14008359C": ("HC::SCr", "TRANSPORT", "PROVEN_STATIC"),
+    "0x140083BA4": ("HC::GCp", "TRANSPORT", "PROVEN_STATIC"),
+    "0x140083FC0": ("HC::SCM-O", "TRANSPORT", "PROVEN_STATIC"),
+    "0x140081C70": ("HC::CANOpenCtrl", "TRANSPORT", "PROVEN_STATIC"),
+    "0x1400B766C": ("vcds_dispatch_protocol_opcode", "DIAGNOSTIC", "PROVEN_STATIC")
 }
 
 def norm_addr(a: str) -> str:
@@ -228,7 +237,11 @@ def run_pipeline():
         "0x14007F778": ("0x14007E734", "VTABLE_CONSTRUCTOR_PROOF", "Dispatched via *(param_1 + 0x108) in HC::Reset"),
         "0x14007E425": ("0x14007E824", "VTABLE_CONSTRUCTOR_PROOF", "Dispatched via *(param_1 + 0x110) with vtable 0x1401AD3C0 in HC::Init5Baud"),
         "0x14007EC69": ("0x14007E824", "VTABLE_CONSTRUCTOR_PROOF", "Dispatched via *(param_1 + 0x110) in HC::Com115"),
-        "0x14007F78B": ("0x14007E824", "VTABLE_CONSTRUCTOR_PROOF", "Dispatched via *(param_1 + 0x110) in HC::Reset")
+        "0x14007F78B": ("0x14007E824", "VTABLE_CONSTRUCTOR_PROOF", "Dispatched via *(param_1 + 0x110) in HC::Reset"),
+        "0x14008322A": ("0x14007E734", "VTABLE_CONSTRUCTOR_PROOF", "Dispatched via *(param_1 + 0x108) with vtable 0x1401AD3C0 in HC::SetBoot"),
+        "0x140083245": ("0x14007E824", "VTABLE_CONSTRUCTOR_PROOF", "Dispatched via *(param_1 + 0x110) with vtable 0x1401AD3C0 in HC::SetBoot"),
+        "0x1400832D2": ("0x14007E734", "VTABLE_CONSTRUCTOR_PROOF", "Dispatched via *(param_1 + 0x108) with vtable 0x1401AD3C0 in HC::ReadBoot"),
+        "0x1400832ED": ("0x14007E824", "VTABLE_CONSTRUCTOR_PROOF", "Dispatched via *(param_1 + 0x110) with vtable 0x1401AD3C0 in HC::ReadBoot")
     }
     
     if calls_file.exists():

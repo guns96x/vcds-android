@@ -134,6 +134,24 @@ def cmd_seed_claims(conn):
             "addr": "0x14007E3B4",
             "callsite": "0x14007E410",
             "prov": "Decompiled C AST in FUN_14007e3b4 with 0x55 sync byte validation in VCDS_unpacked.exe"
+        },
+        {
+            "key": "CLAIM_OPCODE_0E_SETBOOT",
+            "stmt": "Opcode 0x0E (HC::SetBoot) sets the operating mode of the adapter (0x00 = Legacy Dumb Mode, 0x02 = Intelligent/Smart Mode) with 750 ms timeout, verifies 0xFE ACK response, and verifies mode transition via HC::ReadBoot.",
+            "status": "PROVEN_STATIC",
+            "sha": UNPACKED_VCDS_SHA256,
+            "addr": "0x140083208",
+            "callsite": "0x14008322A",
+            "prov": "Decompiled C AST in FUN_140083208 in VCDS_unpacked.exe and string 'HC::SetBoot -1' at 0x1401AD238"
+        },
+        {
+            "key": "CLAIM_OPCODE_0D_READBOOT",
+            "stmt": "Opcode 0x0D (HC::ReadBoot) queries the current operating mode of the adapter (wire request: [0x53, 0x04, 0x0D, 0x5A], reply: [0x4D, 0x05, 0x0D, <mode>, <checksum>]) with 750 ms timeout.",
+            "status": "PROVEN_STATIC",
+            "sha": UNPACKED_VCDS_SHA256,
+            "addr": "0x1400832B4",
+            "callsite": "0x1400832D2",
+            "prov": "Decompiled C AST in FUN_1400832b4 in VCDS_unpacked.exe and string 'HC::ReadBoot -1' at 0x1401AD258"
         }
     ]
     

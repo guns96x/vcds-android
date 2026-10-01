@@ -17,6 +17,16 @@ data class B03InterfaceProbeResult(
     val elapsedMs: Long
 )
 
+data class FiveBaudInitResult(
+    val success: Boolean,
+    val baudRate: Int,
+    val keyByte1: Int,
+    val keyByte2: Int,
+    val syncByte: Int,
+    val rawPayload: ByteArray,
+    val elapsedMs: Long
+)
+
 /**
  * Adapter transport for Ross-Tech HEX-USB+CAN / B03-V2 FTDI clones (VID 0403, PID FA24).
  *
@@ -307,43 +317,211 @@ class HexB03Adapter(
             return@withContext Result.success(true)
         }
 
-        val ackFrame = sendInterfaceCommand(
+        // Send HC::SetBoot(2) unconditionally
+        sendInterfaceCommand(
             opcode = HexB03Constants.OPCODE_SET_BOOT,
             payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART),
             expectedOpcode = HexB03Constants.OPCODE_ACK,
             timeoutMs = timeoutMs
-        ) ?: return@withContext Result.failure(
-            IllegalStateException("HC::SetBoot(2) timed out: no 0xFE ACK reply from cable")
         )
 
         val verifiedMode = readBootMode(timeoutMs).getOrNull()
-        if (verifiedMode != HexB03Constants.BOOT_MODE_SMART) {
-            return@withContext Result.failure(
-                IllegalStateException(
-                    "HC::SetBoot(2) ACKed, but ReadBoot returned 0x%02X instead of 0x02"
-                        .format(verifiedMode?.toInt() ?: -1)
+        if (verifiedMode == HexB03Constants.BOOT_MODE_SMART) {
+            Result.success(true)
+        } else {
+            // Attempt full hardware rescue if mode is not verified 0x02
+            forceIntelligentModeRescue(timeoutMs)
+        }
+    }
+
+    /**
+     * Unconditional hardware rescue to bring the adapter back to Intelligent / Smart Mode (0x02)
+     * even if it is currently stuck in dumb loopback mode or unresponsive.
+     *
+     * 1. Releases DTR / RTS (dtr=false, rts=false) to ensure ATmega162 is NOT held in reset.
+     * 2. Pulses DTR (assert 50ms, release 250ms) to trigger a clean hardware reboot of ATmega162.
+     * 3. Configures port to 115200 baud, 8N1.
+     * 4. Transmits HC::SetBoot(2) [0x53, 0x05, 0x0E, 0x02, 0x5A].
+     * 5. Negotiates 115200 baud if recovered at 9600.
+     * 6. Strictly verifies transition with HC::ReadBoot (0x0D) expecting 0x02.
+     */
+    suspend fun forceIntelligentModeRescue(timeoutMs: Long = 1500): Result<Boolean> = withContext(Dispatchers.IO) {
+        try {
+            if (!driver.isConnected) {
+                val opened = openFa24Transport()
+                if (opened.isFailure) {
+                    return@withContext Result.failure(
+                        opened.exceptionOrNull() ?: IllegalStateException("Unable to open FA24 transport for rescue")
+                    )
+                }
+            }
+
+            // 1. Release modem control lines and trigger ATmega reset pulse
+            if (driver is UsbFtdiDriver) {
+                driver.setDtr(false)
+                driver.setRts(false)
+                delay(50)
+                driver.pulseDtr(assertDurationMs = 50, recoveryMs = 250)
+            } else {
+                driver.setDtr(false)
+                driver.setRts(false)
+                delay(100)
+            }
+            driver.purge()
+            streamDecoder.reset()
+
+            // 2. Try at 115200 baud first
+            driver.setBaudRate(115200)
+            delay(50)
+
+            // Unconditionally issue HC::SetBoot(2)
+            val setBootAck = sendInterfaceCommand(
+                opcode = HexB03Constants.OPCODE_SET_BOOT,
+                payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART),
+                expectedOpcode = HexB03Constants.OPCODE_ACK,
+                timeoutMs = minOf(timeoutMs, 750)
+            )
+
+            // If not ACKed at 115200, try at 9600 baud (MCU bootloader default)
+            if (setBootAck == null) {
+                driver.setBaudRate(9600)
+                driver.purge()
+                streamDecoder.reset()
+                delay(50)
+                val ack9600 = sendInterfaceCommand(
+                    opcode = HexB03Constants.OPCODE_SET_BOOT,
+                    payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART),
+                    expectedOpcode = HexB03Constants.OPCODE_ACK,
+                    timeoutMs = 500
                 )
+                if (ack9600 != null) {
+                    // Cable accepted SetBoot(2) at 9600 baud. Switch to 115200 via HC::Com115 (opcode 0x03)
+                    val com115Ack = sendInterfaceCommand(
+                        opcode = 0x03,
+                        payload = byteArrayOf(0x00, 0xC2.toByte(), 0x01, 0x00),
+                        expectedOpcode = HexB03Constants.OPCODE_ACK,
+                        timeoutMs = 500
+                    )
+                    if (com115Ack != null) {
+                        driver.setBaudRate(115200)
+                        driver.purge()
+                        streamDecoder.reset()
+                        delay(50)
+                    }
+                } else {
+                    driver.setBaudRate(115200)
+                    driver.purge()
+                    streamDecoder.reset()
+                    delay(50)
+                }
+            }
+
+            // 3. Strictly verify via HC::ReadBoot (0x02)
+            val mode = readBootMode(timeoutMs).getOrNull()
+            if (mode == HexB03Constants.BOOT_MODE_SMART) {
+                return@withContext Result.success(true)
+            }
+
+            Result.failure(
+                IllegalStateException("Rescue attempted, but ReadBoot returned ${mode?.let { "0x%02X".format(it) } ?: "UNRESPONSIVE"}")
+            )
+        } catch (c: kotlinx.coroutines.CancellationException) {
+            withContext(kotlinx.coroutines.NonCancellable) {
+                try {
+                    driver.setDtr(false)
+                    driver.close()
+                } catch (_: Exception) {}
+            }
+            throw c
+        }
+    }
+
+    /**
+     * Executes the hardware-accelerated 5-baud wake-up sequence on the ATmega162 microcontroller (Opcode 0x84).
+     * Dispatched via VCDS HC::Init5Baud (0x14007E3B4).
+     *
+     * In Intelligent Mode, the MCU drives the K-line pin with exact 5-baud pulses, receives the ECU sync 0x55
+     * and KeyBytes KB1, KB2, and returns:
+     * [0x4D, 0x0A, 0x84, Baud0, Baud1, Baud2, Baud3, KB1, KB2, Checksum]
+     * where Baud0..Baud3 is a 32-bit little-endian integer (e.g. 0x000028A0 = 10400 bps),
+     * KB1/KB2 are the keyword bytes, and 0x55 sync byte is assigned locally per FUN_14007E3B4.
+     */
+    suspend fun init5Baud(address: Int = 0x01, timeoutMs: Long = 3500): Result<FiveBaudInitResult> = withContext(Dispatchers.IO) {
+        val started = System.currentTimeMillis()
+        if (!driver.isConnected) {
+            val opened = openFa24Transport()
+            if (opened.isFailure) {
+                return@withContext Result.failure(opened.exceptionOrNull() ?: IllegalStateException("Port not open"))
+            }
+        }
+
+        val payload = CandidateB03Command.Init5Baud.encode5BaudPayload(address)
+        val reply = sendInterfaceCommand(
+            opcode = HexB03Constants.OPCODE_INIT_5BAUD,
+            payload = payload,
+            expectedOpcode = HexB03Constants.OPCODE_INIT_5BAUD,
+            timeoutMs = timeoutMs
+        ) ?: return@withContext Result.failure(
+            IllegalStateException("HC::Init5Baud (0x84) timed out after ${timeoutMs}ms (no sync from ECU)")
+        )
+
+        if (reply.payload.size < 6) {
+            return@withContext Result.failure(
+                IllegalStateException("HC::Init5Baud returned short payload: ${reply.payload.size} bytes (expected >= 6)")
             )
         }
 
-        Result.success(true)
+        // Canonical FUN_14007e3b4:
+        // Bytes 0..3: 32-bit uint little endian baud rate (e.g. A0 28 00 00 = 10400 bps)
+        val b0 = reply.payload[0].toInt() and 0xFF
+        val b1 = reply.payload[1].toInt() and 0xFF
+        val b2 = reply.payload[2].toInt() and 0xFF
+        val b3 = reply.payload[3].toInt() and 0xFF
+        val baud = b0 or (b1 shl 8) or (b2 shl 16) or (b3 shl 24)
+        // Bytes 4..5: KeyBytes KB1, KB2
+        val kb1 = reply.payload[4].toInt() and 0xFF
+        val kb2 = reply.payload[5].toInt() and 0xFF
+        // Sync byte 0x55 is canonical per FUN_14007E3B4 (*(undefined4 *)(param_1 + 2) = 0x55)
+        val sync = 0x55
+
+        Result.success(
+            FiveBaudInitResult(
+                success = true,
+                baudRate = baud,
+                keyByte1 = kb1,
+                keyByte2 = kb2,
+                syncByte = sync,
+                rawPayload = reply.payload,
+                elapsedMs = System.currentTimeMillis() - started
+            )
+        )
     }
 
-    private suspend fun openFa24Transport(): Result<Unit> {
+    suspend fun openFa24Transport(): Result<Unit> {
         return when (val hw = driver) {
-            is UsbFtdiDriver -> hw.openRossTechFa24()
+            is UsbFtdiDriver -> {
+                if (hw.isConnected) {
+                    Result.success(Unit)
+                } else {
+                    hw.openRossTechFa24()
+                }
+            }
             else -> {
                 // Test/fallback driver path mirrors the capture-grounded FA24 settings.
-                val opened = hw.open(
-                    ConnectionParameters(
-                        baudRate = 9_600,
-                        dataBits = 8,
-                        stopBits = 1,
-                        parity = 0,
-                        dtr = false,
-                        rts = false
+                val opened = if (hw.isConnected) {
+                    Result.success(Unit)
+                } else {
+                    hw.open(
+                        ConnectionParameters(
+                            baudRate = 9_600,
+                            dataBits = 8,
+                            stopBits = 1,
+                            parity = 0,
+                            dtr = false,
+                            rts = false
+                        )
                     )
-                )
+                }
                 if (opened.isSuccess) {
                     hw.purge()
                     hw.setBaudRate(19_200)

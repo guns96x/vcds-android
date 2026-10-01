@@ -163,5 +163,22 @@ class HexB03PacketTest {
         val keepaliveFrame = CandidateB03Command.KeepalivePing.encodeFrame()
         assertEquals(HexB03Constants.MARKER_HOST, keepaliveFrame[0])
         assertEquals(0xA0.toByte(), keepaliveFrame[2])
+
+        // Init5Baud tests (Opcode 0x84, canonical FUN_14007e3b4: [addr_parity, 0x00, 0x03])
+        val init01Frame = CandidateB03Command.Init5Baud(0x01).encodeFrame()
+        assertEquals(HexB03Constants.MARKER_HOST, init01Frame[0])
+        assertEquals(7.toByte(), init01Frame[1])
+        assertEquals(0x84.toByte(), init01Frame[2])
+        assertEquals(0x01.toByte(), init01Frame[3]) // address with odd parity (0x01 has 1 bit -> 0x01)
+        assertEquals(0x00.toByte(), init01Frame[4]) // flags (0x00)
+        assertEquals(0x03.toByte(), init01Frame[5]) // canonical sub-param 0x03
+        // 0x53 ^ 0x07 ^ 0x84 ^ 0x01 ^ 0x00 ^ 0x03 = 0xD2
+        assertEquals(0xD2.toByte(), init01Frame[6])
+
+        // Verify odd parity for even-bit addresses (e.g. 0x03 has 2 bits -> 0x83)
+        val init03Frame = CandidateB03Command.Init5Baud(0x03).encodeFrame()
+        assertEquals(0x83.toByte(), init03Frame[3])
+        assertEquals(0x00.toByte(), init03Frame[4])
+        assertEquals(0x03.toByte(), init03Frame[5])
     }
 }

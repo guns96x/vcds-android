@@ -44,6 +44,7 @@ import com.vag.vcdsandroid.sensors.PhoneBaroReading
 
 import com.vag.vcdsandroid.protocol.TransportMode
 import com.vag.vcdsandroid.adapters.HexB03Adapter
+import com.vag.vcdsandroid.adapters.HexB03Constants
 import com.vag.vcdsandroid.diagnostics.DiagLog
 import com.vag.vcdsandroid.registry.AdapterRegistry
 import com.vag.vcdsandroid.usb.AndroidUsbProbe
@@ -428,6 +429,13 @@ class MainActivity : AppCompatActivity() {
         val report = AndroidUsbProbe.inspectDevice(this, dev)
         DiagLog.i("UsbProbe", "USB Device Inspection Report:\n${report.toJson().toString(2)}")
 
+        activeB03Adapter?.let { oldAdapter ->
+            lifecycleScope.launch(Dispatchers.IO) {
+                try { oldAdapter.close() } catch (_: Exception) {}
+            }
+            activeB03Adapter = null
+        }
+
         val driverResult = AdapterRegistry.createHardwareDriver(this, dev)
         val driver = driverResult.getOrElse {
             com.vag.vcdsandroid.hardware.NoOpHardwareDriver(dev.deviceName)
@@ -452,126 +460,37 @@ class MainActivity : AppCompatActivity() {
 
             lifecycleScope.launch {
                 binding.btnConnect.isEnabled = false
-                binding.tvSubStatus.text = "Checking legacy HEX K-Line mode..."
+                binding.tvSubStatus.text = "Opening Ross-Tech interface (Smart Mode)..."
 
-                // First choice for the user's Golf 5 BLS: use the legacy HEX-USB+CAN
-                // as a plain K-Line pass-through. This avoids the intelligent-mode
-                // per-ECU encrypted session and lets the existing KWP2000 engine talk
-                // directly to address 01.
-                val directKLineOpened = withContext(Dispatchers.IO) {
-                    transport.connectDumbRossTech(dev)
-                }
+                // 1. First probe interface in intelligent mode
+                var probeResult = adapter.probeInterface()
 
-                var directKLineFailure: String? = null
-                if (directKLineOpened) {
-                    DiagLog.i(
-                        "B03_M2",
-                        "K-Line serial path open; starting five-baud 01-Engine init without echo probe"
-                    )
-                    binding.tvSubStatus.text = "K-Line open -> verifying 01-Engine..."
-
-                    val ecuConnected = engine.connect(
-                        targetDevice = dev,
-                        targetAddress = 0x01,
-                        allowRossTechDumbMode = true
-                    )
-
-                    updateStatusUI()
-
-                    if (ecuConnected) {
-                        binding.btnConnect.isEnabled = true
-                        val verificationHex = engine.lastEcuVerificationPayload?.joinToString(" ") {
-                            "%02X".format(it.toInt() and 0xFF)
-                        } ?: "(missing)"
-
-                        val identityHex = engine.lastEcuIdentityPayload?.joinToString(" ") {
-                            "%02X".format(it.toInt() and 0xFF)
-                        }
-
-                        DiagLog.i(
-                            "B03_M2",
-                            "01-ENGINE RESPONDED verification=[$verificationHex] " +
-                                "identity=[${identityHex ?: "not returned"}]"
-                        )
-                        binding.tvSubStatus.text = "01-Engine verified"
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle("01-ENGINE RESPONDED")
-                            .setMessage(
-                                "ECU address: 01\n" +
-                                    "Five-baud init: OK\n" +
-                                    "Checksum-valid KWP reply from source 01: OK\n" +
-                                    "Verification reply: $verificationHex" +
-                                    (identityHex?.let { "\nIdentity reply: $it" } ?: "") +
-                                    "\n\nM2 passed. Measuring Groups are not started automatically."
-                            )
-                            .setPositiveButton("OK", null)
-                            .show()
-                        return@launch
+                // 2. If probe failed or timed out, attempt automatic hardware rescue (pulse DTR, SetBoot 2)
+                if (probeResult.isFailure) {
+                    binding.tvSubStatus.text = "Cable unresponsive/dumb; executing hardware rescue..."
+                    DiagLog.w("B03_RESCUE", "Initial probe failed, executing forceIntelligentModeRescue...")
+                    val rescueOk = adapter.forceIntelligentModeRescue()
+                    if (rescueOk.isSuccess) {
+                        DiagLog.i("B03_RESCUE", "Hardware rescue succeeded, re-probing...")
+                        probeResult = adapter.probeInterface()
                     }
-
-                    directKLineFailure = engine.lastError ?: "No verified response from ECU address 01"
-                    DiagLog.w("B03_M2", "Direct K-Line M2 failed: $directKLineFailure")
-                    // Release the experimental direct-serial handle before checking the
-                    // already-proven smart interface path.
-                    transport.disconnect()
-                } else {
-                    directKLineFailure = "Direct K-Line serial path could not be opened"
                 }
-
-                // If the cable is still booting in intelligent mode, retain the
-                // proven smart-interface handshake as a fallback/diagnostic.
-                binding.tvSubStatus.text = "Dumb mode not active; checking smart interface..."
-                val probeResult = adapter.probeInterface()
 
                 binding.btnConnect.isEnabled = true
+
                 probeResult.fold(
                     onSuccess = { probe ->
-                        val probeHex = probe.probePayload.joinToString(" ") {
-                            "%02X".format(it.toInt() and 0xFF)
-                        }
-                        val statusHex = probe.statusPayload.joinToString(" ") {
-                            "%02X".format(it.toInt() and 0xFF)
-                        }
-                        val modeHex = probe.modePayload.joinToString(" ") {
-                            "%02X".format(it.toInt() and 0xFF)
-                        }
                         activeB03Adapter = adapter
                         activeB03Identity = probe.identityText
                         currentDevice = dev
                         binding.tvSubStatus.text = "Smart mode: ${probe.identityText}"
-                        DiagLog.i(
-                            "B03_M1",
-                            "INTERFACE RESPONDED identity=${probe.identityText}, " +
-                                "probePayload=[$probeHex], status=[$statusHex], mode=[$modeHex], " +
-                                "elapsedMs=${probe.elapsedMs}"
-                        )
                         updateStatusUI()
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle("INTERFACE RESPONDED (SMART MODE)")
-                            .setMessage(
-                                "Interface responds: ${probe.identityText}\n\n" +
-                                    "M1 remains verified. M2 direct K-Line did not produce a verified " +
-                                    "ECU 01 response.\n\n" +
-                                    "Last M2 result: ${directKLineFailure ?: "not attempted"}\n\n" +
-                                    "For the direct K-Line experiment, use VCDS Options on Windows: " +
-                                    "run Test, disable 'Boot in intelligent mode' (or enable Forced Dumb Mode), " +
-                                    "run Test again, then reconnect this cable to the phone."
-                            )
-                            .setPositiveButton("OK", null)
-                            .show()
+                        showRossTechReadyDialog(adapter, probe)
                     },
                     onFailure = { error ->
-                        binding.tvSubStatus.text = "Interface handshake failed"
+                        binding.tvSubStatus.text = "Cable probe failed"
                         DiagLog.e("B03_M1", "Interface probe failed: ${error.message}")
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle("INTERFACE HANDSHAKE FAILED")
-                            .setMessage(
-                                "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
-                                    "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
-                                    (error.message ?: "Unknown interface error")
-                            )
-                            .setPositiveButton("OK", null)
-                            .show()
+                        showRossTechFailedDialog(adapter, dev, identity, error)
                     }
                 )
             }
@@ -628,6 +547,156 @@ class MainActivity : AppCompatActivity() {
             }
             resetTurboSessionState()
             updateStatusUI()
+        }
+    }
+
+    private fun wakeUpEngine01Intelligent(adapter: HexB03Adapter) {
+        lifecycleScope.launch {
+            binding.tvSubStatus.text = "Waking up 01-Engine via MCU Opcode 0x84..."
+            binding.btnConnect.isEnabled = false
+
+            val result = adapter.init5Baud(address = 0x01, timeoutMs = 3500)
+            binding.btnConnect.isEnabled = true
+
+            result.fold(
+                onSuccess = { initRes ->
+                    val kb1Hex = "%02X".format(initRes.keyByte1)
+                    val kb2Hex = "%02X".format(initRes.keyByte2)
+                    val syncHex = "%02X".format(initRes.syncByte)
+                    val rawHex = initRes.rawPayload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+
+                    DiagLog.i(
+                        "B03_01_ENGINE",
+                        "01-ENGINE 5-BAUD SUCCESS! Baud=${initRes.baudRate} bps, " +
+                            "KB1=0x$kb1Hex, KB2=0x$kb2Hex, Sync=0x$syncHex, Raw=[$rawHex] in ${initRes.elapsedMs}ms"
+                    )
+                    binding.tvSubStatus.text = "01-Engine Connected (${initRes.baudRate} bps, KB1=$kb1Hex KB2=$kb2Hex)"
+                    updateStatusUI()
+
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("01-ENGINE CONNECTED (SMART 0x84)")
+                        .setMessage(
+                            "ECU Address: 0x01 (Engine)\n" +
+                            "Detected Baud Rate: ${initRes.baudRate} bps\n" +
+                            "KeyByte 1: 0x$kb1Hex\n" +
+                            "KeyByte 2: 0x$kb2Hex (${if (initRes.keyByte2 == 0x89) "KWP2000" else if (initRes.keyByte2 == 0x01) "KWP1281" else "Protocol unknown"})\n" +
+                            "Sync Byte: 0x$syncHex (0x55 OK)\n" +
+                            "Wake-Up Time: ${initRes.elapsedMs} ms\n\n" +
+                            "Physical K-Line link established by ATmega162!"
+                        )
+                        .setPositiveButton("OK", null)
+                        .show()
+                },
+                onFailure = { error ->
+                    DiagLog.e("B03_01_ENGINE", "01-Engine init failed: ${error.message}")
+                    binding.tvSubStatus.text = "01-Engine 5-baud init failed"
+                    AlertDialog.Builder(this@MainActivity)
+                        .setTitle("01-ENGINE WAKE-UP FAILED")
+                        .setMessage(
+                            "Opcode 0x84 did not receive 0x55 sync from ECU.\n\n" +
+                            "Error: ${error.message}\n\n" +
+                            "Check:\n" +
+                            "1. Ignition is turned ON (key in position II, dashboard lit).\n" +
+                            "2. Cable is firmly seated in the OBD-II port."
+                        )
+                        .setPositiveButton("RETRY") { _, _ ->
+                            wakeUpEngine01Intelligent(adapter)
+                        }
+                        .setNegativeButton("CLOSE", null)
+                        .show()
+                }
+            )
+        }
+    }
+
+    private fun showRossTechReadyDialog(adapter: HexB03Adapter, probe: com.vag.vcdsandroid.adapters.B03InterfaceProbeResult) {
+        val probeHex = probe.probePayload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+        val statusHex = probe.statusPayload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+        val modeHex = probe.modePayload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+        val isSmartMode = probe.modePayload.isNotEmpty() && probe.modePayload[0] == HexB03Constants.BOOT_MODE_SMART
+
+        DiagLog.i(
+            "B03_M1",
+            "INTERFACE RESPONDED identity=${probe.identityText}, " +
+                "probePayload=[$probeHex], status=[$statusHex], mode=[$modeHex], " +
+                "elapsedMs=${probe.elapsedMs}"
+        )
+
+        AlertDialog.Builder(this)
+            .setTitle("ROSS-TECH ADAPTER READY")
+            .setMessage(
+                "Model: ${probe.identityText}\n" +
+                "Mode: ${if (isSmartMode) "SMART / INTELLIGENT (0x02)" else "DUMB (0x00)"}\n" +
+                "K-Line Status: $statusHex\n" +
+                "Response time: ${probe.elapsedMs} ms\n\n" +
+                "Ready to wake up 01-Engine using hardware-accelerated 5-baud init (Opcode 0x84)."
+            )
+            .setPositiveButton("01-ENGINE (0x84)") { _, _ ->
+                wakeUpEngine01Intelligent(adapter)
+            }
+            .setNeutralButton("RESCUE SMART") { _, _ ->
+                runSmartModeRescue(adapter)
+            }
+            .setNegativeButton("CLOSE", null)
+            .show()
+    }
+
+    private fun showRossTechFailedDialog(
+        adapter: HexB03Adapter,
+        dev: UsbDevice,
+        identity: com.vag.vcdsandroid.adapters.AdapterIdentity,
+        error: Throwable
+    ) {
+        AlertDialog.Builder(this)
+            .setTitle("INTERFACE PROBE FAILED")
+            .setMessage(
+                "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
+                    "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
+                    (error.message ?: "Unknown interface error") + "\n\n" +
+                    "Tap 'RESCUE SMART' to reset MCU and force Intelligent Mode."
+            )
+            .setPositiveButton("RESCUE SMART") { _, _ ->
+                runSmartModeRescue(adapter)
+            }
+            .setNegativeButton("CLOSE") { _, _ ->
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try { adapter.close() } catch (_: Exception) {}
+                }
+            }
+            .show()
+    }
+
+    private fun runSmartModeRescue(adapter: HexB03Adapter) {
+        lifecycleScope.launch {
+            binding.tvSubStatus.text = "Executing Smart Mode rescue..."
+            binding.btnConnect.isEnabled = false
+            val res = adapter.forceIntelligentModeRescue()
+            binding.btnConnect.isEnabled = true
+            res.fold(
+                onSuccess = {
+                    Toast.makeText(this@MainActivity, "Cable rescued to SMART mode!", Toast.LENGTH_SHORT).show()
+                    binding.tvSubStatus.text = "Cable rescued; probing interface..."
+                    val probeResult = adapter.probeInterface()
+                    probeResult.fold(
+                        onSuccess = { probe ->
+                            activeB03Adapter = adapter
+                            activeB03Identity = probe.identityText
+                            currentDevice = (adapter.driver as? com.vag.vcdsandroid.hardware.UsbSerialDriverBase)?.usbDevice
+                            binding.tvSubStatus.text = "Smart mode: ${probe.identityText}"
+                            updateStatusUI()
+                            showRossTechReadyDialog(adapter, probe)
+                        },
+                        onFailure = { probeErr ->
+                            binding.tvSubStatus.text = "Probe failed: ${probeErr.message}"
+                            Toast.makeText(this@MainActivity, "Probe failed after rescue: ${probeErr.message}", Toast.LENGTH_LONG).show()
+                        }
+                    )
+                },
+                onFailure = { err ->
+                    Toast.makeText(this@MainActivity, "Rescue failed: ${err.message}", Toast.LENGTH_LONG).show()
+                    binding.tvSubStatus.text = "Rescue failed"
+                }
+            )
         }
     }
 
