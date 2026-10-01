@@ -235,15 +235,36 @@ class MainActivity : AppCompatActivity() {
         scheduleAutoConnect()
     }
 
+    /**
+     * The FA24 must be plugged into the phone first (plugged into the car first it
+     * never enumerates), but its interface MCU only comes alive from car power.
+     * So after the USB attach, wait until the cable answers (smart frame or K-Line
+     * echo) and only then connect. The user just plugs phone -> car; no taps.
+     */
     private fun scheduleAutoConnect(delayMs: Long = 1_500) {
         if (connectionMode != AppConnectionMode.USB_HARDWARE) return
         autoConnectJob?.cancel()
         autoConnectJob = lifecycleScope.launch {
-            // Let the cable MCU finish booting after VBUS comes up.
             delay(delayMs)
-            if (isCurrentModeConnected() || connectInProgress) return@launch
-            if ((currentDevice ?: transport.findAvailableDevice()) == null) return@launch
-            performConnect()
+            val dev = currentDevice ?: transport.findAvailableDevice() ?: return@launch
+            if (!transport.hasPermission(dev)) {
+                // Permission dialog first; its receiver calls performConnect().
+                performConnect()
+                return@launch
+            }
+            val deadlineMs = System.currentTimeMillis() + 120_000L
+            while (isActive && System.currentTimeMillis() < deadlineMs) {
+                if (isCurrentModeConnected() || connectInProgress) return@launch
+                val powered = withContext(Dispatchers.IO) { transport.isCablePoweredByCar(dev) }
+                if (powered) {
+                    DiagLog.i("VCDS_USB", "Cable answers (car power present); auto-connect")
+                    performConnect()
+                    return@launch
+                }
+                binding.tvSubStatus.text = "Cable detected. Now plug it into the car OBD port (ignition ON)..."
+                delay(1_000)
+            }
+            binding.tvSubStatus.text = "Cable silent for 2 min: plug it into the car, then press Connect"
         }
     }
 
@@ -375,6 +396,8 @@ class MainActivity : AppCompatActivity() {
 
         // Connect button
         binding.btnConnect.setOnClickListener {
+            // A manual tap takes over from the waiting auto-connect loop.
+            autoConnectJob?.cancel()
             val isConnected =
                 activeB03Adapter?.driver?.isConnected == true ||
                     engine.state == DiagState.CONNECTED || engine.state == DiagState.POLLING

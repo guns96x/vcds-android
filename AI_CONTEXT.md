@@ -35,6 +35,12 @@ Found by code review, not by a car log. Status: **UNVERIFIED on hardware**.
 - Spec defects found on review: the address-parity rule is self-contradictory (0x01->0x81 but 0x03 unchanged, which is even parity), so the app tries `0x81` and then `0x01`. Opcode `0x85` is named differently in two reverse docs. The group 011 formula types are mislabeled. The app keeps its scaler-driven decoder.
 - The app now runs intelligent mode first: probe `0x02/0x04`, then `0x84` for 01, then a read-only `1A 9B` as an S-frame. The phone **never sends SetBoot** anymore. An earlier build's `SetBoot(0)` left this cable booting in dumb mode, and Windows VCDS Options -> Test with "Boot in intelligent mode" ticked restores it.
 
+### Cable power and plug order (2026-10-01, screenshots 13:39)
+
+- User observation: the FA24 is never recognised when it goes into the car first. It has to go into the phone first, then into the car.
+- The phone restore attempt ran ~1.5 s after the USB attach, before OBD was connected. It got **no bytes at all** (`rx[none]`) on 115200, 115200+DTR, 9600+DTR and 115200+RTS. A few seconds later, after the cable went into the car, the same ReadBoot echoed `53 04 0D 5A`. INFERRED: the interface MCU/transceiver is powered from OBD pin 16, not from USB. That restore attempt is therefore **inconclusive**, not a failure.
+- The app now waits after the attach until the cable answers (a frame or the echo) before it connects.
+
 Next car test, stationary, ignition on: Connect, then save `connection_diagnostics.log` with the `VCDS_DUMB`, `VCDS_SLOW_INIT` and `B03_M2` lines.
 
 Read this before changing the project.

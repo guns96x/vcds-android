@@ -397,6 +397,49 @@ class UsbKwpTransport(private val context: Context) {
      * This is critical on Samsung devices where the /dev/bus/usb path changes
      * after the USB chooser dialog remounts the device.
      */
+    /**
+     * True when the cable answers anything to one ReadBoot S-frame: a smart
+     * reply frame or (dumb mode) the K-Line echo of the request.
+     *
+     * Field evidence 2026-10-01: with only USB connected the FA24 returned
+     * nothing at all, while the same request echoed back seconds later once the
+     * cable was in the OBD port. The interface MCU/transceiver is powered by the
+     * car (pin 16), so every cable test must wait for this before running.
+     * Opens and closes its own port; safe to poll.
+     */
+    fun isCablePoweredByCar(targetDevice: UsbDevice? = null): Boolean {
+        if (isPortOpen) return true
+        var device = targetDevice ?: findAvailableDevice() ?: return false
+        device = refreshDevice(device) ?: device
+        if (!usbManager.hasPermission(device)) return false
+        val driver = createProber().probeDevice(device) ?: FtdiSerialDriver(device)
+        if (driver.ports.isEmpty()) return false
+        val connection = try { usbManager.openDevice(driver.device) } catch (_: Exception) { null } ?: return false
+        val port = driver.ports[0]
+        return try {
+            port.open(connection)
+            if (port is FtdiSerialDriver.FtdiSerialPort) {
+                try { port.setLatencyTimer(1) } catch (_: Exception) {}
+            }
+            port.setParameters(115_200, 8, UsbSerialPort.STOPBITS_1, UsbSerialPort.PARITY_NONE)
+            port.dtr = false
+            port.rts = false
+            port.purgeHwBuffers(true, true)
+            val frame = sendFa24Control(
+                port = port,
+                opcode = HexB03Constants.OPCODE_READ_BOOT,
+                expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                timeoutMs = 250
+            )
+            frame != null || lastFa24RawRx.isNotEmpty()
+        } catch (_: Exception) {
+            false
+        } finally {
+            try { port.close() } catch (_: Exception) {}
+            try { connection.close() } catch (_: Exception) {}
+        }
+    }
+
     data class IntelligentRestoreResult(val restored: Boolean, val report: String)
 
     /**
