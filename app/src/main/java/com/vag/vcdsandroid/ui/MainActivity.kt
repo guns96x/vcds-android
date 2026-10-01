@@ -2391,60 +2391,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Intelligent-mode M2 gate: the interface MCU wakes ECU 01 (opcode 0x84),
-     * then one read-only identification request (1A 9B) is sent through the
-     * cable. Opcodes come from static VCDS analysis (reverse/vcds-ghidra,
-     * PROVEN_STATIC); everything the cable returns is shown so the run itself
-     * becomes the wire-level evidence.
+     * Intelligent-mode M2 gate: the interface MCU wakes ECU 01 (opcode 0x84,
+     * spec V2 on audit/vcds-ghidra-proof, PROVEN_STATIC). The 0x55 sync and the
+     * key bytes in the reply are produced by the ECU itself, so they prove the
+     * engine answered. No diagnostic service is sent: the adapter framing for
+     * KWP services is UNKNOWN (quarantined by the red-team audit).
      */
     private suspend fun runSmartEngineWakeUp(adapter: HexB03Adapter, identityText: String) {
-        fun hex(bytes: ByteArray) = bytes.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
-
         binding.tvSubStatus.text = "Smart mode: waking 01-Engine (0x84, ~3 s)..."
         val init = adapter.init5BaudKLine(0x01)
         DiagLog.i("B03_M2", "0x84 init result:\n${init.describe()}")
 
-        val woke = init.success
-        var verification = "not sent (no 0x55 from the 5-baud init)"
-        var verified = false
-        if (woke != null) {
-            binding.tvSubStatus.text = "01-Engine woke up; reading identification..."
-            val reply = adapter.kwpReadRequest(0x1A, byteArrayOf(0x9B.toByte())).getOrNull()
-            val frame = reply?.frame
-            verification = when {
-                reply == null -> "blocked"
-                frame != null -> {
-                    verified = true
-                    "op=%02X [%s]".format(frame.opcode.toInt() and 0xFF, hex(frame.payload))
-                }
-                reply.frames.isNotEmpty() ->
-                    "other frames: " + reply.frames.joinToString(" | ") {
-                        "op=%02X [%s]".format(it.opcode.toInt() and 0xFF, hex(it.payload))
-                    }
-                reply.rawRx.isNotEmpty() -> "no frame, raw=" + hex(reply.rawRx)
-                else -> "silent (timeout)"
-            }
-            DiagLog.i("B03_M2", "1A 9B via smart interface: $verification")
-        }
-
-        val title = when {
-            verified -> "01-ENGINE RESPONDED (SMART)"
-            woke != null -> "01-ENGINE WOKE UP (SMART)"
-            else -> "01-ENGINE NOT VERIFIED (SMART)"
-        }
-        binding.tvSubStatus.text = when {
-            verified -> "01-Engine verified (smart)"
-            woke != null -> "01-Engine woke up (smart)"
-            else -> "01-Engine not verified (smart)"
+        val woke = init.success?.reply
+        val title = if (woke != null) "01-ENGINE RESPONDED (SMART)" else "01-ENGINE NOT VERIFIED (SMART)"
+        binding.tvSubStatus.text = if (woke != null) "01-Engine answered 5-baud init" else "01-Engine not verified (smart)"
+        val verdict = if (woke != null) {
+            "ECU 01 answered: sync 55, KB1=%02X KB2=%02X (%s).".format(
+                woke.keyByte1, woke.keyByte2,
+                if (woke.keyByte2 == 0x8A) "KW1281" else "KWP2000"
+            ) + " M2 link proven. Reading groups needs the next step (data framing is not proven yet)."
+        } else {
+            "No 0x55 from the ECU. Check ignition ON and that the cable sits fully in the OBD port."
         }
         AlertDialog.Builder(this)
             .setTitle(title)
             .setMessage(
                 "Interface: $identityText\n\n" +
                     "5-baud init by cable (0x84):\n${init.describe()}\n\n" +
-                    "Identification 1A 9B: $verification\n\n" +
-                    "Opcodes are PROVEN_STATIC (VCDS Ghidra); this run is the first wire test. " +
-                    "Measuring Groups are not started automatically."
+                    verdict
             )
             .setPositiveButton("OK", null)
             .show()

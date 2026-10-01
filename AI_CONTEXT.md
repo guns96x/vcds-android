@@ -47,6 +47,12 @@ Found by code review, not by a car log. Status: **UNVERIFIED on hardware**.
 - The direct K-Line path is unchanged: echo `[00 00]`, no sync from 01 or 33. The echo needs car power. A dumb-mode route to a K-Line the engine is not on (Dual-K cable) is a hypothesis, UNVERIFIED.
 - Blocker: intelligent mode must be restored once in Windows VCDS. `tools/vcds/d2xx_trace/capture_vcds_engine_session.ps1` records that restore (D), 01-Engine in intelligent mode (E, wire proof for 0x84) and group 011 (F).
 
+### Spec V2 adopted, "10400 baud bug" claim rejected (2026-10-01)
+
+- The claim that ReadBoot was sent at 10400 baud is FALSE. In 36ffc51 the port opens at 10400, then switches 9600 -> 19200 -> 115200 before ReadBoot. The 13:45 restore screenshot shows 115200 and 9600+DTR returning only the echo.
+- Adopted from `audit/vcds-ghidra-proof` `reverse/IMPLEMENTATION_SPEC_V2.md` / `RED_TEAM_REVIEW.md`: the 0x84 address byte for 01 is `0x01` (0x81 kept as fallback), and the request is `53 07 84 03 01 00 D2`. Sending KWP services as raw adapter opcodes (`21 0B`, `1A 9B`, `3E`) is UNKNOWN and quarantined, so the app no longer sends them. The smart M2 gate is the ECU's own `55` + KB1/KB2 in the 0x84 reply.
+- The restore attempt also tries plain 9600 (the VCDS open baud per spec V2).
+
 Next car test, stationary, ignition on: Connect, then save `connection_diagnostics.log` with the `VCDS_DUMB`, `VCDS_SLOW_INIT` and `B03_M2` lines.
 
 Read this before changing the project.

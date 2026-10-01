@@ -39,20 +39,19 @@ class Hex5BaudInitTest {
         )
 
     @Test
-    fun `request for engine matches the spec bytes 53 07 84 03 81 00`() {
+    fun `request for engine matches spec V2 bytes 53 07 84 03 01 00 D2`() {
         val frame = Hex5BaudInit.encodeRequest(Hex5BaudInit.specAddressByte(0x01))
-        val expectedXor = 0x53 xor 0x07 xor 0x84 xor 0x03 xor 0x81 xor 0x00
         assertArrayEquals(
-            byteArrayOf(0x53, 0x07, 0x84.toByte(), 0x03, 0x81.toByte(), 0x00, expectedXor.toByte()),
+            byteArrayOf(0x53, 0x07, 0x84.toByte(), 0x03, 0x01, 0x00, 0xD2.toByte()),
             frame
         )
     }
 
     @Test
     fun `both the spec address byte and the plain address are tried`() {
-        assertEquals(listOf(0x81, 0x01), Hex5BaudInit.addressByteVariants(0x01))
-        // 0x03 has an even bit count: the spec leaves it unchanged, so one variant only.
-        assertEquals(listOf(0x03), Hex5BaudInit.addressByteVariants(0x03))
+        assertEquals(listOf(0x01, 0x81), Hex5BaudInit.addressByteVariants(0x01))
+        assertEquals(0x83, Hex5BaudInit.specAddressByte(0x03))
+        assertEquals(0x33, Hex5BaudInit.specAddressByte(0x33))
     }
 
     @Test
@@ -71,34 +70,9 @@ class Hex5BaudInitTest {
         val result = adapter.init5BaudKLine(0x01)
 
         val success = result.success ?: error("expected a sync reply")
-        assertEquals(0x81, success.addressByte)
+        assertEquals(0x01, success.addressByte)
         assertEquals(1, driver.written.size)
         assertTrue(result.describe(), result.describe().contains("SYNC 55, KB1=EF KB2=8F, baud=10400"))
-    }
-
-    @Test
-    fun `framed 1A 9B accepts a negative response as proof of life`() = runBlocking {
-        val driver = ScriptedDriver(cableFrame(0x7F, 0x1A, 0x31))
-        val adapter = HexB03Adapter(driver, isDebugBuild = false)
-
-        val reply = adapter.kwpReadRequest(0x1A, byteArrayOf(0x9B.toByte())).getOrThrow()
-
-        assertArrayEquals(
-            HexB03FrameCodec.encode(HexB03Constants.MARKER_HOST, 0x1A, byteArrayOf(0x9B.toByte())),
-            driver.written.single()
-        )
-        assertEquals(0x7F.toByte(), reply.frame?.opcode)
-    }
-
-    @Test
-    fun `write services are refused without any transmission`() = runBlocking {
-        val driver = ScriptedDriver()
-        val adapter = HexB03Adapter(driver, isDebugBuild = false)
-
-        val result = adapter.kwpReadRequest(0x2E, byteArrayOf(0x01))
-
-        assertTrue(result.isFailure)
-        assertTrue(driver.written.isEmpty())
     }
 
     @Test

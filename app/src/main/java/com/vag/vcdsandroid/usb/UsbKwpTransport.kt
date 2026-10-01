@@ -483,6 +483,7 @@ class UsbKwpTransport(private val context: Context) {
             // (label, baud, reset line pulsed before polling)
             val profiles = listOf(
                 Triple("115200", 115_200, null),
+                Triple("9600", 9_600, null),
                 Triple("115200+DTR", 115_200, "DTR"),
                 Triple("9600+DTR", 9_600, "DTR"),
                 Triple("115200+RTS", 115_200, "RTS")

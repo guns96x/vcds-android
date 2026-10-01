@@ -355,36 +355,6 @@ class HexB03Adapter(
         Hex5BaudInitResult(address, attempts)
     }
 
-    data class FramedKwpReply(val frame: HexB03Frame?, val frames: List<HexB03Frame>, val rawRx: ByteArray)
-
-    /**
-     * Sends one read-only KWP service through the smart interface as an S-frame
-     * whose opcode is the service ID (spec 2.5: `53 05 21 0B ..`). Accepts the
-     * positive response (SID+0x40) or a negative response (0x7F).
-     * Services outside [ALLOWED_READ_SERVICES] are refused without any TX.
-     */
-    suspend fun kwpReadRequest(
-        sid: Int,
-        data: ByteArray = ByteArray(0),
-        timeoutMs: Long = 750
-    ): Result<FramedKwpReply> = withContext(Dispatchers.IO) {
-        val violation = assertReadOnlyGuardrails(byteArrayOf(sid.toByte()) + data)
-        if (violation != null) return@withContext Result.failure(SecurityException(violation))
-
-        val request = HexB03FrameCodec.encode(
-            marker = HexB03Constants.MARKER_HOST,
-            opcode = sid.toByte(),
-            payload = data
-        )
-        val positive = ((sid + 0x40) and 0xFF).toByte()
-        val (match, frames, raw) = sendAndCollect(
-            request = request,
-            isReply = { it.opcode == positive || it.opcode == 0x7F.toByte() },
-            timeoutMs = timeoutMs
-        )
-        Result.success(FramedKwpReply(match, frames, raw))
-    }
-
     /** Writes [request] and keeps every decoded frame and raw byte until [isReply] matches. */
     private suspend fun sendAndCollect(
         request: ByteArray,

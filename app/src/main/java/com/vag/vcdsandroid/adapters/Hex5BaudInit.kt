@@ -10,10 +10,11 @@ package com.vag.vcdsandroid.adapters
  * Request:  53 07 84 03 <addr> 00 <xor>   (sub 0x03 = K-Line init, flags 0x00)
  * Response: 4D 09 84 <baudHi> <baudLo> <KB1> <KB2> 55 <xor>
  *
- * The spec is internally inconsistent about the address byte: it maps
- * 0x01 -> 0x81 ("odd parity") but leaves 0x03 unchanged, which is even parity
- * over 8 bits. Both the spec's byte and the plain 7-bit address are therefore
- * tried; whichever produces a 0x55 reply is recorded as evidence.
+ * Address byte: reverse/IMPLEMENTATION_SPEC_V2.md (audit/vcds-ghidra-proof,
+ * FUN_14007e3b4 lines 20-33) corrects the first draft: odd parity in bit 7,
+ * set only when the 7-bit address has an EVEN number of ones, so 0x01 -> 0x01
+ * and 0x03 -> 0x83; 0x33 is sent unchanged. The first draft's 0x81 is kept
+ * only as a fallback variant; whichever produces a 0x55 reply is recorded.
  *
  * Android-free so the byte layout is unit tested.
  */
@@ -26,15 +27,20 @@ object Hex5BaudInit {
     /** VCDS waits 3300 ms (0xCE4); the physical 5-baud address alone takes ~2 s. */
     const val TIMEOUT_MS = 3_300L
 
-    /** Address byte exactly as the spec derives it: bit 7 set when the 7-bit address has an odd bit count. */
+    /** Spec V2: odd parity in bit 7 (set when the 7-bit address has an even bit count); 0x33 exempt. */
     fun specAddressByte(address: Int): Int {
         require(address in 0..0x7F) { "K-Line address must be 7-bit" }
-        return if (Integer.bitCount(address) % 2 == 1) address or 0x80 else address
+        if (address == 0x33) return address
+        return if (Integer.bitCount(address) % 2 == 0) address or 0x80 else address
     }
 
-    /** Spec byte first, then the plain 7-bit address if it differs. */
+    /** First-draft encoding (0x01 -> 0x81), retracted by the audit; fallback only. */
+    fun firstDraftAddressByte(address: Int): Int =
+        if (Integer.bitCount(address) % 2 == 1) address or 0x80 else address
+
+    /** Spec V2 byte first, then the first-draft byte if it differs. */
     fun addressByteVariants(address: Int): List<Int> =
-        listOf(specAddressByte(address), address).distinct()
+        listOf(specAddressByte(address), firstDraftAddressByte(address)).distinct()
 
     fun encodeRequest(addressByte: Int): ByteArray =
         HexB03FrameCodec.encode(
