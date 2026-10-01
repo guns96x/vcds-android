@@ -63,8 +63,15 @@ object KwpSlowInit {
         return value xor 0xFF
     }
 
-    /** DTR level per connection attempt: clear, clear, then asserted. */
+    /**
+     * Control-line matrix per connection attempt, (DTR, RTS):
+     * 1 = (off, off), 2 = (off, on), 3 = (on, off).
+     * Car runs on 2026-10-01 showed identical results for repeated (off, off),
+     * so attempt 2 now tries RTS instead of repeating.
+     */
     fun dtrAssertedForAttempt(attempt: Int): Boolean = attempt >= 3
+
+    fun rtsAssertedForAttempt(attempt: Int): Boolean = attempt == 2
 
     /** Human-readable cause of a failed five-baud init, shown to the user. */
     fun describeFailure(
@@ -99,7 +106,8 @@ object KwpSlowInit {
         val dtrAsserted: Boolean,
         val stage: String?,
         val klineEchoSeen: Boolean,
-        val echoBytes: ByteArray = byteArrayOf()
+        val echoBytes: ByteArray = byteArrayOf(),
+        val rtsAsserted: Boolean = false
     )
 
     /**
@@ -114,6 +122,7 @@ object KwpSlowInit {
     ): String {
         val perAttempt = attempts.mapIndexed { i, a ->
             "#${i + 1} DTR=${if (a.dtrAsserted) "ON" else "OFF"} " +
+                "RTS=${if (a.rtsAsserted) "ON" else "OFF"} " +
                 "${a.stage ?: "OK"} echo=" +
                 if (a.echoBytes.isEmpty()) {
                     if (a.klineEchoSeen) "yes" else "no"

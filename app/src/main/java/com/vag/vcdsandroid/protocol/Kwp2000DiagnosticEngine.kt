@@ -199,9 +199,11 @@ class Kwp2000DiagnosticEngine(
                         // DTR clear (interface MCU running, as in the proven M1 link);
                         // attempt 3 asserts DTR, the legacy third-party KKL convention.
                         val dtrAsserted = KwpSlowInit.dtrAssertedForAttempt(attempt)
+                        val rtsAsserted = KwpSlowInit.rtsAssertedForAttempt(attempt)
                         val slow = transport.performFiveBaudSlowInit(
                             address = targetEcuAddress.toInt() and 0xFF,
-                            dtrAsserted = dtrAsserted
+                            dtrAsserted = dtrAsserted,
+                            rtsAsserted = rtsAsserted
                         )
                         lastSlowInitResult = slow
                         slowInitHistory += slow
@@ -218,6 +220,7 @@ class Kwp2000DiagnosticEngine(
                                 "addrComp=${slow.addressComplement?.let { "%02X".format(it) } ?: "--"} " +
                                 "w4=${slow.w4SendDelayMs ?: -1}ms elapsed=${slow.elapsedMs}ms " +
                                 "dtr=${if (slow.dtrAsserted) "ON" else "OFF"} " +
+                                "rts=${if (slow.rtsAsserted) "ON" else "OFF"} " +
                                 "klineEcho=${slow.klineEchoSeen} ignored=[$ignoredHex]"
                         )
 
@@ -289,12 +292,14 @@ class Kwp2000DiagnosticEngine(
                         // broken" from "ECU does not accept address 01 on K-Line".
                         // Only the handshake is performed; no OBD service is sent.
                         if (slowInitHistory.all { it.failureStage == "WAIT_SYNC_55" }) {
-                            val controlDtr = slowInitHistory.firstOrNull { it.klineEchoSeen }
-                                ?.dtrAsserted ?: false
+                            val controlProfile = slowInitHistory.firstOrNull { it.klineEchoSeen }
+                            val controlDtr = controlProfile?.dtrAsserted ?: false
+                            val controlRts = controlProfile?.rtsAsserted ?: false
                             delay(KwpSlowInit.RETRY_QUIET_MS)
                             val control = transport.performFiveBaudSlowInit(
                                 address = KwpSlowInit.OBD_FUNCTIONAL_ADDRESS,
-                                dtrAsserted = controlDtr
+                                dtrAsserted = controlDtr,
+                                rtsAsserted = controlRts
                             )
                             lastObdControlInitResult = control
                             DiagLog.i(
@@ -311,7 +316,8 @@ class Kwp2000DiagnosticEngine(
                         lastError = KwpSlowInit.summarizeAttempts(
                             attempts = slowInitHistory.map {
                                 KwpSlowInit.AttemptSummary(
-                                    it.dtrAsserted, it.failureStage, it.klineEchoSeen, it.ignoredBeforeSync
+                                    it.dtrAsserted, it.failureStage, it.klineEchoSeen, it.ignoredBeforeSync,
+                                    rtsAsserted = it.rtsAsserted
                                 )
                             },
                             lastFailure = lastError ?: "",

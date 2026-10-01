@@ -46,7 +46,8 @@ data class FiveBaudSlowInitResult(
     val ignoredBeforeSync: ByteArray = byteArrayOf(),
     val w4SendDelayMs: Long? = null,
     val elapsedMs: Long = 0L,
-    val dtrAsserted: Boolean = false
+    val dtrAsserted: Boolean = false,
+    val rtsAsserted: Boolean = false
 ) {
     /**
      * Bytes seen while the address was being clocked out. On a transparent
@@ -620,13 +621,15 @@ class UsbKwpTransport(private val context: Context) {
      */
     fun performFiveBaudSlowInit(
         address: Int = 0x01,
-        dtrAsserted: Boolean = false
+        dtrAsserted: Boolean = false,
+        rtsAsserted: Boolean = false
     ): FiveBaudSlowInitResult = synchronized(ioLock) {
         val port = serialPort ?: return@synchronized FiveBaudSlowInitResult(
             success = false,
             address = address,
             failureStage = "PORT_NOT_OPEN",
-            dtrAsserted = dtrAsserted
+            dtrAsserted = dtrAsserted,
+            rtsAsserted = rtsAsserted
         )
 
         val startedNs = System.nanoTime()
@@ -660,7 +663,8 @@ class UsbKwpTransport(private val context: Context) {
                 ignoredBeforeSync = ignored.toByteArray(),
                 w4SendDelayMs = w4,
                 elapsedMs = elapsedMs(),
-                dtrAsserted = dtrAsserted
+                dtrAsserted = dtrAsserted,
+                rtsAsserted = rtsAsserted
             )
         }
 
@@ -706,7 +710,7 @@ class UsbKwpTransport(private val context: Context) {
                 UsbSerialPort.PARITY_NONE
             )
             port.dtr = dtrAsserted
-            port.rts = false
+            port.rts = rtsAsserted
             port.setBreak(false)
             port.purgeHwBuffers(true, true)
             reader.clear()
@@ -824,7 +828,8 @@ class UsbKwpTransport(private val context: Context) {
                 ignoredBeforeSync = ignored.toByteArray(),
                 w4SendDelayMs = w4DelayMs,
                 elapsedMs = elapsedMs(),
-                dtrAsserted = dtrAsserted
+                dtrAsserted = dtrAsserted,
+                rtsAsserted = rtsAsserted
             )
         } catch (e: Exception) {
             DiagLog.e("VCDS_SLOW_INIT", "Five-baud init exception: ${e.message}")

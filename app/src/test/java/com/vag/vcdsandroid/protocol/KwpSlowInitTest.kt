@@ -65,8 +65,8 @@ class KwpSlowInitTest {
             KwpSlowInit.AttemptSummary(true, "WAIT_SYNC_55", true)
         )
         val ok = KwpSlowInit.summarizeAttempts(attempts, "last", true, null)
-        assertTrue(ok, ok.contains("#1 DTR=OFF WAIT_SYNC_55 echo=no"))
-        assertTrue(ok, ok.contains("#3 DTR=ON WAIT_SYNC_55 echo=yes"))
+        assertTrue(ok, ok.contains("#1 DTR=OFF RTS=OFF WAIT_SYNC_55 echo=no"))
+        assertTrue(ok, ok.contains("#3 DTR=ON RTS=OFF WAIT_SYNC_55 echo=yes"))
         assertTrue(ok, ok.contains("address 33 SUCCEEDED"))
 
         val bad = KwpSlowInit.summarizeAttempts(attempts, "last", false, "WAIT_SYNC_55")
@@ -89,5 +89,12 @@ class KwpSlowInitTest {
             "last", null, null
         )
         assertTrue(text, text.contains("echo=[00 00 F0 01 02 03 04 05 +2]"))
+    }
+
+    @Test
+    fun `attempt matrix covers DTR off RTS off, RTS on, then DTR on`() {
+        assertEquals(false to false, KwpSlowInit.dtrAssertedForAttempt(1) to KwpSlowInit.rtsAssertedForAttempt(1))
+        assertEquals(false to true, KwpSlowInit.dtrAssertedForAttempt(2) to KwpSlowInit.rtsAssertedForAttempt(2))
+        assertEquals(true to false, KwpSlowInit.dtrAssertedForAttempt(3) to KwpSlowInit.rtsAssertedForAttempt(3))
     }
 }
