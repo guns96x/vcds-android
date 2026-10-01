@@ -129,7 +129,7 @@ class UsbKwpTransport(private val context: Context) {
 
     /**
      * Short record of what HC::ReadBoot / HC::SetBoot did in the last
-     * [connectDumbRossTech], e.g. "ReadBoot=02 -> SetBoot ACK -> ReadBoot=00".
+     * [connectDumbRossTech], e.g. "ReadBoot=NO_REPLY rx[53 04 0D 5A]".
      * Shown on screen so a field run can be diagnosed from a screenshot.
      */
     @Volatile var lastBootModeReport: String = "not run"
@@ -462,7 +462,7 @@ class UsbKwpTransport(private val context: Context) {
                 }
             }
 
-            // Automated mode transition recovered from VCDS HC::SetBoot / HC::ReadBoot.
+            // Read-only mode check via HC::ReadBoot. The phone never changes the boot mode.
             // Use the exact FA24 intelligent-link bring-up before issuing framed commands.
             try {
                 port.purgeHwBuffers(true, true)
@@ -507,39 +507,12 @@ class UsbKwpTransport(private val context: Context) {
                 )
 
                 if (bootBefore == HexB03Constants.BOOT_MODE_SMART) {
-                    val ack = sendFa24Control(
-                        port = port,
-                        opcode = HexB03Constants.OPCODE_SET_BOOT,
-                        payload = byteArrayOf(HexB03Constants.BOOT_MODE_LEGACY_DUMB),
-                        expectedOpcode = HexB03Constants.OPCODE_ACK,
-                        timeoutMs = 700
-                    )
-                    lastBootModeReport += if (ack != null) " -> SetBoot ACK" else " -> SetBoot NO_ACK rx[${rawRxHex()}]"
-                    if (ack == null) {
-                        throw IOException("HC::SetBoot(0) did not return checksum-valid 0xFE ACK")
-                    }
-
-                    // VCDS HC::SetBoot calls HC::ReadBoot before returning. Mirror that exact
-                    // state transition instead of assuming the ACK alone changed the mux.
-                    val bootAfter = sendFa24Control(
-                        port = port,
-                        opcode = HexB03Constants.OPCODE_READ_BOOT,
-                        expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
-                        timeoutMs = 700
-                    )?.payload?.firstOrNull()
-
-                    lastBootModeReport += " -> ReadBoot=" +
-                        (bootAfter?.let { "%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY rx[${rawRxHex()}]")
-                    if (bootAfter != HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
-                        throw IOException(
-                            "HC::SetBoot(0) ACKed but HC::ReadBoot returned " +
-                                (bootAfter?.let { "0x%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY")
-                        )
-                    }
-                    DiagLog.i(
-                        "VCDS_DUMB",
-                        "PHONE-ONLY SMART->DUMB VERIFIED: ReadBoot=0x00"
-                    )
+                    // The cable answers in intelligent mode, which is the mode VCDS uses
+                    // (VCDS.CFG HexIntel=1). Never rewrite its boot mode from the phone:
+                    // SetBoot(0) persists across re-plug and needs Windows VCDS to undo.
+                    // The smart path (opcode 0x84) is used instead of direct K-Line.
+                    lastBootModeReport += " (smart; dumb path not used)"
+                    throw IOException("Cable is in intelligent mode; direct K-Line path skipped")
                 } else if (bootBefore == HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
                     DiagLog.i("VCDS_DUMB", "Interface already reports Legacy Dumb Mode (0x00)")
                 } else if (bootBefore == null) {

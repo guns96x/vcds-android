@@ -456,30 +456,40 @@ class MainActivity : AppCompatActivity() {
 
             lifecycleScope.launch {
                 binding.btnConnect.isEnabled = false
-                binding.tvSubStatus.text = "Checking legacy HEX K-Line mode..."
+                binding.tvSubStatus.text = "Checking HEX interface (intelligent mode)..."
 
-                // First choice for the user's Golf 5 BLS: use the legacy HEX-USB+CAN
-                // as a plain K-Line pass-through. This avoids the intelligent-mode
-                // per-ECU encrypted session and lets the existing KWP2000 engine talk
-                // directly to address 01.
+                // 1. Intelligent mode first: this is how VCDS drives the cable
+                //    (VCDS.CFG HexIntel=1). The MCU does the 5-baud wake-up itself.
+                val probeResult = adapter.probeInterface()
+                val probe = probeResult.getOrNull()
+                if (probe != null) {
+                    activeB03Adapter = adapter
+                    activeB03Identity = probe.identityText
+                    currentDevice = dev
+                    DiagLog.i("B03_M1", "INTERFACE RESPONDED identity=${probe.identityText}")
+                    runSmartEngineWakeUp(adapter, probe.identityText)
+                    binding.btnConnect.isEnabled = true
+                    updateStatusUI()
+                    return@launch
+                }
+                val smartFailure = probeResult.exceptionOrNull()?.message ?: "Unknown interface error"
+                DiagLog.w("B03_M1", "Smart probe silent: $smartFailure")
+
+                // 2. Smart probe silent: the cable may be booted in dumb (transparent)
+                //    mode. Try direct K-Line; the phone never changes the boot mode.
+                binding.tvSubStatus.text = "Smart mode silent; trying direct K-Line..."
                 val directKLineOpened = withContext(Dispatchers.IO) {
                     transport.connectDumbRossTech(dev)
                 }
 
-                var directKLineFailure: String? = null
+                val directKLineFailure: String
                 if (directKLineOpened) {
-                    DiagLog.i(
-                        "B03_M2",
-                        "K-Line serial path open; starting five-baud 01-Engine init without echo probe"
-                    )
                     binding.tvSubStatus.text = "K-Line open -> verifying 01-Engine..."
-
                     val ecuConnected = engine.connect(
                         targetDevice = dev,
                         targetAddress = 0x01,
                         allowRossTechDumbMode = true
                     )
-
                     updateStatusUI()
 
                     if (ecuConnected) {
@@ -487,26 +497,15 @@ class MainActivity : AppCompatActivity() {
                         val verificationHex = engine.lastEcuVerificationPayload?.joinToString(" ") {
                             "%02X".format(it.toInt() and 0xFF)
                         } ?: "(missing)"
-
-                        val identityHex = engine.lastEcuIdentityPayload?.joinToString(" ") {
-                            "%02X".format(it.toInt() and 0xFF)
-                        }
-
-                        DiagLog.i(
-                            "B03_M2",
-                            "01-ENGINE RESPONDED verification=[$verificationHex] " +
-                                "identity=[${identityHex ?: "not returned"}]"
-                        )
+                        DiagLog.i("B03_M2", "01-ENGINE RESPONDED (direct K-Line) verification=[$verificationHex]")
                         binding.tvSubStatus.text = "01-Engine verified"
                         AlertDialog.Builder(this@MainActivity)
                             .setTitle("01-ENGINE RESPONDED")
                             .setMessage(
-                                "ECU address: 01\n" +
+                                "Path: direct K-Line (cable in dumb mode)\n" +
                                     "Five-baud init: OK\n" +
-                                    "Checksum-valid KWP reply from source 01: OK\n" +
-                                    "Verification reply: $verificationHex" +
-                                    (identityHex?.let { "\nIdentity reply: $it" } ?: "") +
-                                    "\n\nM2 passed. Measuring Groups are not started automatically."
+                                    "Verification reply: $verificationHex\n\n" +
+                                    "M2 passed. Measuring Groups are not started automatically."
                             )
                             .setPositiveButton("OK", null)
                             .show()
@@ -516,75 +515,28 @@ class MainActivity : AppCompatActivity() {
                     directKLineFailure = (engine.lastError ?: "No verified response from ECU address 01").let {
                         if (it.contains("Cable: ")) it else "$it\nCable: ${transport.lastBootModeReport}"
                     }
-                    DiagLog.w("B03_M2", "Direct K-Line M2 failed: $directKLineFailure")
-                    // Release the experimental direct-serial handle before checking the
-                    // already-proven smart interface path.
                     transport.disconnect()
                 } else {
                     directKLineFailure = "Direct K-Line serial path could not be opened" +
                         "\nCable: ${transport.lastBootModeReport}"
                 }
-
-                // If the cable is still booting in intelligent mode, retain the
-                // proven smart-interface handshake as a fallback/diagnostic.
-                binding.tvSubStatus.text = "Dumb mode not active; checking smart interface..."
-                val probeResult = adapter.probeInterface()
+                DiagLog.w("B03_M2", "Direct K-Line M2 failed: $directKLineFailure")
 
                 binding.btnConnect.isEnabled = true
-                probeResult.fold(
-                    onSuccess = { probe ->
-                        val probeHex = probe.probePayload.joinToString(" ") {
-                            "%02X".format(it.toInt() and 0xFF)
-                        }
-                        val statusHex = probe.statusPayload.joinToString(" ") {
-                            "%02X".format(it.toInt() and 0xFF)
-                        }
-                        val modeHex = probe.modePayload.joinToString(" ") {
-                            "%02X".format(it.toInt() and 0xFF)
-                        }
-                        activeB03Adapter = adapter
-                        activeB03Identity = probe.identityText
-                        currentDevice = dev
-                        binding.tvSubStatus.text = "Smart mode: ${probe.identityText}"
-                        DiagLog.i(
-                            "B03_M1",
-                            "INTERFACE RESPONDED identity=${probe.identityText}, " +
-                                "probePayload=[$probeHex], status=[$statusHex], mode=[$modeHex], " +
-                                "elapsedMs=${probe.elapsedMs}"
-                        )
-                        updateStatusUI()
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle("INTERFACE RESPONDED (SMART MODE)")
-                            .setMessage(
-                                "Interface responds: ${probe.identityText}\n\n" +
-                                    "M1 remains verified. M2 direct K-Line did not produce a verified " +
-                                    "ECU 01 response.\n\n" +
-                                    "Last M2 result: ${directKLineFailure ?: "not attempted"}\n\n" +
-                                    "For the direct K-Line experiment, use VCDS Options on Windows: " +
-                                    "run Test, disable 'Boot in intelligent mode' (or enable Forced Dumb Mode), " +
-                                    "run Test again, then reconnect this cable to the phone."
-                            )
-                            .setPositiveButton("OK", null)
-                            .show()
-                    },
-                    onFailure = { error ->
-                        binding.tvSubStatus.text = "01-Engine not verified; smart probe silent"
-                        DiagLog.e("B03_M1", "Interface probe failed: ${error.message}")
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle("01-ENGINE NOT VERIFIED")
-                            .setMessage(
-                                "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
-                                    "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
-                                    "M2 direct K-Line: ${directKLineFailure ?: "not attempted"}\n\n" +
-                                    "Smart-mode probe: ${error.message ?: "Unknown interface error"}\n\n" +
-                                    "A silent smart probe after the K-Line attempt is expected if the " +
-                                    "cable is now in dumb (transparent) mode. Details are in " +
-                                    "VCDS_Logs/${DiagLog.FILE_NAME} (VCDS_DUMB / VCDS_SLOW_INIT lines)."
-                            )
-                            .setPositiveButton("OK", null)
-                            .show()
-                    }
-                )
+                binding.tvSubStatus.text = "Cable not in intelligent mode"
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("CABLE NOT IN INTELLIGENT MODE")
+                    .setMessage(
+                        "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
+                            "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
+                            "Intelligent-mode probe: $smartFailure\n\n" +
+                            "Direct K-Line: $directKLineFailure\n\n" +
+                            "The cable boots in dumb mode (an earlier app build switched it). " +
+                            "Restore it once on Windows: VCDS -> Options -> tick " +
+                            "'Boot in intelligent mode' -> Test -> Save. Then reconnect it to the phone."
+                    )
+                    .setPositiveButton("OK", null)
+                    .show()
             }
             return
         }
@@ -2325,6 +2277,66 @@ class MainActivity : AppCompatActivity() {
         return files.filter { it.name.startsWith(preferredPrefix) }
             .maxByOrNull { it.lastModified() }
             ?: files.maxByOrNull { it.lastModified() }
+    }
+
+    /**
+     * Intelligent-mode M2 gate: the interface MCU wakes ECU 01 (opcode 0x84),
+     * then one read-only identification request (1A 9B) is sent through the
+     * cable. Opcodes come from static VCDS analysis (reverse/vcds-ghidra,
+     * PROVEN_STATIC); everything the cable returns is shown so the run itself
+     * becomes the wire-level evidence.
+     */
+    private suspend fun runSmartEngineWakeUp(adapter: HexB03Adapter, identityText: String) {
+        fun hex(bytes: ByteArray) = bytes.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+
+        binding.tvSubStatus.text = "Smart mode: waking 01-Engine (0x84, ~3 s)..."
+        val init = adapter.init5BaudKLine(0x01)
+        DiagLog.i("B03_M2", "0x84 init result:\n${init.describe()}")
+
+        val woke = init.success
+        var verification = "not sent (no 0x55 from the 5-baud init)"
+        var verified = false
+        if (woke != null) {
+            binding.tvSubStatus.text = "01-Engine woke up; reading identification..."
+            val reply = adapter.kwpReadRequest(0x1A, byteArrayOf(0x9B.toByte())).getOrNull()
+            val frame = reply?.frame
+            verification = when {
+                reply == null -> "blocked"
+                frame != null -> {
+                    verified = true
+                    "op=%02X [%s]".format(frame.opcode.toInt() and 0xFF, hex(frame.payload))
+                }
+                reply.frames.isNotEmpty() ->
+                    "other frames: " + reply.frames.joinToString(" | ") {
+                        "op=%02X [%s]".format(it.opcode.toInt() and 0xFF, hex(it.payload))
+                    }
+                reply.rawRx.isNotEmpty() -> "no frame, raw=" + hex(reply.rawRx)
+                else -> "silent (timeout)"
+            }
+            DiagLog.i("B03_M2", "1A 9B via smart interface: $verification")
+        }
+
+        val title = when {
+            verified -> "01-ENGINE RESPONDED (SMART)"
+            woke != null -> "01-ENGINE WOKE UP (SMART)"
+            else -> "01-ENGINE NOT VERIFIED (SMART)"
+        }
+        binding.tvSubStatus.text = when {
+            verified -> "01-Engine verified (smart)"
+            woke != null -> "01-Engine woke up (smart)"
+            else -> "01-Engine not verified (smart)"
+        }
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(
+                "Interface: $identityText\n\n" +
+                    "5-baud init by cable (0x84):\n${init.describe()}\n\n" +
+                    "Identification 1A 9B: $verification\n\n" +
+                    "Opcodes are PROVEN_STATIC (VCDS Ghidra); this run is the first wire test. " +
+                    "Measuring Groups are not started automatically."
+            )
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     /**

@@ -28,6 +28,13 @@ Found by code review, not by a car log. Status: **UNVERIFIED on hardware**.
 - Five-baud init to `01`, with DTR off/off/on: echo `[00 00]`, which matches the two LOW periods of address `0x01` in 7O1. No `0x55` sync. The control init to `0x33` also gets no sync.
 - Open question: does the BREAK waveform reach the car's K-Line? Test it with the cable unplugged from OBD. If echo `[00 00]` and `53 04 0D 5A` still appear, the loopback is internal.
 
+### Change of course (2026-10-01): intelligent mode with opcode 0x84
+
+- The user's own `C:\Ross-Tech\VCDS\VCDS.CFG` (as reported) has `HexIntel=1`, `ForceK=0`, so VCDS drives this cable in **intelligent mode**, not dumb.
+- Branch `reverse/vcds-ghidra` (306ba40, `reverse/IMPLEMENTATION_SPEC.md`) documents opcode `0x84` (HC::Init5Baud): the cable MCU performs the 5-baud wake-up itself. Request `53 07 84 03 <addr> 00 xx`, reply `4D 09 84 BH BL KB1 KB2 55 xx`, timeout 3300 ms. Status: **PROVEN_STATIC only**.
+- Spec defects found on review: the address-parity rule is self-contradictory (0x01->0x81 but 0x03 unchanged, which is even parity), so the app tries `0x81` and then `0x01`. Opcode `0x85` is named differently in two reverse docs. The group 011 formula types are mislabeled. The app keeps its scaler-driven decoder.
+- The app now runs intelligent mode first: probe `0x02/0x04`, then `0x84` for 01, then a read-only `1A 9B` as an S-frame. The phone **never sends SetBoot** anymore. An earlier build's `SetBoot(0)` left this cable booting in dumb mode, and Windows VCDS Options -> Test with "Boot in intelligent mode" ticked restores it.
+
 Next car test, stationary, ignition on: Connect, then save `connection_diagnostics.log` with the `VCDS_DUMB`, `VCDS_SLOW_INIT` and `B03_M2` lines.
 
 Read this before changing the project.
