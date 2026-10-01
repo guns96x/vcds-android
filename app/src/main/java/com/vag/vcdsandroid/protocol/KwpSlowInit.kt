@@ -95,7 +95,12 @@ object KwpSlowInit {
         return "01-Engine slow init failed at ${stage ?: "UNKNOWN"} $bytes." +
             (hint?.let { " $it" } ?: "")
     }
-    data class AttemptSummary(val dtrAsserted: Boolean, val stage: String?, val klineEchoSeen: Boolean)
+    data class AttemptSummary(
+        val dtrAsserted: Boolean,
+        val stage: String?,
+        val klineEchoSeen: Boolean,
+        val echoBytes: ByteArray = byteArrayOf()
+    )
 
     /**
      * Final M2 error text: every attempt's DTR level and outcome, the last
@@ -109,7 +114,13 @@ object KwpSlowInit {
     ): String {
         val perAttempt = attempts.mapIndexed { i, a ->
             "#${i + 1} DTR=${if (a.dtrAsserted) "ON" else "OFF"} " +
-                "${a.stage ?: "OK"} echo=${if (a.klineEchoSeen) "yes" else "no"}"
+                "${a.stage ?: "OK"} echo=" +
+                if (a.echoBytes.isEmpty()) {
+                    if (a.klineEchoSeen) "yes" else "no"
+                } else {
+                    "[" + a.echoBytes.take(8).joinToString(" ") { "%02X".format(it.toInt() and 0xFF) } +
+                        (if (a.echoBytes.size > 8) " +${a.echoBytes.size - 8}" else "") + "]"
+                }
         }.joinToString("; ")
         val verdict = when (obdControlSuccess) {
             true ->

@@ -126,6 +126,21 @@ class UsbKwpTransport(private val context: Context) {
     private var isPortOpen = false
     private var bridgeServer: TcpBridgeServer? = null
 
+    /**
+     * Short record of what HC::ReadBoot / HC::SetBoot did in the last
+     * [connectDumbRossTech], e.g. "ReadBoot=02 -> SetBoot ACK -> ReadBoot=00".
+     * Shown on screen so a field run can be diagnosed from a screenshot.
+     */
+    @Volatile var lastBootModeReport: String = "not run"
+        private set
+
+    /** First raw bytes received by the last FA24 control request (frame or not). */
+    private val lastFa24RawRx = ArrayList<Byte>(16)
+
+    private fun rawRxHex(): String =
+        if (lastFa24RawRx.isEmpty()) "none"
+        else lastFa24RawRx.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
+
     fun isConnected(): Boolean {
         if (!isPortOpen || serialPort == null) return false
         val dev = currentDevice ?: return false
@@ -328,6 +343,7 @@ class UsbKwpTransport(private val context: Context) {
         val decoder = HexB03StreamDecoder(expectedMarker = HexB03Constants.MARKER_CABLE)
         val deadlineNs = System.nanoTime() + timeoutMs.toLong() * 1_000_000L
         val buf = ByteArray(128)
+        lastFa24RawRx.clear()
         val txHex = request.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
 
         DiagLog.i(
@@ -350,6 +366,7 @@ class UsbKwpTransport(private val context: Context) {
             if (count <= 0) continue
 
             val chunk = buf.copyOf(count)
+            for (b in chunk) if (lastFa24RawRx.size < 16) lastFa24RawRx.add(b)
             val rxHex = chunk.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
             DiagLog.i("VCDS_DUMB", "FA24 CTRL RX raw=[$rxHex]")
 
@@ -393,6 +410,7 @@ class UsbKwpTransport(private val context: Context) {
      */
     fun connectDumbRossTech(targetDevice: UsbDevice? = null): Boolean {
         disconnect()
+        lastBootModeReport = "not run"
 
         var deviceToOpen = targetDevice ?: findAvailableDevice() ?: return false
         deviceToOpen = refreshDevice(deviceToOpen) ?: deviceToOpen
@@ -478,10 +496,13 @@ class UsbKwpTransport(private val context: Context) {
                     )
                     )?.payload?.firstOrNull()
 
+                lastBootModeReport = "ReadBoot=" +
+                    (bootBefore?.let { "%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY rx[${rawRxHex()}]")
                 DiagLog.i(
                     "VCDS_DUMB",
                     "HC::ReadBoot before switch = " +
-                        (bootBefore?.let { "0x%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY")
+                        (bootBefore?.let { "0x%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY") +
+                        " rawRx=[${rawRxHex()}]"
                 )
 
                 if (bootBefore == HexB03Constants.BOOT_MODE_SMART) {
@@ -492,6 +513,7 @@ class UsbKwpTransport(private val context: Context) {
                         expectedOpcode = HexB03Constants.OPCODE_ACK,
                         timeoutMs = 700
                     )
+                    lastBootModeReport += if (ack != null) " -> SetBoot ACK" else " -> SetBoot NO_ACK rx[${rawRxHex()}]"
                     if (ack == null) {
                         throw IOException("HC::SetBoot(0) did not return checksum-valid 0xFE ACK")
                     }
@@ -505,6 +527,8 @@ class UsbKwpTransport(private val context: Context) {
                         timeoutMs = 700
                     )?.payload?.firstOrNull()
 
+                    lastBootModeReport += " -> ReadBoot=" +
+                        (bootAfter?.let { "%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY rx[${rawRxHex()}]")
                     if (bootAfter != HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
                         throw IOException(
                             "HC::SetBoot(0) ACKed but HC::ReadBoot returned " +

@@ -513,13 +513,16 @@ class MainActivity : AppCompatActivity() {
                         return@launch
                     }
 
-                    directKLineFailure = engine.lastError ?: "No verified response from ECU address 01"
+                    directKLineFailure = (engine.lastError ?: "No verified response from ECU address 01").let {
+                        if (it.contains("Cable: ")) it else "$it\nCable: ${transport.lastBootModeReport}"
+                    }
                     DiagLog.w("B03_M2", "Direct K-Line M2 failed: $directKLineFailure")
                     // Release the experimental direct-serial handle before checking the
                     // already-proven smart interface path.
                     transport.disconnect()
                 } else {
-                    directKLineFailure = "Direct K-Line serial path could not be opened"
+                    directKLineFailure = "Direct K-Line serial path could not be opened" +
+                        "\nCable: ${transport.lastBootModeReport}"
                 }
 
                 // If the cable is still booting in intelligent mode, retain the

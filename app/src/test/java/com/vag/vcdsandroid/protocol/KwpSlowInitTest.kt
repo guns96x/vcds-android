@@ -81,4 +81,13 @@ class KwpSlowInitTest {
         val bits = KwpSlowInit.addressBits7O1(KwpSlowInit.OBD_FUNCTIONAL_ADDRESS)
         assertEquals(1, bits.slice(1..8).count { it } % 2)
     }
+    @Test
+    fun `summary shows the actual echo bytes when they were captured`() {
+        val echo = byteArrayOf(0x00, 0x00, 0xF0.toByte(), 1, 2, 3, 4, 5, 6, 7)
+        val text = KwpSlowInit.summarizeAttempts(
+            listOf(KwpSlowInit.AttemptSummary(false, "WAIT_SYNC_55", true, echo)),
+            "last", null, null
+        )
+        assertTrue(text, text.contains("echo=[00 00 F0 01 02 03 04 05 +2]"))
+    }
 }

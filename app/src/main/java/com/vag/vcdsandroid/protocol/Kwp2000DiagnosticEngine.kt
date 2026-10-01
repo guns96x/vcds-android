@@ -310,12 +310,14 @@ class Kwp2000DiagnosticEngine(
 
                         lastError = KwpSlowInit.summarizeAttempts(
                             attempts = slowInitHistory.map {
-                                KwpSlowInit.AttemptSummary(it.dtrAsserted, it.failureStage, it.klineEchoSeen)
+                                KwpSlowInit.AttemptSummary(
+                                    it.dtrAsserted, it.failureStage, it.klineEchoSeen, it.ignoredBeforeSync
+                                )
                             },
                             lastFailure = lastError ?: "",
                             obdControlSuccess = lastObdControlInitResult?.success,
                             obdControlStage = lastObdControlInitResult?.failureStage
-                        )
+                        ) + "\nCable: ${transport.lastBootModeReport}"
                         state = DiagState.ERROR
                         return@withContext false
                     }
