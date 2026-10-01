@@ -67,17 +67,29 @@ Read-Host "Stage F. Start VCDS, 01-Engine -> Measuring Blocks -> group 011, let 
 Save-Trace "F_intelligent_group_011"
 $obdText = Read-Host "Did group 011 show values? Type RPM / boost seen"
 
+Reset-Trace
+Read-Host "Stage K (Keepalive +). Start VCDS, Select -> 01-Engine, leave open for ~30 seconds without clicking anything, Close Controller, close VCDS, press Enter"
+Save-Trace "K_intelligent_01_keepalive_30s"
+
+Reset-Trace
+Read-Host "Stage G (Dumb mode). Options -> UNTICK 'Boot in intelligent mode' (Force Dumb) -> Test -> Save. Select -> 01-Engine -> Close, close VCDS, press Enter"
+Save-Trace "G_dumb_mode_01_engine"
+$dumbText = Read-Host "Did 01-Engine open in Dumb mode? Type result"
+
 $readme = @"
 # VCDS FA24 restore + 01-Engine capture
 
 D = Options: tick Boot in intelligent mode, Test, Save (dumb -> intelligent)
-E = Select 01-Engine in intelligent mode (open, then close)
-F = 01-Engine Measuring Blocks group 011 for ~10 s
+E = Select 01-Engine in intelligent mode (open, then close - opcode 0x84 proof)
+F = 01-Engine Measuring Blocks group 011 for ~10 s (KWP encapsulation)
+K = 01-Engine idle for ~30 s (keepalive opcode GAP_KEEPALIVE_ADAPTER_OPCODE)
+G = Options: Force Dumb Mode, Select 01-Engine (dumb K-Line fallback)
 
 User notes:
 - Test dialog: $testText
 - 01-Engine:   $engineText
 - Group 011:   $obdText
+- Dumb Mode:   $dumbText
 
 Raw D2XX shim logs (FT_SetBreakOn/Off, FT_SetDtr/Rts, FT_SetBitMode,
 FT_SetBaudRate, FT_Write/FT_Read with timestamps).
@@ -90,3 +102,4 @@ Compress-Archive -Path (Join-Path $OutDir "*") -DestinationPath $zip -Force
 Write-Host ""
 Write-Host "DONE: $zip" -ForegroundColor Cyan
 Write-Host "Send that ZIP."
+
