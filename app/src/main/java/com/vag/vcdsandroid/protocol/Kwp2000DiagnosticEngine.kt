@@ -328,7 +328,71 @@ class Kwp2000DiagnosticEngine(
                         return@withContext false
                     }
 
-                    // Generic K-Line adapters keep the older fallback sequence.
+                    // Generic KKL/USB-UART path. The real BLS car has already
+                    // identified as ISO 14230-4 / KWP 5BAUD, so slow-init must be
+                    // the first attempt here too. The older direct/fast probes stay
+                    // below only as a fallback for other K-Line ECUs.
+                    if (!isRossTech) {
+                        if (attempt > 1) {
+                            delay(KwpSlowInit.RETRY_QUIET_MS)
+                        }
+
+                        val dtrAsserted = KwpSlowInit.dtrAssertedForAttempt(attempt)
+                        val rtsAsserted = KwpSlowInit.rtsAssertedForAttempt(attempt)
+                        val slow = transport.performFiveBaudSlowInit(
+                            address = targetEcuAddress.toInt() and 0xFF,
+                            dtrAsserted = dtrAsserted,
+                            rtsAsserted = rtsAsserted
+                        )
+                        lastSlowInitResult = slow
+
+                        val ignoredHex = slow.ignoredBeforeSync.joinToString(" ") {
+                            "%02X".format(it.toInt() and 0xFF)
+                        }
+                        DiagLog.i(
+                            "KKL_SLOW_INIT",
+                            "attempt=$attempt success=${slow.success} stage=${slow.failureStage ?: "OK"} " +
+                                "sync=${slow.syncByte?.let { "%02X".format(it) } ?: "--"} " +
+                                "kb1=${slow.keyByte1?.let { "%02X".format(it) } ?: "--"} " +
+                                "kb2=${slow.keyByte2?.let { "%02X".format(it) } ?: "--"} " +
+                                "dtr=${if (slow.dtrAsserted) "ON" else "OFF"} " +
+                                "rts=${if (slow.rtsAsserted) "ON" else "OFF"} " +
+                                "ignored=[$ignoredHex]"
+                        )
+
+                        if (slow.isKw1281Keywords) {
+                            lastError = "KKL link is alive, but ECU returned KW1281 keywords; this build supports KWP2000 only."
+                            state = DiagState.ERROR
+                            return@withContext false
+                        }
+
+                        if (slow.success) {
+                            delay(55)
+                            val verification = readEcuIdentificationRaw(targetEcuAddress)
+                            lastEcuVerificationPayload = verification
+                            lastEcuIdentityPayload = verification?.takeIf {
+                                it.isNotEmpty() &&
+                                    (it[0] == 0x5A.toByte() || it[0] == 0x61.toByte())
+                            }
+                            if (verification != null) {
+                                noteDiagnosticActivity()
+                                state = DiagState.CONNECTED
+                                startIdleKeepAlive()
+                                DiagLog.i(
+                                    "KKL_M2",
+                                    "01-Engine verified over generic KKL: " +
+                                        verification.joinToString(" ") {
+                                            "%02X".format(it.toInt() and 0xFF)
+                                        }
+                                )
+                                return@withContext true
+                            }
+                            lastError =
+                                "KKL five-baud init completed, but 01-Engine did not return a checksum-valid KWP frame."
+                        }
+                    }
+
+                    // Generic K-Line adapters keep the older direct/fast fallback sequence.
                     transport.purge()
                     delay(60)
                     var ok = false
