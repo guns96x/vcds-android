@@ -446,11 +446,13 @@ class UsbKwpTransport(private val context: Context) {
      * Tries to bring a FA24 that boots in dumb mode back to intelligent mode
      * (HC::SetBoot(2)) without Windows VCDS.
      *
-     * In dumb mode the MCU echoes S-frames instead of answering, so ReadBoot is
-     * polled under several entry conditions: plain 115200, after a DTR or RTS
-     * reset pulse (DTR# is believed to drive the ATmega reset, INFERRED), and at
-     * 9600. SetBoot(2) is sent ONLY after the cable answered with a checksum-valid
-     * ReadBoot frame reporting 0x00; otherwise nothing is written to the cable.
+     * Under each entry condition (plain 115200/9600, after a DTR or RTS reset
+     * pulse; DTR# is believed to drive the ATmega reset, INFERRED) SetBoot(2) is
+     * sent FIRST and unconditionally, then ReadBoot verifies. A dumb cable never
+     * answers ReadBoot, so gating SetBoot on it could never restore anything.
+     * Mode 0x02 is the cable's VCDS mode (VCDS.CFG HexIntel=1); in dumb mode the
+     * frame is only K-Line noise. Expected outcome on a transparent cable is an
+     * echo of 53 05 0E 02 5A, which the report shows.
      */
     fun tryRestoreIntelligentMode(targetDevice: UsbDevice? = null): IntelligentRestoreResult {
         disconnect()
@@ -498,6 +500,17 @@ class UsbKwpTransport(private val context: Context) {
                     "RTS" -> { port.rts = true; Thread.sleep(50); port.rts = false }
                 }
 
+                // Blind SetBoot(2) right after the reset pulse, while a freshly
+                // booted MCU may still parse host frames.
+                val blindAck = sendFa24Control(
+                    port = port,
+                    opcode = HexB03Constants.OPCODE_SET_BOOT,
+                    payload = byteArrayOf(HexB03Constants.BOOT_MODE_SMART),
+                    expectedOpcode = HexB03Constants.OPCODE_ACK,
+                    timeoutMs = 300
+                )
+                report.append("$label: SetBoot(2)=${if (blindAck != null) "ACK" else "NO_ACK"} rx[${rawRxHex()}], ")
+
                 // Poll quickly: a freshly reset MCU may only listen briefly.
                 var mode: Byte? = null
                 val deadline = System.nanoTime() + 800L * 1_000_000L
@@ -509,10 +522,10 @@ class UsbKwpTransport(private val context: Context) {
                         timeoutMs = 60
                     )?.payload?.firstOrNull()
                 }
-                report.append("$label: ReadBoot=${hexOf(mode)} rx[${rawRxHex()}]; ")
+                report.append("ReadBoot=${hexOf(mode)} rx[${rawRxHex()}]; ")
 
                 if (mode == HexB03Constants.BOOT_MODE_SMART) {
-                    return IntelligentRestoreResult(true, report.append("already intelligent").toString())
+                    return IntelligentRestoreResult(true, report.append("intelligent mode confirmed").toString())
                 }
                 if (mode == HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
                     val ack = sendFa24Control(
