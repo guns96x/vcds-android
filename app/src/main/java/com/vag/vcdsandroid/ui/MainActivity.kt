@@ -253,6 +253,18 @@ class MainActivity : AppCompatActivity() {
                 performConnect()
                 return@launch
             }
+
+            // Generic FTDI/CH340 KKL cables do not speak the FA24 control protocol
+            // used by isCablePoweredByCar(). Do not wait for a Ross-Tech ReadBoot
+            // response here; hand them directly to performConnect(), which asks
+            // the user to explicitly confirm KKL pass-through before any TX.
+            val attachedInfo = UsbKwpTransport.identifyDevice(dev)
+            if (!attachedInfo.isRossTechIntelligent) {
+                binding.tvSubStatus.text = "USB serial cable detected; select KKL mode..."
+                performConnect()
+                return@launch
+            }
+
             val deadlineMs = System.currentTimeMillis() + 120_000L
             while (isActive && System.currentTimeMillis() < deadlineMs) {
                 if (isCurrentModeConnected() || connectInProgress) return@launch
@@ -585,6 +597,35 @@ class MainActivity : AppCompatActivity() {
                     }
                 )
             }.invokeOnCompletion { connectInProgress = false }
+            return
+        }
+
+        val isGenericKklCandidate =
+            (dev.vendorId == 0x0403 && dev.productId == 0x6001) ||
+                (dev.vendorId == 0x1A86 && dev.productId == 0x7523)
+
+        if (identity.isZeroTxEnforced && isGenericKklCandidate) {
+            AlertDialog.Builder(this)
+                .setTitle("USE USB CABLE AS KKL?")
+                .setMessage(
+                    "Detected a generic USB-UART bridge: VID %04X, PID %04X.\n\n".format(
+                        dev.vendorId,
+                        dev.productId
+                    ) +
+                        "Continue only if this is a VAG KKL / VAG-COM K-Line cable. " +
+                        "The app will use raw K-Line and start with a 5-baud init to 01-Engine."
+                )
+                .setPositiveButton("USE AS KKL") { _, _ ->
+                    lifecycleScope.launch {
+                        binding.tvSubStatus.text = "KKL: opening 01-Engine..."
+                        val ok = engine.connect(dev)
+                        updateStatusUI()
+                        if (ok) startOemPolling()
+                    }
+                }
+                .setNegativeButton("CANCEL", null)
+                .show()
+            updateStatusUI()
             return
         }
 
