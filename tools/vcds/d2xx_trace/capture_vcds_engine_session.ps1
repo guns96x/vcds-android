@@ -99,7 +99,11 @@ Set-Content -Path (Join-Path $OutDir "README.txt") -Value $readme -Encoding UTF8
 $zip = "$OutDir.zip"
 if (Test-Path $zip) { Remove-Item $zip -Force }
 Compress-Archive -Path (Join-Path $OutDir "*") -DestinationPath $zip -Force
+$desktopZip = "C:\Users\pavlo\Desktop\vcds_engine_session.zip"
+Copy-Item $zip $desktopZip -Force
 Write-Host ""
 Write-Host "DONE: $zip" -ForegroundColor Cyan
-Write-Host "Send that ZIP."
+Write-Host "COPIED TO DESKTOP: $desktopZip" -ForegroundColor Green
+Write-Host "Send that ZIP to Claude."
+
 
