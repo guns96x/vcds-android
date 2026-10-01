@@ -1,0 +1,32 @@
+[
+  {
+    "service_id": "0x10",
+    "name": "DiagnosticSessionControl",
+    "layer": "ECU_PROTOCOL",
+    "status": "INFERRED"
+  },
+  {
+    "service_id": "0x1A",
+    "name": "ReadEcuIdentification",
+    "layer": "ECU_PROTOCOL",
+    "status": "INFERRED"
+  },
+  {
+    "service_id": "0x21",
+    "name": "ReadDataByLocalIdentifier",
+    "layer": "ECU_PROTOCOL",
+    "status": "UNKNOWN_ADAPTER_ENCAPSULATION"
+  },
+  {
+    "service_id": "0x29",
+    "name": "KWP1281_ReadGroup",
+    "layer": "ECU_PROTOCOL",
+    "status": "UNKNOWN_ADAPTER_ENCAPSULATION"
+  },
+  {
+    "service_id": "0x3E",
+    "name": "TesterPresent",
+    "layer": "ECU_PROTOCOL",
+    "status": "UNKNOWN_ADAPTER_ENCAPSULATION"
+  }
+]

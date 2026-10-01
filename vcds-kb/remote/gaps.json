@@ -1,0 +1,16 @@
+[
+  {
+    "priority": "P0",
+    "title": "GAP_KWP_TO_ADAPTER_ENCAPSULATION",
+    "description": "Continuous data flow from ECU diagnostic request (KWP service / measuring block) to Ross-Tech adapter send_frame is unresolved across vtable dispatch in BlockDlg.",
+    "required_evidence": "Complete decompiled AST or dynamic bus trace bridging BlockDlg::OnGraph (0x14005911c) to vcds_adapter_send_frame (0x14007E734).",
+    "status": "OPEN"
+  },
+  {
+    "priority": "P0",
+    "title": "GAP_KEEPALIVE_ADAPTER_OPCODE",
+    "description": "The specific opcode used by Ross-Tech adapter to maintain active K-Line/CAN session without sending diagnostic requests is unmapped.",
+    "required_evidence": "Dynamic trace of idle session or static identification of session timer callback.",
+    "status": "OPEN"
+  }
+]

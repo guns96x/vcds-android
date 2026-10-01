@@ -1,0 +1,30 @@
+[
+  {
+    "from_stage": "vcds_cmd_init_5baud",
+    "to_stage": "vcds_adapter_send_frame",
+    "input_repr": "ECU Address 0x01",
+    "output_repr": "Wire bytes [0x53, 0x07, 0x84, 0x03, 0x01, 0x00, 0xD2]",
+    "status": "PROVEN_STATIC"
+  },
+  {
+    "from_stage": "vcds_cmd_get_version",
+    "to_stage": "vcds_adapter_send_frame",
+    "input_repr": "Opcode 0x02",
+    "output_repr": "Wire bytes [0x53, 0x04, 0x02, 0x55]",
+    "status": "PROVEN_STATIC"
+  },
+  {
+    "from_stage": "vcds_cmd_set_com_baud",
+    "to_stage": "vcds_adapter_send_frame",
+    "input_repr": "Baud uint32 115200 (0x0001C200)",
+    "output_repr": "Wire bytes [0x53, 0x08, 0x03, 0x00, 0xC2, 0x01, 0x00, 0x9B]",
+    "status": "PROVEN_STATIC"
+  },
+  {
+    "from_stage": "BlockDlg::OnGraph",
+    "to_stage": "vcds_adapter_send_frame",
+    "input_repr": "Measuring Group 011",
+    "output_repr": "UNKNOWN",
+    "status": "UNKNOWN"
+  }
+]

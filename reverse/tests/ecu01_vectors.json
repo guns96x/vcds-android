@@ -1,0 +1,87 @@
+{
+  "protocol": "Ross-Tech HEX Transport / KWP 5-Baud Session",
+  "target_ecu": {
+    "name": "01-Engine",
+    "address_hex": "0x01",
+    "address_dec": 1,
+    "parity_encoded_hex": "0x01",
+    "parity_scheme": "ODD (MSB bit 7 set only if bitcount % 2 == 0)"
+  },
+  "sequence_steps": [
+    {
+      "step": 1,
+      "description": "Query Adapter Firmware Version & Interface Type",
+      "command": "HC::GetVersion",
+      "opcode_hex": "0x02",
+      "request_payload_hex": "02",
+      "wire_request_hex": "53040255",
+      "wire_response_example_hex": "4D07020160446D",
+      "response_interpretation": {
+        "sync": "0x4D ('M')",
+        "length": 7,
+        "opcode": "0x02",
+        "fw_major": 1,
+        "fw_minor": 96,
+        "model_char": "D (Dual-K + CAN / HEX-USB+CAN)",
+        "checksum": "0x6D (XOR of all 7 bytes == 0)"
+      },
+      "timeout_ms": 750,
+      "source_function": "FUN_14007e988",
+      "source_address": "0x14007E988",
+      "evidence_status": "PROVEN_STATIC"
+    },
+    {
+      "step": 2,
+      "description": "Switch UART Communication Baud Rate to 115200 (4-Way Handshake)",
+      "command": "HC::Com115",
+      "opcode_hex": "0x03",
+      "baud_rate": 115200,
+      "baud_rate_le_hex": "00C20100",
+      "request_payload_hex": "0300C20100",
+      "wire_request_hex": "53080300C201009B",
+      "step_2a_response": {
+        "wire_hex": "4D04FEB7",
+        "opcode": "0xFE (Adapter ACK)"
+      },
+      "step_2b_action": "Switch local FTDI host baud rate to 115200 (FT_SetBaudRate)",
+      "step_2c_response": {
+        "wire_hex": "4D04FDB4",
+        "opcode": "0xFD (Adapter Ready at new baud)"
+      },
+      "step_2d_confirm_request": {
+        "wire_hex": "5304FEA9",
+        "opcode": "0xFE (Host confirmation)"
+      },
+      "timeout_ms": 750,
+      "source_function": "FUN_14007ec2c",
+      "source_address": "0x14007EC2C",
+      "evidence_status": "PROVEN_STATIC"
+    },
+    {
+      "step": 3,
+      "description": "Autonomous Hardware 5-Baud Line Wake-Up for ECU 01",
+      "command": "HC::Init5Baud",
+      "opcode_hex": "0x84",
+      "sub_function": "0x03",
+      "encoded_ecu_address": "0x01",
+      "flags": "0x00",
+      "request_payload_hex": "84030100",
+      "wire_request_hex": "530784030100D2",
+      "wire_response_template": "4D0984<BaudHi><BaudLo><KB1><KB2>55<Checksum>",
+      "wire_response_example_hex": "4D098428A0088955EF",
+      "response_interpretation": {
+        "sync": "0x4D ('M')",
+        "length": 9,
+        "opcode": "0x84",
+        "baud_rate_raw": "0x28A0 (10400 bps)",
+        "kb1": "0x08 (KeyByte 1)",
+        "kb2": "0x89 (KeyByte 2 - KWP2000 indicator)",
+        "sync_byte": "0x55 (Sync confirmation byte)"
+      },
+      "timeout_ms": 3300,
+      "source_function": "FUN_14007e3b4",
+      "source_address": "0x14007E3B4",
+      "evidence_status": "PROVEN_STATIC"
+    }
+  ]
+}

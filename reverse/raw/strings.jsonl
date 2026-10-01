@@ -1,0 +1,1936 @@
+{"address":"0x14018D1F0","value":"1.2.11"}
+{"address":"0x14018DAA8","value":"incorrect length check"}
+{"address":"0x14018DAC0","value":"incorrect data check"}
+{"address":"0x14018DAD8","value":"invalid distance too far back"}
+{"address":"0x14018DAF8","value":"invalid distance code"}
+{"address":"0x14018DB10","value":"invalid literal/length code"}
+{"address":"0x14018DB30","value":"invalid distances set"}
+{"address":"0x14018DB48","value":"invalid literal/lengths set"}
+{"address":"0x14018DB68","value":"invalid code -- missing end-of-block"}
+{"address":"0x14018DB90","value":"invalid bit length repeat"}
+{"address":"0x14018DBB0","value":"invalid code lengths set"}
+{"address":"0x14018DBD0","value":"too many length or distance symbols"}
+{"address":"0x14018DBF8","value":"invalid stored block lengths"}
+{"address":"0x14018DC18","value":"invalid block type"}
+{"address":"0x14018DC30","value":"header crc mismatch"}
+{"address":"0x14018DC48","value":"unknown header flags set"}
+{"address":"0x14018DC68","value":"invalid window size"}
+{"address":"0x14018DC80","value":"unknown compression method"}
+{"address":"0x14018DCA0","value":"incorrect header check"}
+{"address":"0x14018DCB8","value":"incompatible version"}
+{"address":"0x14018DCD0","value":"buffer error"}
+{"address":"0x14018DCE0","value":"insufficient memory"}
+{"address":"0x14018DCF8","value":"data error"}
+{"address":"0x14018DD08","value":"stream error"}
+{"address":"0x14018DD18","value":"file error"}
+{"address":"0x14018DD28","value":"stream end"}
+{"address":"0x14018DD38","value":"need dictionary"}
+{"address":"0x14018DDA0","value":" inflate 1.2.11 Copyright 1995-2017 Mark Adler "}
+{"address":"0x14018FED0","value":"System"}
+{"address":"0x14018FED8","value":"CCmdTarget"}
+{"address":"0x1401900C0","value":"CInvalidArgException"}
+{"address":"0x1401900D8","value":"CNotSupportedException"}
+{"address":"0x1401900F0","value":"CMemoryException"}
+{"address":"0x140190108","value":"CSimpleException"}
+{"address":"0x140190120","value":"CException"}
+{"address":"0x140190328","value":"CDialog"}
+{"address":"0x1401907F0","value":"COleException"}
+{"address":"0x1401908B8","value":"DISPLAY"}
+{"address":"0x140190928","value":"AfxWnd90s"}
+{"address":"0x140190938","value":"AfxControlBar90s"}
+{"address":"0x140190950","value":"AfxMDIFrame90s"}
+{"address":"0x140190960","value":"AfxFrameOrView90s"}
+{"address":"0x140190978","value":"AfxOleControl90s"}
+{"address":"0x140190990","value":"AfxOldWndProc423"}
+{"address":"0x1401909E8","value":"EnumDisplayDevicesA"}
+{"address":"0x140190A00","value":"GetMonitorInfoA"}
+{"address":"0x140190A10","value":"EnumDisplayMonitors"}
+{"address":"0x140190A28","value":"MonitorFromPoint"}
+{"address":"0x140190A40","value":"MonitorFromRect"}
+{"address":"0x140190A50","value":"MonitorFromWindow"}
+{"address":"0x140190A68","value":"GetSystemMetrics"}
+{"address":"0x140190A7C","value":"USER32"}
+{"address":"0x140190A88","value":"u\"accParent\""}
+{"address":"0x140190AA0","value":"u\"accChildCount\""}
+{"address":"0x140190AC0","value":"u\"accChild\""}
+{"address":"0x140190AD8","value":"u\"accName\""}
+{"address":"0x140190AE8","value":"u\"accValue\""}
+{"address":"0x140190B00","value":"u\"accDescription\""}
+{"address":"0x140190B20","value":"u\"accRole\""}
+{"address":"0x140190B30","value":"u\"accState\""}
+{"address":"0x140190B48","value":"u\"accHelp\""}
+{"address":"0x140190B58","value":"u\"accHelpTopic\""}
+{"address":"0x140190B78","value":"u\"accKeyboardShortcut\""}
+{"address":"0x140190BA0","value":"u\"accFocus\""}
+{"address":"0x140190BB8","value":"u\"accSelection\""}
+{"address":"0x140190BD8","value":"u\"accDefaultAction\""}
+{"address":"0x140190C00","value":"u\"accSelect\""}
+{"address":"0x140190C18","value":"u\"accLocation\""}
+{"address":"0x140190C30","value":"u\"accNavigate\""}
+{"address":"0x140190C48","value":"u\"accHitTest\""}
+{"address":"0x140190C60","value":"u\"accDoDefaultAction\""}
+{"address":"0x140191588","value":"InitCommonControls"}
+{"address":"0x1401915A0","value":"InitCommonControlsEx"}
+{"address":"0x140191658","value":"HtmlHelpA"}
+{"address":"0x140191668","value":"hhctrl.ocx"}
+{"address":"0x1401918A8","value":"#32768"}
+{"address":"0x140191D80","value":"commctrl_DragListMsg"}
+{"address":"0x140191DE8","value":"CEdit"}
+{"address":"0x140191DF0","value":"CComboBox"}
+{"address":"0x140191E00","value":"CListBox"}
+{"address":"0x140191E10","value":"CStatic"}
+{"address":"0x140191ED8","value":"STATIC"}
+{"address":"0x1401921A0","value":"LISTBOX"}
+{"address":"0x140192488","value":"COMBOBOX"}
+{"address":"0x140192A18","value":"CBitmap"}
+{"address":"0x140192A20","value":"CFont"}
+{"address":"0x140192A28","value":"CBrush"}
+{"address":"0x140192A30","value":"CGdiObject"}
+{"address":"0x140192A40","value":"CPaintDC"}
+{"address":"0x140192A50","value":"CWindowDC"}
+{"address":"0x140192A60","value":"CClientDC"}
+{"address":"0x140192A70","value":"CUserException"}
+{"address":"0x140192A80","value":"CResourceException"}
+{"address":"0x140193308","value":"DeactivateActCtx"}
+{"address":"0x140193320","value":"ActivateActCtx"}
+{"address":"0x140193330","value":"ReleaseActCtx"}
+{"address":"0x140193340","value":"CreateActCtxW"}
+{"address":"0x140193350","value":"KERNEL32"}
+{"address":"0x140193400","value":"comctl32.dll"}
+{"address":"0x140193448","value":"comdlg32.dll"}
+{"address":"0x140193490","value":"shell32.dll"}
+{"address":"0x140193500","value":"CFileDialog"}
+{"address":"0x14019386E","value":"p4GetOpenFileNameA"}
+{"address":"0x140193888","value":"GetSaveFileNameA"}
+{"address":"0x140193CE8","value":"SHCreateItemFromParsingName"}
+{"address":"0x140193D08","value":"Shell32.dll"}
+{"address":"0x140193DB8","value":"CRichEditCtrl"}
+{"address":"0x140193DC8","value":"CImageList"}
+{"address":"0x140193DD8","value":"CListCtrl"}
+{"address":"0x140193DE8","value":"CTabCtrl"}
+{"address":"0x140193DF8","value":"CProgressCtrl"}
+{"address":"0x140193E08","value":"CSliderCtrl"}
+{"address":"0x1401941E8","value":"msctls_trackbar32"}
+{"address":"0x1401944C0","value":"msctls_progress32"}
+{"address":"0x140194790","value":"SysTabControl32"}
+{"address":"0x140194D30","value":"ImageList_Create"}
+{"address":"0x140194D48","value":"ImageList_Destroy"}
+{"address":"0x140194E88","value":"f:\\\\dd\\\\vctools\\\\vc7libs\\\\ship\\\\atlmfc\\\\src\\\\mfc\\\\winctrl2.cpp"}
+{"address":"0x140194EE0","value":"CIPAddressCtrl"}
+{"address":"0x1401951E0","value":"SysIPAddress32"}
+{"address":"0x1401951F0","value":"CMenu"}
+{"address":"0x1401952A0","value":"CFileFind"}
+{"address":"0x140195450","value":"file://"}
+{"address":"0x140195458","value":"CCommonDialog"}
+{"address":"0x140195510","value":"commdlg_SetRGBColor"}
+{"address":"0x140195528","value":"commdlg_help"}
+{"address":"0x140195538","value":"commdlg_ColorOK"}
+{"address":"0x140195548","value":"commdlg_FileNameOK"}
+{"address":"0x140195560","value":"commdlg_ShareViolation"}
+{"address":"0x140195578","value":"commdlg_LBSelChangedNotify"}
+{"address":"0x140195598","value":"CPrintDialog"}
+{"address":"0x140195960","value":"PrintDlgA"}
+{"address":"0x140195970","value":"CObject"}
+{"address":"0x140195978","value":"Delete"}
+{"address":"0x140195980","value":"NoRemove"}
+{"address":"0x140195990","value":"ForceRemove"}
+{"address":"0x140195A40","value":"CWinApp"}
+{"address":"0x140195A48","value":"Settings"}
+{"address":"0x140195A58","value":"PreviewPages"}
+{"address":"0x140195B30","value":"CreateActCtxA"}
+{"address":"0x140195B40","value":"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Explorer"}
+{"address":"0x140195B7C","value":"NoRun"}
+{"address":"0x140195B88","value":"NoDrives"}
+{"address":"0x140195B98","value":"RestrictRun"}
+{"address":"0x140195BA8","value":"NoNetConnectDisconnect"}
+{"address":"0x140195BC0","value":"NoRecentDocsHistory"}
+{"address":"0x140195BD8","value":"NoClose"}
+{"address":"0x140195BE0","value":"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Network"}
+{"address":"0x140195C20","value":"NoEntireNetwork"}
+{"address":"0x140195C30","value":"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Policies\\\\Comdlg32"}
+{"address":"0x140195C70","value":"NoPlacesBar"}
+{"address":"0x140195C80","value":"NoBackButton"}
+{"address":"0x140195C90","value":"NoFileMru"}
+{"address":"0x140195CA0","value":"Automation"}
+{"address":"0x140195CB0","value":"Embedding"}
+{"address":"0x140195CC0","value":"UnregserverPerUser"}
+{"address":"0x140195CD8","value":"UnregisterPerUser"}
+{"address":"0x140195CF0","value":"Unregserver"}
+{"address":"0x140195D00","value":"Unregister"}
+{"address":"0x140195D10","value":"RegserverPerUser"}
+{"address":"0x140195D28","value":"RegisterPerUser"}
+{"address":"0x140195D38","value":"Regserver"}
+{"address":"0x140195D48","value":"Register"}
+{"address":"0x140195D88","value":"GetSystemDefaultUILanguage"}
+{"address":"0x140195DA8","value":"GetUserDefaultUILanguage"}
+{"address":"0x140195DC8","value":"%s%s.dll"}
+{"address":"0x140195FC8","value":"f:\\\\dd\\\\vctools\\\\vc7libs\\\\ship\\\\atlmfc\\\\src\\\\mfc\\\\appcore.cpp"}
+{"address":"0x140196050","value":"Software\\\\Classes\\\\"}
+{"address":"0x140196090","value":"Software\\\\"}
+{"address":"0x1401960A0","value":"CWinThread"}
+{"address":"0x140196270","value":"RICHED32.DLL"}
+{"address":"0x140196280","value":"CHttpConnection"}
+{"address":"0x140196290","value":"CInternetConnection"}
+{"address":"0x1401962A8","value":"CInternetSession"}
+{"address":"0x1401962C0","value":"CHttpFile"}
+{"address":"0x1401962D0","value":"CInternetFile"}
+{"address":"0x1401962E0","value":"CInternetException"}
+{"address":"0x1401962F4","value":"UNLINK"}
+{"address":"0x1401962FC","value":"DELETE"}
+{"address":"0x140196328","value":"http://"}
+{"address":"0x140196530","value":"WININET.DLL"}
+{"address":"0x140196900","value":"HTTP/1.0"}
+{"address":"0x140196938","value":"CStdioFile"}
+{"address":"0x140196AA8","value":"f:\\\\dd\\\\vctools\\\\vc7libs\\\\ship\\\\atlmfc\\\\src\\\\mfc\\\\filetxt.cpp"}
+{"address":"0x140196B30","value":"f:\\\\dd\\\\vctools\\\\vc7libs\\\\ship\\\\atlmfc\\\\src\\\\mfc\\\\auxdata.cpp"}
+{"address":"0x140196B68","value":"CArchiveException"}
+{"address":"0x140196D38","value":"CMapPtrToPtr"}
+{"address":"0x140196E98","value":"software"}
+{"address":"0x140196EA4","value":"CFile"}
+{"address":"0x140196FF0","value":"f:\\\\dd\\\\vctools\\\\vc7libs\\\\ship\\\\atlmfc\\\\src\\\\mfc\\\\filecore.cpp"}
+{"address":"0x140197068","value":"commdlg_FindReplace"}
+{"address":"0x1401970B0","value":"CSyncObject"}
+{"address":"0x1401970C0","value":"CCriticalSection"}
+{"address":"0x140197190","value":"CFileException"}
+{"address":"0x140197220","value":"CByteArray"}
+{"address":"0x140197258","value":"%2\\\\CLSID"}
+{"address":"0x140197268","value":"%2\\\\Insertable"}
+{"address":"0x140197278","value":"%2\\\\protocol\\\\StdFileEditing\\\\verb\\\\0"}
+{"address":"0x1401972A0","value":"%2\\\\protocol\\\\StdFileEditing\\\\server"}
+{"address":"0x1401972C8","value":"CLSID\\\\%1"}
+{"address":"0x1401972D8","value":"CLSID\\\\%1\\\\ProgID"}
+{"address":"0x1401972F0","value":"CLSID\\\\%1\\\\InprocHandler32"}
+{"address":"0x140197309","value":"ole32.dll"}
+{"address":"0x140197318","value":"CLSID\\\\%1\\\\LocalServer32"}
+{"address":"0x140197338","value":"CLSID\\\\%1\\\\Verb\\\\0"}
+{"address":"0x140197358","value":"CLSID\\\\%1\\\\Verb\\\\1"}
+{"address":"0x140197378","value":"CLSID\\\\%1\\\\Insertable"}
+{"address":"0x140197390","value":"CLSID\\\\%1\\\\AuxUserType\\\\2"}
+{"address":"0x1401973B0","value":"CLSID\\\\%1\\\\AuxUserType\\\\3"}
+{"address":"0x1401973D0","value":"CLSID\\\\%1\\\\DefaultIcon"}
+{"address":"0x1401973F0","value":"CLSID\\\\%1\\\\MiscStatus"}
+{"address":"0x140197408","value":"CLSID\\\\%1\\\\InProcServer32"}
+{"address":"0x140197428","value":"CLSID\\\\%1\\\\DocObject"}
+{"address":"0x140197440","value":"%2\\\\DocObject"}
+{"address":"0x140197450","value":"CLSID\\\\%1\\\\Printable"}
+{"address":"0x140197468","value":"CLSID\\\\%1\\\\DefaultExtension"}
+{"address":"0x1401977B8","value":"NotifyWinEvent"}
+{"address":"0x1401977C8","value":"user32.dll"}
+{"address":"0x140197870","value":"CObArray"}
+{"address":"0x1401978A0","value":"CPtrArray"}
+{"address":"0x1401981B8","value":"HH:mm:ss"}
+{"address":"0x1401981C8","value":"dddd, MMMM dd, yyyy"}
+{"address":"0x1401981E0","value":"MM/dd/yy"}
+{"address":"0x1401981F8","value":"December"}
+{"address":"0x140198208","value":"November"}
+{"address":"0x140198218","value":"October"}
+{"address":"0x140198220","value":"September"}
+{"address":"0x14019822C","value":"August"}
+{"address":"0x140198244","value":"April"}
+{"address":"0x14019824C","value":"March"}
+{"address":"0x140198258","value":"February"}
+{"address":"0x140198268","value":"January"}
+{"address":"0x1401982A0","value":"Saturday"}
+{"address":"0x1401982AC","value":"Friday"}
+{"address":"0x1401982B8","value":"Thursday"}
+{"address":"0x1401982C8","value":"Wednesday"}
+{"address":"0x1401982D8","value":"Tuesday"}
+{"address":"0x1401982E0","value":"Monday"}
+{"address":"0x1401982E8","value":"Sunday"}
+{"address":"0x140198310","value":"am/pm"}
+{"address":"0x140198318","value":"floor"}
+{"address":"0x1401987A0","value":"log10"}
+{"address":"0x1401987B0","value":"Visual C++ CRT: Not enough memory to complete call to strerror."}
+{"address":"0x1401988E0","value":"CorExitProcess"}
+{"address":"0x1401988F0","value":"u\"mscoree.dll\""}
+{"address":"0x1401989A8","value":"u\"(null)\""}
+{"address":"0x140198A84","value":"UTF-8"}
+{"address":"0x140198A90","value":"UTF-16LE"}
+{"address":"0x140198AA0","value":"UNICODE"}
+{"address":"0x140198AB0","value":"SunMonTueWedThuFriSat"}
+{"address":"0x140198AC8","value":"JanFebMarAprMayJunJulAugSepOctNovDec"}
+{"address":"0x140198AF0","value":"runtime error "}
+{"address":"0x140198B00","value":"TLOSS error\\r\\n"}
+{"address":"0x140198B10","value":"SING error\\r\\n"}
+{"address":"0x140198B20","value":"DOMAIN error\\r\\n"}
+{"address":"0x140198B30","value":"R6034\\r\\nAn application has made an attempt to load the C runtime library incorrectly.\\nPlease contact the application's support team for more information.\\r\\n"}
+{"address":"0x140198BD0","value":"R6033\\r\\n- Attempt to use MSIL code from this assembly during native code initialization\\nThis indicates a bug in your application. It is most likely the result of calling an MSIL-compiled (/clr) function from a native constructor or from DllMain.\\r\\n"}
+{"address":"0x140198CC8","value":"R6032\\r\\n- not enough space for locale information\\r\\n"}
+{"address":"0x140198D00","value":"R6031\\r\\n- Attempt to initialize the CRT more than once.\\nThis indicates a bug in your application.\\r\\n"}
+{"address":"0x140198D68","value":"R6030\\r\\n- CRT not initialized\\r\\n"}
+{"address":"0x140198D88","value":"R6028\\r\\n- unable to initialize heap\\r\\n"}
+{"address":"0x140198DB0","value":"R6027\\r\\n- not enough space for lowio initialization\\r\\n"}
+{"address":"0x140198DE8","value":"R6026\\r\\n- not enough space for stdio initialization\\r\\n"}
+{"address":"0x140198E20","value":"R6025\\r\\n- pure virtual function call\\r\\n"}
+{"address":"0x140198E48","value":"R6024\\r\\n- not enough space for _onexit/atexit table\\r\\n"}
+{"address":"0x140198E80","value":"R6019\\r\\n- unable to open console device\\r\\n"}
+{"address":"0x140198EB0","value":"R6018\\r\\n- unexpected heap error\\r\\n"}
+{"address":"0x140198ED8","value":"R6017\\r\\n- unexpected multithread lock error\\r\\n"}
+{"address":"0x140198F08","value":"R6016\\r\\n- not enough space for thread data\\r\\n"}
+{"address":"0x140198F40","value":"\\r\\nThis application has requested the Runtime to terminate it in an unusual way.\\nPlease contact the application's support team for more information.\\r\\n"}
+{"address":"0x140198FD8","value":"R6009\\r\\n- not enough space for environment\\r\\n"}
+{"address":"0x140199008","value":"R6008\\r\\n- not enough space for arguments\\r\\n"}
+{"address":"0x140199038","value":"R6002\\r\\n- floating point support not loaded\\r\\n"}
+{"address":"0x140199068","value":"Microsoft Visual C++ Runtime Library"}
+{"address":"0x140199098","value":"<program name unknown>"}
+{"address":"0x1401990B0","value":"Runtime Error!\\n\\nProgram: "}
+{"address":"0x1401990D0","value":"_nextafter"}
+{"address":"0x140199178","value":"Illegal byte sequence"}
+{"address":"0x140199190","value":"Directory not empty"}
+{"address":"0x1401991A8","value":"Function not implemented"}
+{"address":"0x1401991C8","value":"No locks available"}
+{"address":"0x1401991E0","value":"Filename too long"}
+{"address":"0x1401991F8","value":"Resource deadlock avoided"}
+{"address":"0x140199218","value":"Result too large"}
+{"address":"0x140199230","value":"Domain error"}
+{"address":"0x140199240","value":"Broken pipe"}
+{"address":"0x140199250","value":"Too many links"}
+{"address":"0x140199260","value":"Read-only file system"}
+{"address":"0x140199278","value":"Invalid seek"}
+{"address":"0x140199288","value":"No space left on device"}
+{"address":"0x1401992A0","value":"File too large"}
+{"address":"0x1401992B0","value":"Inappropriate I/O control operation"}
+{"address":"0x1401992D8","value":"Too many open files"}
+{"address":"0x1401992F0","value":"Too many open files in system"}
+{"address":"0x140199310","value":"Invalid argument"}
+{"address":"0x140199328","value":"Is a directory"}
+{"address":"0x140199338","value":"Not a directory"}
+{"address":"0x140199348","value":"No such device"}
+{"address":"0x140199358","value":"Improper link"}
+{"address":"0x140199368","value":"File exists"}
+{"address":"0x140199378","value":"Resource device"}
+{"address":"0x140199388","value":"Unknown error"}
+{"address":"0x140199398","value":"Bad address"}
+{"address":"0x1401993A8","value":"Permission denied"}
+{"address":"0x1401993C0","value":"Not enough space"}
+{"address":"0x1401993D8","value":"Resource temporarily unavailable"}
+{"address":"0x140199400","value":"No child processes"}
+{"address":"0x140199418","value":"Bad file descriptor"}
+{"address":"0x140199430","value":"Exec format error"}
+{"address":"0x140199448","value":"Arg list too long"}
+{"address":"0x140199460","value":"No such device or address"}
+{"address":"0x140199480","value":"Input/output error"}
+{"address":"0x140199498","value":"Interrupted function call"}
+{"address":"0x1401994B8","value":"No such process"}
+{"address":"0x1401994C8","value":"No such file or directory"}
+{"address":"0x1401994E8","value":"Operation not permitted"}
+{"address":"0x140199500","value":"No error"}
+{"address":"0x1401995F0","value":"bad exception"}
+{"address":"0x140199600","value":"e+000"}
+{"address":"0x140199E20","value":" Complete Object Locator'"}
+{"address":"0x140199E40","value":" Class Hierarchy Descriptor'"}
+{"address":"0x140199E60","value":" Base Class Array'"}
+{"address":"0x140199E78","value":" Base Class Descriptor at ("}
+{"address":"0x140199E98","value":" Type Descriptor'"}
+{"address":"0x140199EB0","value":"`local static thread guard'"}
+{"address":"0x140199ED0","value":"`managed vector copy constructor iterator'"}
+{"address":"0x140199F00","value":"`vector vbase copy constructor iterator'"}
+{"address":"0x140199F30","value":"`vector copy constructor iterator'"}
+{"address":"0x140199F58","value":"`dynamic atexit destructor for '"}
+{"address":"0x140199F80","value":"`dynamic initializer for '"}
+{"address":"0x140199FA0","value":"`eh vector vbase copy constructor iterator'"}
+{"address":"0x140199FD0","value":"`eh vector copy constructor iterator'"}
+{"address":"0x140199FF8","value":"`managed vector destructor iterator'"}
+{"address":"0x14019A020","value":"`managed vector constructor iterator'"}
+{"address":"0x14019A048","value":"`placement delete[] closure'"}
+{"address":"0x14019A068","value":"`placement delete closure'"}
+{"address":"0x14019A088","value":"`omni callsig'"}
+{"address":"0x14019A098","value":" delete[]"}
+{"address":"0x14019A0A4","value":" new[]"}
+{"address":"0x14019A0B0","value":"`local vftable constructor closure'"}
+{"address":"0x14019A0D8","value":"`local vftable'"}
+{"address":"0x14019A0E8","value":"`RTTI"}
+{"address":"0x14019A0F8","value":"`udt returning'"}
+{"address":"0x14019A108","value":"`copy constructor closure'"}
+{"address":"0x14019A128","value":"`eh vector vbase constructor iterator'"}
+{"address":"0x14019A150","value":"`eh vector destructor iterator'"}
+{"address":"0x14019A170","value":"`eh vector constructor iterator'"}
+{"address":"0x14019A198","value":"`virtual displacement map'"}
+{"address":"0x14019A1B8","value":"`vector vbase constructor iterator'"}
+{"address":"0x14019A1E0","value":"`vector destructor iterator'"}
+{"address":"0x14019A200","value":"`vector constructor iterator'"}
+{"address":"0x14019A220","value":"`scalar deleting destructor'"}
+{"address":"0x14019A240","value":"`default constructor closure'"}
+{"address":"0x14019A260","value":"`vector deleting destructor'"}
+{"address":"0x14019A280","value":"`vbase destructor'"}
+{"address":"0x14019A298","value":"`string'"}
+{"address":"0x14019A2A8","value":"`local static guard'"}
+{"address":"0x14019A2C0","value":"`typeof'"}
+{"address":"0x14019A2D0","value":"`vcall'"}
+{"address":"0x14019A2D8","value":"`vbtable'"}
+{"address":"0x14019A2E8","value":"`vftable'"}
+{"address":"0x14019A348","value":"operator"}
+{"address":"0x14019A370","value":" delete"}
+{"address":"0x14019A380","value":"__unaligned"}
+{"address":"0x14019A390","value":"__restrict"}
+{"address":"0x14019A3A0","value":"__ptr64"}
+{"address":"0x14019A3A8","value":"__clrcall"}
+{"address":"0x14019A3B8","value":"__fastcall"}
+{"address":"0x14019A3C8","value":"__thiscall"}
+{"address":"0x14019A3D8","value":"__stdcall"}
+{"address":"0x14019A3E8","value":"__pascal"}
+{"address":"0x14019A3F8","value":"__cdecl"}
+{"address":"0x14019A400","value":"__based("}
+{"address":"0x14019A710","value":"GetProcessWindowStation"}
+{"address":"0x14019A728","value":"GetUserObjectInformationA"}
+{"address":"0x14019A748","value":"GetLastActivePopup"}
+{"address":"0x14019A760","value":"GetActiveWindow"}
+{"address":"0x14019A770","value":"MessageBoxA"}
+{"address":"0x14019A7A8","value":"Unknown exception"}
+{"address":"0x14019A7C0","value":"CONOUT$"}
+{"address":"0x14019A7C8","value":"1#QNAN"}
+{"address":"0x14019A7D0","value":"1#INF"}
+{"address":"0x14019A7D8","value":"1#IND"}
+{"address":"0x14019A7E0","value":"1#SNAN"}
+{"address":"0x14019AA30","value":"OLEACC.dll"}
+{"address":"0x14019AA40","value":"SystemRoot"}
+{"address":"0x14019AA50","value":"ABAssistDlg"}
+{"address":"0x14019AA60","value":"Invalid DateTime"}
+{"address":"0x14019AEB0","value":"MS Sans Serif"}
+{"address":"0x14019AEC8","value":"Arial"}
+{"address":"0x14019AEE8","value":"%1.0f km/h"}
+{"address":"0x14019AEF8","value":"%1.0f mph"}
+{"address":"0x14019AF08","value":"%1.1f +- %0.2fs"}
+{"address":"0x14019AF18","value":"%1.1f +- %0.2fs, @%1.0f mph"}
+{"address":"0x14019AF38","value":"%1.1f +- %0.2fs, @%1.0f km/h"}
+{"address":"0x14019AF58","value":"Chimes"}
+{"address":"0x14019AF60","value":"%1.0f m"}
+{"address":"0x14019AF68","value":"%1.0f ft"}
+{"address":"0x14019AF78","value":".\\\\Logs\\\\Accel.txt"}
+{"address":"0x14019AF98","value":"%s %s    "}
+{"address":"0x14019AFA8","value":"%s %s\\n\\n"}
+{"address":"0x14019AFBC","value":"%s %s\\n"}
+{"address":"0x14019AFC8","value":"%s-%s %s %s\\n"}
+{"address":"0x14019AFD8","value":"%s %s %s\\n\\n"}
+{"address":"0x14019B010","value":"\\\\Logs\\\\Accel.txt"}
+{"address":"0x14019B514","value":"%s\\n%s"}
+{"address":"0x14019B538","value":";%d %s\\n;"}
+{"address":"0x14019B548","value":"%s: %02d:%02d"}
+{"address":"0x14019B558","value":"\\n%03d,%d,"}
+{"address":"0x14019B564","value":"%02X "}
+{"address":"0x14019B578","value":"%s %02d"}
+{"address":"0x14019B588","value":";%s %s\\n"}
+{"address":"0x14019B590","value":";\\nA%s,0,\\n;%s\\n"}
+{"address":"0x14019B5A0","value":"A%s,%d,\\n;%s\\n"}
+{"address":"0x14019B5B0","value":"%s,%s,"}
+{"address":"0x14019B5C0","value":"%s,%s,\\n"}
+{"address":"0x14019B5C8","value":".\\\\Debug\\\\AdpLog.CSV"}
+{"address":"0x14019B608","value":",**Tst "}
+{"address":"0x14019B618","value":"**%s **,"}
+{"address":"0x14019B8F8","value":"AddVINDlg"}
+{"address":"0x14019BCB8","value":"ADPUDSDlg"}
+{"address":"0x14019BCC8","value":"%I64d"}
+{"address":"0x14019BCD0","value":"C:\\\\Program Files (x86)\\\\Microsoft Visual Studio 9.0\\\\VC\\\\atlmfc\\\\include\\\\afxwin1.inl"}
+{"address":"0x14019BD28","value":"Exception thrown in destructor"}
+{"address":"0x14019BD48","value":"%s (%s:%d)\\n%s"}
+{"address":"0x14019BD58","value":"%s (%s:%d)"}
+{"address":"0x14019BFB0","value":"%s (%d/%d)"}
+{"address":"0x14019BFC0","value":"%s-%s"}
+{"address":"0x14019BFC8","value":"MAS00194"}
+{"address":"0x14019BFD8","value":"UNK00000"}
+{"address":"0x14019BFE8","value":"%s-%s-%s"}
+{"address":"0x14019BFF8","value":"%s-%s-%s-%s"}
+{"address":"0x14019C010","value":"   CurrentVal "}
+{"address":"0x14019C040","value":"ID=%04X: %s:: %s -> %s // %s"}
+{"address":"0x14019C084","value":"131071"}
+{"address":"0x14019C098","value":"2097151"}
+{"address":"0x14019C0A0","value":"00000"}
+{"address":"0x14019C0A8","value":"12345"}
+{"address":"0x14019C0BC","value":"99999"}
+{"address":"0x14019C0F0","value":"%s. %s.."}
+{"address":"0x14019C128","value":"Cannot open the Clipboard"}
+{"address":"0x14019C510","value":"%s%s: %s"}
+{"address":"0x14019C51C","value":" %03d"}
+{"address":"0x14019C524","value":" %05d"}
+{"address":"0x14019C538","value":"%02X %02X %02X %02X"}
+{"address":"0x14019C54C","value":"/FAZIT"}
+{"address":"0x14019C554","value":"%s%s-"}
+{"address":"0x14019C560","value":"%02X.%02X.%02X"}
+{"address":"0x14019C578","value":"--.--.--"}
+{"address":"0x14019C584","value":"-----"}
+{"address":"0x14019C590","value":" %s %s %s"}
+{"address":"0x14019C59C","value":" (OK)"}
+{"address":"0x14019C5A8","value":" (nOK:%02X)"}
+{"address":"0x14019C5B8","value":"%02X%02X.%02X.%02X"}
+{"address":"0x14019C5D0","value":"----.--.--"}
+{"address":"0x14019C5E0","value":"%s %s %s"}
+{"address":"0x14019C5F0","value":"%s%s(%s): %s"}
+{"address":"0x14019C600","value":"RxSWIN"}
+{"address":"0x14019C610","value":"4E0 035 785"}
+{"address":"0x14019C620","value":"8T0 035 785"}
+{"address":"0x14019C630","value":"Theft prot."}
+{"address":"0x14019C650","value":"TP 2.0"}
+{"address":"0x14019C658","value":"TP 1.6"}
+{"address":"0x14019C660","value":"ISO15765"}
+{"address":"0x14019C670","value":"KWP2000"}
+{"address":"0x14019C678","value":"OSEK-OS"}
+{"address":"0x14019C680","value":"OSEK Net"}
+{"address":"0x14019C690","value":"HiSpd Net"}
+{"address":"0x14019C6A0","value":"OSEK-Com"}
+{"address":"0x14019C6B0","value":"LIN 1.3"}
+{"address":"0x14019C6B8","value":"LIN 2.0"}
+{"address":"0x14019C6C0","value":"I/O lib."}
+{"address":"0x14019C6D0","value":"EEProm lib."}
+{"address":"0x14019C6E0","value":"MOST Net"}
+{"address":"0x14019C6F0","value":"UDS Std Diag"}
+{"address":"0x14019C700","value":"Bootloader/Flasher"}
+{"address":"0x14019C718","value":"AUTOSAR-ISO TP"}
+{"address":"0x14019C728","value":"MOST Firmware"}
+{"address":"0x14019C738","value":"INIC Config Str"}
+{"address":"0x14019C748","value":"Generic Net Mgt"}
+{"address":"0x14019C758","value":"FlexRay Net Mgt"}
+{"address":"0x14019C768","value":"FlexRay Trsp"}
+{"address":"0x14019C778","value":"Prot Data Unit Router"}
+{"address":"0x14019C790","value":"FlexRay Interf"}
+{"address":"0x14019C7A0","value":"FlexRay Drv"}
+{"address":"0x14019C7B0","value":"%s: %02X.%02X.%02X"}
+{"address":"0x14019C7C8","value":"FF.FF.FF"}
+{"address":"0x14019C7D8","value":"%s %s (%s)"}
+{"address":"0x14019C7E8","value":"Framework"}
+{"address":"0x14019C7F8","value":"Bootloader"}
+{"address":"0x14019C808","value":"UART/IPOD"}
+{"address":"0x14019C820","value":"INIC FW"}
+{"address":"0x14019C828","value":"Driver Versions:"}
+{"address":"0x14019C840","value":"     %02X%02X%02X %s"}
+{"address":"0x14019C858","value":"%s%s(%s): "}
+{"address":"0x14019C868","value":"     %s %s"}
+{"address":"0x14019C874","value":"     "}
+{"address":"0x14019C880","value":"       "}
+{"address":"0x14019C888","value":"     ROD: "}
+{"address":"0x14019C898","value":"%s %s"}
+{"address":"0x14019C8A0","value":"                      "}
+{"address":"0x14019C8B8","value":"%04X-%s %s (%02X)"}
+{"address":"0x14019C8D8","value":"%04X-%s %s (?)"}
+{"address":"0x14019C8E8","value":"%s%s %d: "}
+{"address":"0x14019C8F8","value":"%s%s (%s): "}
+{"address":"0x14019C908","value":"%s%s%s 2: "}
+{"address":"0x14019C918","value":"%s%s%s %s:"}
+{"address":"0x14019C924","value":" %02X"}
+{"address":"0x14019C92C","value":"%s%s "}
+{"address":"0x14019C938","value":"(WFS): "}
+{"address":"0x14019C940","value":"(ESCL): "}
+{"address":"0x14019C950","value":"%s%s%s: 0x%X"}
+{"address":"0x14019C960","value":"%s%s%s: %X"}
+{"address":"0x14019C970","value":"%s%s%s: %d"}
+{"address":"0x14019C980","value":" (ESCL): "}
+{"address":"0x14019C990","value":".\\\\Logs\\\\Param-%02x-%s-"}
+{"address":"0x14019C9A8","value":"%Y%m%d-%H%M"}
+{"address":"0x14019C9C0","value":"Unable to write to file"}
+{"address":"0x14019C9D8","value":"Comms Error"}
+{"address":"0x14019C9E8","value":"%02X %02X"}
+{"address":"0x14019C9F8","value":"Success writing to file %s"}
+{"address":"0x14019CA18","value":"param.prm"}
+{"address":"0x14019CA50","value":"File checked OK;\\nAre you SURE you want to parametrize the module?"}
+{"address":"0x14019CA98","value":"Error in PRM file"}
+{"address":"0x14019CAB0","value":"%s\\nuploaded to module"}
+{"address":"0x14019CFC0","value":"%03d-%d"}
+{"address":"0x14019CFD8","value":"Line %d: %s %s\\t(F%d,R%d)"}
+{"address":"0x14019CFF8","value":"ERROR -- String too Long"}
+{"address":"0x14019D040","value":"G%03d,F%d,%s,%s,"}
+{"address":"0x14019D058","value":"G000,,,,"}
+{"address":"0x14019D068","value":"MB-PIPE.TXT"}
+{"address":"0x14019D078","value":"graph-debug.txt"}
+{"address":"0x14019D088","value":": Error"}
+{"address":"0x14019D098","value":"VCScope.txt"}
+{"address":"0x14019D0A8","value":"VCSCOPE.EXE"}
+{"address":"0x14019D0B8","value":"Can't create Control File MB-PIPE.TXT"}
+{"address":"0x14019D0E0","value":"Can't spawn %s"}
+{"address":"0x14019D0F0","value":"Unexpected Error in AdvMbDlg::OnGraph"}
+{"address":"0x14019D118","value":"Close AdvMB requested"}
+{"address":"0x14019D150","value":"Group UDS "}
+{"address":"0x14019D160","value":"selected"}
+{"address":"0x14019D178","value":"%s %d/%d"}
+{"address":"0x14019D188","value":"\\n%d,%s,%s,%s"}
+{"address":"0x14019D198","value":"\\n%s,%s,%s,%s"}
+{"address":"0x14019D1A8","value":"%d/%d"}
+{"address":"0x14019D1B0","value":"Group UDS split %d"}
+{"address":"0x14019D1C8","value":"DTC clear requested from AdvMB"}
+{"address":"0x14019D1E8","value":"BypassWinTimer %d"}
+{"address":"0x14019D5E0","value":".\\\\scaling\\\\prefs.%c%02x"}
+{"address":"0x14019D5F8","value":"prefs.%c%02x"}
+{"address":"0x14019D608","value":" (*.%c%02x)|*.%c%02x|"}
+{"address":"0x14019D620","value":" (*.*)|*.*||"}
+{"address":"0x14019D630","value":"%c%02x"}
+{"address":"0x14019D638","value":"\\\\Scaling"}
+{"address":"0x14019D648","value":"\\\\VCDS.exe"}
+{"address":"0x14019D658","value":"%d,%d\\r\\n"}
+{"address":"0x14019D664","value":"%d,%d"}
+{"address":"0x14019DC98","value":"Working with VIN %s"}
+{"address":"0x14019DCB0","value":"Starting to load ASAM data for address %02X. XPAChassis==%d"}
+{"address":"0x14019DD08","value":"PA version of %s does not exist; reverting PA logic"}
+{"address":"0x14019DD40","value":"chassis==%s"}
+{"address":"0x14019DD50","value":"LoadASAMData--NO VIN"}
+{"address":"0x14019DD68","value":".\\\\Debug\\\\DEBUG-VIN.DLM"}
+{"address":"0x14019DD80","value":"Address 0x%02X: %s. P/N: %s, ASAM: %s %s, GWSW: %s, GWHW: %s"}
+{"address":"0x14019DDC0","value":"User declined platform guessing"}
+{"address":"0x14019DDE0","value":"User accepted platform guessing"}
+{"address":"0x14019DE00","value":"Working with P/N "}
+{"address":"0x14019DE18","value":"Working with P/N %s"}
+{"address":"0x14019DE30","value":"ASAMChassis preloaded %s"}
+{"address":"0x14019DE50","value":"Using chassis %s"}
+{"address":"0x14019DE68","value":"OVERRIDDING with autoscan user chassis %s"}
+{"address":"0x14019DF68","value":".\\\\UDS_EV\\\\"}
+{"address":"0x14019DFA8","value":".\\\\UDS_EV\\\\STRUC.ROD"}
+{"address":"0x14019DFC4","value":"TTText"}
+{"address":"0x14019DFD0","value":"%s_%c%02d"}
+{"address":"0x14019DFE0","value":"%sTTText-%s.ROD"}
+{"address":"0x14019E008","value":"redir.rod"}
+{"address":"0x14019E014","value":"ReDir"}
+{"address":"0x14019E01C","value":"TNF %d"}
+{"address":"0x14019E030","value":".\\\\UDS_EV\\\\TTDOP.rod"}
+{"address":"0x14019E048","value":".\\\\UDS_EV\\\\MUX.rod"}
+{"address":"0x14019E060","value":"TTDOP overrun"}
+{"address":"0x14019E070","value":"MUX overrun"}
+{"address":"0x14019E07C","value":"%I64X"}
+{"address":"0x14019E088","value":".\\\\UDS_EV\\\\Chassis.clb"}
+{"address":"0x14019E0A8","value":"Chassis file too long!"}
+{"address":"0x14019E0C0","value":"Chassis.clb"}
+{"address":"0x14019E0D0","value":"ASAMChassis->carid %s "}
+{"address":"0x14019E1D4","value":"FFMUX"}
+{"address":"0x14019E1EC","value":"STRUC"}
+{"address":"0x14019E1F8","value":".\\\\UDS_EV\\\\%s.rod"}
+{"address":"0x14019E208","value":".\\\\UDS_EV\\\\Unit.rod"}
+{"address":"0x14019E220","value":"TTText2"}
+{"address":"0x14019E228","value":"%s:%s\\n"}
+{"address":"0x14019E230","value":"Write only subchan. Not supported"}
+{"address":"0x14019E258","value":"Write only channel"}
+{"address":"0x14019E278","value":"%1.0f"}
+{"address":"0x14019E284","value":"%dllX"}
+{"address":"0x14019E298","value":"%s (%d)"}
+{"address":"0x14019E2A0","value":"Couldn't match TTDOP %d text %d"}
+{"address":"0x14019E2C8","value":"Struc %d--"}
+{"address":"0x14019E2D8","value":"Struc %d NF "}
+{"address":"0x14019E2EC","value":"%d)%s,"}
+{"address":"0x14019E2F8","value":"%d)Pos %d/%d,F%d,IPC %05d,"}
+{"address":"0x14019E318","value":"%d bytes(Bpos:%d,bpos:%d,blen%d):"}
+{"address":"0x14019E348","value":"MY >= 2024: Checking for XPA Chassis"}
+{"address":"0x14019E370","value":"XPA Chassis detected"}
+{"address":"0x14019E388","value":"5QS907530"}
+{"address":"0x14019E3A0","value":"XPA Chassis not detected, but forcing due to 5QS 907 530 gateway"}
+{"address":"0x14019E3E4","value":"54321"}
+{"address":"0x14019E3F0","value":"CRFT_LDWS"}
+{"address":"0x14019E418","value":"CRFT_ESP"}
+{"address":"0x14019E428","value":"CRFT_KOMBI"}
+{"address":"0x14019E438","value":"CRFT_FAHRT"}
+{"address":"0x14019E448","value":"CRFT_TPMS"}
+{"address":"0x14019E478","value":"CRFT_KLIMA"}
+{"address":"0x14019E4A8","value":"CRFT_STH"}
+{"address":"0x14019E4B8","value":"CRFT_RAD"}
+{"address":"0x14019E4C8","value":"CRFT_NAV"}
+{"address":"0x14019E510","value":"CRFT_EPH"}
+{"address":"0x14019E520","value":"CRFT_TRL"}
+{"address":"0x14019E540","value":"CRFT_PSM"}
+{"address":"0x14019E560","value":"CRFT_STL"}
+{"address":"0x14019E570","value":"CRFT_STR"}
+{"address":"0x14019E580","value":"UNKNOWN"}
+{"address":"0x14019E5A8","value":"%s_%s_%s"}
+{"address":"0x14019E5B4","value":"EMPTY"}
+{"address":"0x14019E5D0","value":".\\\\UDS_EV\\\\redir.rod"}
+{"address":"0x14019E5E8","value":"Redir file too long!"}
+{"address":"0x14019E600","value":"ModelYear %02X (%C)"}
+{"address":"0x14019E614","value":"TTTEXT"}
+{"address":"0x14019E66C","value":"%s%05d"}
+{"address":"0x14019E678","value":".\\\\UDS_EV\\\\%s*.ROD"}
+{"address":"0x14019E690","value":"%02X.%02X %02X.%02X"}
+{"address":"0x14019E6A8","value":"AutoCom"}
+{"address":"0x14019E6C0","value":"AC.Init: -99"}
+{"address":"0x14019E6D0","value":"AC.Init: -1"}
+{"address":"0x14019E6E0","value":"AC::Login -99"}
+{"address":"0x14019E6F8","value":"AC1%05d.BIN"}
+{"address":"0x14019E708","value":"AC2%05d.BIN"}
+{"address":"0x14019E718","value":"AC3%05d.BIN"}
+{"address":"0x14019E728","value":"AC4%05d.BIN"}
+{"address":"0x14019ECB0","value":"Scans"}
+{"address":"0x14019ECB8","value":"Load from disk and Submit"}
+{"address":"0x14019ECD8","value":"Too Many Chassis Types in File!"}
+{"address":"0x14019ECF8","value":"(L) - "}
+{"address":"0x14019ED08","value":"Too Many Addresses!"}
+{"address":"0x14019ED30","value":"Skoda"}
+{"address":"0x14019ED38","value":", %s %1.1fV"}
+{"address":"0x14019ED48","value":"/%1.1fV"}
+{"address":"0x14019ED50","value":". VIgn %1.1fV"}
+{"address":"0x14019ED60","value":", Deb=%d"}
+{"address":"0x14019ED70","value":", udsna"}
+{"address":"0x14019ED78","value":"%s (%s: 00:00%s%s)"}
+{"address":"0x14019ED90","value":"%s%s(%s: %02d:%02d%s%s)"}
+{"address":"0x14019EDB0","value":".:|END|:.\\r\\n"}
+{"address":"0x14019EDBC","value":"%s: %s"}
+{"address":"0x14019EDC8","value":"%s - %s"}
+{"address":"0x14019EDD0","value":": XX ("}
+{"address":"0x14019EDD8","value":"-%s PA* ("}
+{"address":"0x14019EDE8","value":"-%s PA ("}
+{"address":"0x14019EDF4","value":"-%s ("}
+{"address":"0x14019EE00","value":"%s: %dkm-%dmiles"}
+{"address":"0x14019EE18","value":"%s   %s"}
+{"address":"0x14019EE20","value":"%s %02X"}
+{"address":"0x14019EE30","value":"7H09370"}
+{"address":"0x14019EE38","value":"7E0937"}
+{"address":"0x14019EE40","value":"6RU9370"}
+{"address":"0x14019EE48","value":"3C0907"}
+{"address":"0x14019EE50","value":".\\\\Debug\\\\DEBUG-CAL.DLM"}
+{"address":"0x14019EE68","value":"Bitte"}
+{"address":"0x14019EE70","value":"Address %02X, Part %s, Baud %d"}
+{"address":"0x14019EE90","value":"-------------------------------------------------------------------------------"}
+{"address":"0x14019EEF0","value":"%s %02X: %s %s"}
+{"address":"0x14019EF00","value":"%s %02X: %s (%s%s)"}
+{"address":"0x14019EF28","value":"%s %s: %s    %s: %s"}
+{"address":"0x14019EF40","value":"   %s %d - "}
+{"address":"0x14019EF4C","value":"  %s%s"}
+{"address":"0x14019EF58","value":"   %s %s: %s"}
+{"address":"0x14019EF68","value":"   %s: %s  "}
+{"address":"0x14019EF7C","value":"CVN: "}
+{"address":"0x14019EF88","value":"   %s: %s"}
+{"address":"0x14019EF98","value":"   %s: %s %s %s"}
+{"address":"0x14019EFA8","value":"   GVL: "}
+{"address":"0x14019EFB8","value":"   %s: %s %s"}
+{"address":"0x14019EFC8","value":"   ROD: %s"}
+{"address":"0x14019EFD8","value":"   %s %s"}
+{"address":"0x14019EFE4","value":"VINID"}
+{"address":"0x14019EFEC","value":"   %s"}
+{"address":"0x14019F000","value":"%s %02X: %s"}
+{"address":"0x14019F010","value":"%s %s(%s) "}
+{"address":"0x14019F020","value":"%s: %03d %05d %06d"}
+{"address":"0x14019F038","value":"%s   %s: %s"}
+{"address":"0x14019F044","value":"%s %d"}
+{"address":"0x14019F050","value":"            "}
+{"address":"0x14019F060","value":".\\\\Debug\\\\DEBUG-INST.DLM"}
+{"address":"0x14019F080","value":"FOD Check"}
+{"address":"0x14019F090","value":"In Memoriam\\nJack I. Shapiro\\n1972 - 2021"}
+{"address":"0x14019F0B8","value":"Autoscan-ClearAll"}
+{"address":"0x14019F0D8","value":"4Z0 907 468"}
+{"address":"0x14019F0F0","value":"         "}
+{"address":"0x14019F100","value":"myautoscan.txt"}
+{"address":"0x14019F110","value":"notepad.exe"}
+{"address":"0x14019F128","value":"Flux Capacitor"}
+{"address":"0x14019F140","value":"\\n**********Questions?**********\\nPlease visit forums.ross-tech.com\\nor email: support@ross-tech.com"}
+{"address":"0x14019F1A8","value":".\\\\Scans\\\\Scan-"}
+{"address":"0x14019F1B8","value":"-%dkm-%dmi"}
+{"address":"0x14019F1D0","value":"autoscan.txt"}
+{"address":"0x14019F1E8","value":"http://www.ross-tech.com/misc/uploadform.php?serial="}
+{"address":"0x14019F220","value":".\\\\Scans"}
+{"address":"0x14019F228","value":"explore"}
+{"address":"0x14019F254","value":"\\\\Scans"}
+{"address":"0x14019F528","value":"ImageList_SetBkColor"}
+{"address":"0x14019F540","value":"ImageList_Draw"}
+{"address":"0x14019F550","value":"ImageList_AddMasked"}
+{"address":"0x1401A9590","value":"USER32.DLL"}
+{"address":"0x1401A95A0","value":"AnimateWindow"}
+{"address":"0x1401A95B0","value":"BalloonHelpClassDS"}
+{"address":"0x1401A95C8","value":"BalloonHelpClass"}
+{"address":"0x1401A9A68","value":"564130"}
+{"address":"0x1401A9A70","value":"4D4C41"}
+{"address":"0x1401A9A78","value":"424132"}
+{"address":"0x1401A9A80","value":"545533"}
+{"address":"0x1401A9A88","value":"35444F"}
+{"address":"0x1401A9A90","value":"4A4342"}
+{"address":"0x1401A9A98","value":"Varta"}
+{"address":"0x1401A9AA8","value":"Banner"}
+{"address":"0x1401A9AB0","value":"Exide"}
+{"address":"0x1401A9AB8","value":"JFF, Boading"}
+{"address":"0x1401A9AC8","value":"JCB/JCI"}
+{"address":"0x1401AA210","value":"Courier New"}
+{"address":"0x1401AA228","value":"VAG-COM: "}
+{"address":"0x1401AA248","value":"%s 0x%02X,%s,UDS %s,%s"}
+{"address":"0x1401AA260","value":".\\\\Debug\\\\GESLog.CSV"}
+{"address":"0x1401AA278","value":"%s 0x%02X,%s,%s,%s %s"}
+{"address":"0x1401AA290","value":"Row %d"}
+{"address":"0x1401AA2A0","value":"ERROR:"}
+{"address":"0x1401AA2A8","value":"Unknown"}
+{"address":"0x1401AA2B0","value":"Message"}
+{"address":"0x1401AA2B8","value":"Type: 0x%02X"}
+{"address":"0x1401AA2D0","value":"%1.1f"}
+{"address":"0x1401AA2E8","value":"DTC clear requested from MWB"}
+{"address":"0x1401AA308","value":"Close MB/GES requested"}
+{"address":"0x1401AA320","value":"Unexpected Error in BlockDlg::OnGraph"}
+{"address":"0x1401AA358","value":"G%s,F%d,%s,%s,"}
+{"address":"0x1401AA368","value":"TDIGraph.EXE"}
+{"address":"0x1401AA378","value":"Can't spawn TDIGraph.EXE"}
+{"address":"0x1401AA398","value":"Unexpected Error in BlockDlg::OnGraph2"}
+{"address":"0x1401AA3C0","value":"\\n %03d - %03d"}
+{"address":"0x1401AA3D8","value":"038 906"}
+{"address":"0x1401AA3E0","value":"028 906 021"}
+{"address":"0x1401AA3F0","value":"065 906 018"}
+{"address":"0x1401AA400","value":"074 906 018"}
+{"address":"0x1401AA418","value":"T100-5SE"}
+{"address":"0x1401AA428","value":"065 906"}
+{"address":"0x1401AA440","value":"VTEDC"}
+{"address":"0x1401AA448","value":"%d,%d,%s,\\n"}
+{"address":"0x1401AA458","value":"%d,%d,%s,%s,%s\\n"}
+{"address":"0x1401AA480","value":"%s,\\n;\\n;\\n"}
+{"address":"0x1401AA48C","value":"%d,%s,"}
+{"address":"0x1401AA494","value":"%d,%d\\n"}
+{"address":"0x1401AA4A0","value":"http://wiki.ross-tech.com/index.php/Control_Module_Maps"}
+{"address":"0x1401AA4D8","value":"%H:%M:%S"}
+{"address":"0x1401AA4E8","value":"\\r\\n%s %s %s"}
+{"address":"0x1401AA530","value":"  Line %d-Form:%d"}
+{"address":"0x1401AA818","value":"Detected keep-alive vicious circle"}
+{"address":"0x1401AA848","value":"Rcv Nothing"}
+{"address":"0x1401AA858","value":"Rcv %03X  "}
+{"address":"0x1401AA868","value":"-----------------"}
+{"address":"0x1401AA880","value":"SilentGetVerbau %02X begin"}
+{"address":"0x1401AA8A0","value":"unsolved: "}
+{"address":"0x1401AA8B0","value":"SilentGetVerbau %02X end, nonzero %d, resolved %d, %s installed %d, total time: %1.3f s"}
+{"address":"0x1401AA908","value":"Processing GVL type %d, sort=%d: pos/add/status|"}
+{"address":"0x1401AA940","value":"%d %02X %02X|"}
+{"address":"0x1401AA950","value":"limit=%d|"}
+{"address":"0x1401AA960","value":"%d %02X %02X %02X|"}
+{"address":"0x1401AA978","value":"Snd %03X  "}
+{"address":"0x1401AAA40","value":"%d -- %s -- %s"}
+{"address":"0x1401AB3A8","value":"%1.4f"}
+{"address":"0x1401AB418","value":"%1.3f"}
+{"address":"0x1401AB428","value":"%1.2f"}
+{"address":"0x1401AB448","value":"Copyright(c) 2004, Ross-Tech LLC"}
+{"address":"0x1401AB470","value":"CODES.DAT"}
+{"address":"0x1401AB480","value":"%03d %03d %03d"}
+{"address":"0x1401AB490","value":"TXT %03d %03d"}
+{"address":"0x1401AB4A0","value":"TNF %03d %03d"}
+{"address":"0x1401AB4B8","value":"%02d:%02d"}
+{"address":"0x1401AB4D0","value":"Release"}
+{"address":"0x1401AB4D8","value":"%s %01d.%01d.%01d%s"}
+{"address":"0x1401AB4F0","value":"Div.by.Zero!"}
+{"address":"0x1401AB5B4","value":"Error!"}
+{"address":"0x1401AB5BC","value":"%1.6f"}
+{"address":"0x1401AB5C8","value":"DirectDlg"}
+{"address":"0x1401AB6A0","value":"Lucida"}
+{"address":"0x1401AB6B0","value":"Logs\\\\Direct-%s-%02X-%s.log"}
+{"address":"0x1401AB6E8","value":"%s: %s\\n"}
+{"address":"0x1401ABB10","value":"DQ400E"}
+{"address":"0x1401ABB18","value":"Restarting Session"}
+{"address":"0x1401ABB2C","value":"ROD - "}
+{"address":"0x1401ABB38","value":"%04d - %s "}
+{"address":"0x1401ABB48","value":"%06d - %s "}
+{"address":"0x1401ABB58","value":"DTC-Line1:%s"}
+{"address":"0x1401ABB70","value":"   P%04X"}
+{"address":"0x1401ABB80","value":"   C%04X"}
+{"address":"0x1401ABB90","value":"   B%04X"}
+{"address":"0x1401ABBA0","value":"   U%04X"}
+{"address":"0x1401ABBB0","value":"       %s %02X [%s] %s %s"}
+{"address":"0x1401ABBD0","value":"          %s %02X [%s] %s %s"}
+{"address":"0x1401ABBF0","value":"          %s %02X [%s]"}
+{"address":"0x1401ABC08","value":"DTC-Line2a:%s"}
+{"address":"0x1401ABC18","value":"Tip-TNF %d"}
+{"address":"0x1401ABC58","value":"DTC-Line3:%s"}
+{"address":"0x1401ABC68","value":"%05d - %s "}
+{"address":"0x1401ABC78","value":"            %s %s %02d-%d%d - %s"}
+{"address":"0x1401ABCA0","value":"            %s %s %03d %s %s"}
+{"address":"0x1401ABCC0","value":"            %02d-%d%d %s %s"}
+{"address":"0x1401ABCE0","value":"            %03d %s %s"}
+{"address":"0x1401ABCF8","value":"DTC-Line2:%s"}
+{"address":"0x1401ABD08","value":"%04X - %s "}
+{"address":"0x1401ABD18","value":"Clear codes requested"}
+{"address":"0x1401ABD30","value":"Version %s"}
+{"address":"0x1401ABD40","value":"Version: %s"}
+{"address":"0x1401ABD50","value":"%s: %03d %05d"}
+{"address":"0x1401ABD60","value":"%s %s %s %s"}
+{"address":"0x1401ABD70","value":"              %s"}
+{"address":"0x1401ABD88","value":"                      %s"}
+{"address":"0x1401ABDA8","value":"%s %s (%s) "}
+{"address":"0x1401ABDC0","value":"             %s:"}
+{"address":"0x1401ABDD8","value":"                        %s"}
+{"address":"0x1401ABDF8","value":"                    %s: %s"}
+{"address":"0x1401ABE14","value":"%d km"}
+{"address":"0x1401ABE20","value":"%02d.%02d.%02d"}
+{"address":"0x1401ABE30","value":"%Y.%m.%d."}
+{"address":"0x1401ABE40","value":"%02d:%02d:%02d"}
+{"address":"0x1401ABE50","value":"EV_ParkbA7"}
+{"address":"0x1401ABE60","value":"                    %s: %1.1f V"}
+{"address":"0x1401ABE80","value":"                    "}
+{"address":"0x1401ABE98","value":"                       ROD: %s"}
+{"address":"0x1401ABEC0","value":"%s %s\\r\\n"}
+{"address":"0x1401AC1A0","value":"Too many SRI jobs!"}
+{"address":"0x1401AC1B8","value":"REDIRECT"}
+{"address":"0x1401AC1D0","value":"\\nFound matching redirect: %s"}
+{"address":"0x1401AC200","value":"labels\\\\labeltest.txt"}
+{"address":"0x1401AC218","value":"debug\\\\LabelLog.txt"}
+{"address":"0x1401AC230","value":"\\n\\n**********************\\n%s\\nController: %02X PartNo: %s HWPartNo: %s"}
+{"address":"0x1401AC278","value":"TEST-%02x"}
+{"address":"0x1401AC288","value":"%c%c-%02X"}
+{"address":"0x1401AC298","value":"dummy.lbl"}
+{"address":"0x1401AC2A4","value":"dummy"}
+{"address":"0x1401AC2B0","value":"\\nLabel file NOT found, display: None"}
+{"address":"0x1401AC2D8","value":"\\nLabel file NOT found, display: REDIR FAIL"}
+{"address":"0x1401AC308","value":"\\nLabel file found, display: %s"}
+{"address":"0x1401AC328","value":"\\n\\n**********************\\n%s\\nLoading SRI Label"}
+{"address":"0x1401AC358","value":"SRI%d"}
+{"address":"0x1401AC360","value":"S%d,%02X,%02X,%d,%d,%d,%d"}
+{"address":"0x1401AC37C","value":"CTRLCR"}
+{"address":"0x1401AC384","value":"CTRLLF"}
+{"address":"0x1401AC390","value":".\\\\labels\\\\User\\\\"}
+{"address":"0x1401AC3A0","value":".\\\\labels\\\\"}
+{"address":"0x1401AC3C0","value":"\\nLooking for %s..."}
+{"address":"0x1401AC3D4","value":"found!"}
+{"address":"0x1401AC3E0","value":"not found."}
+{"address":"0x1401AC3F0","value":"%s-%02X-%02d"}
+{"address":"0x1401AC408","value":"FileSavedDlg"}
+{"address":"0x1401AC7C8","value":"Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\Fonts"}
+{"address":"0x1401AC800","value":"Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Fonts"}
+{"address":"0x1401AC8F0","value":"%02X - %s"}
+{"address":"0x1401AC900","value":"GWCoding"}
+{"address":"0x1401AC910","value":"-Direct"}
+{"address":"0x1401AC918","value":".\\\\Debug\\\\CodingLog.CSV"}
+{"address":"0x1401ACBF8","value":"HEX-Micro USB<->Serial Adapter"}
+{"address":"0x1401ACC18","value":"Ross-Tech USB<->Serial Adapter"}
+{"address":"0x1401ACC38","value":"HEX-USB"}
+{"address":"0x1401ACC40","value":"KII-USB"}
+{"address":"0x1401ACC48","value":"HEX-PRO"}
+{"address":"0x1401ACC58","value":"KEY-USB"}
+{"address":"0x1401ACC60","value":"Auto-Intern"}
+{"address":"0x1401ACC70","value":"HC::Test:KMode failed 1"}
+{"address":"0x1401ACC98","value":"ROSSTECH"}
+{"address":"0x1401ACCA8","value":"ROSS-USA"}
+{"address":"0x1401ACCB8","value":"Ross-Tech"}
+{"address":"0x1401ACCC8","value":" KII-USB"}
+{"address":"0x1401ACCD4","value":" HEX-"}
+{"address":"0x1401ACCE0","value":"OEM HEX-COM"}
+{"address":"0x1401ACCF0","value":"HC::Test:KMode failed 2"}
+{"address":"0x1401ACD08","value":"B: %d KW: %02X%02X"}
+{"address":"0x1401ACD20","value":"HexInit: %d"}
+{"address":"0x1401ACD30","value":"HC::TurboBaud -1"}
+{"address":"0x1401ACD48","value":"HC::TurboBaud -2"}
+{"address":"0x1401ACD60","value":"HC::SendCommand -1"}
+{"address":"0x1401ACD78","value":"HC::GetVersion -1"}
+{"address":"0x1401ACD90","value":"HC::GetVersion -2"}
+{"address":"0x1401ACDA4","value":"%d.%d"}
+{"address":"0x1401ACDB8","value":"HC::GetVersion:KMode failed 1"}
+{"address":"0x1401ACDD8","value":"HC::Com115 -1"}
+{"address":"0x1401ACDE8","value":"HC::Com115 -2"}
+{"address":"0x1401ACDF8","value":"HC::Com115 -3"}
+{"address":"0x1401ACE08","value":"HC::Com115 -4"}
+{"address":"0x1401ACE18","value":"HC::KLineTest -1"}
+{"address":"0x1401ACE30","value":"HC::KLineTest -2"}
+{"address":"0x1401ACE48","value":"\\n    CAN: %s"}
+{"address":"0x1401ACE58","value":"HC::Reset:KMode failed"}
+{"address":"0x1401ACE70","value":"HC::Reset -1"}
+{"address":"0x1401ACE80","value":"HC::Reset -2"}
+{"address":"0x1401ACE90","value":"%y%m%d"}
+{"address":"0x1401ACE98","value":"HC::KMode Fail try %d"}
+{"address":"0x1401ACEB0","value":"HC:KMode -1"}
+{"address":"0x1401ACEC0","value":"HC::SetRcvMask -3"}
+{"address":"0x1401ACED8","value":"HC::SetRcvFilter -4"}
+{"address":"0x1401ACEF0","value":"Retrieved Packet from Stack, PRXi=%d"}
+{"address":"0x1401ACF18","value":"\\n**** Address %02X-%02X CAN Error %02X in GetCANMsg()"}
+{"address":"0x1401ACF50","value":"**** Address %02X-%02X Unexpected Message from HC: %02X in GetCANMsg()"}
+{"address":"0x1401ACF98","value":"HC::SCM -1"}
+{"address":"0x1401ACFA8","value":"HC::SCM -3"}
+{"address":"0x1401ACFB8","value":"**** Address %02X-%02X CAN Error %02X in SendCANMsg()"}
+{"address":"0x1401ACFF0","value":"Resp[0]=%02X, CPC=%d, LCE=%02X"}
+{"address":"0x1401AD010","value":"Non-ack resp(1):"}
+{"address":"0x1401AD028","value":"Resending with PC=%d"}
+{"address":"0x1401AD040","value":"No response"}
+{"address":"0x1401AD050","value":"Resend success"}
+{"address":"0x1401AD060","value":"Non-ack resp(2):"}
+{"address":"0x1401AD078","value":"HC::CAN_OpenController16 -1"}
+{"address":"0x1401AD098","value":"HC::CAN_OpenController -1"}
+{"address":"0x1401AD0B8","value":"HC::CANOpenCtrl:KMode failed 1"}
+{"address":"0x1401AD0D8","value":"HC::CANOpenCtrl -1"}
+{"address":"0x1401AD0F0","value":"HC::CANOpenCtrl:KMode failed 2"}
+{"address":"0x1401AD110","value":"HC::CANOpenCtrl -2"}
+{"address":"0x1401AD128","value":"HC::CANOpenCtrl:KMode failed 3"}
+{"address":"0x1401AD148","value":"HC::CANOpenCtrl -3"}
+{"address":"0x1401AD160","value":"HC1%05d.BIN"}
+{"address":"0x1401AD170","value":"HC2%05d.BIN"}
+{"address":"0x1401AD180","value":"HC3%05d.BIN"}
+{"address":"0x1401AD190","value":"HC4%05d.BIN"}
+{"address":"0x1401AD1A0","value":"HC8%05d.BIN"}
+{"address":"0x1401AD1B0","value":"HC5%05d.BIN"}
+{"address":"0x1401AD1C0","value":"HC7%05d.BIN"}
+{"address":"0x1401AD1D0","value":"HC6%05d.BIN"}
+{"address":"0x1401AD1E0","value":"HC::FastInit -1"}
+{"address":"0x1401AD1F0","value":"HC::FastInit -2"}
+{"address":"0x1401AD200","value":"HC::Echo10400 -1"}
+{"address":"0x1401AD218","value":"HC::Echo10400 -2"}
+{"address":"0x1401AD238","value":"HC::SetBoot -1"}
+{"address":"0x1401AD248","value":"HC::SetBoot -2"}
+{"address":"0x1401AD258","value":"HC::ReadBoot -1"}
+{"address":"0x1401AD268","value":"HC::ReadBoot -2"}
+{"address":"0x1401AD278","value":"HC::GC -1"}
+{"address":"0x1401AD288","value":"HC::GC -2"}
+{"address":"0x1401AD298","value":"HC::GCr -1"}
+{"address":"0x1401AD2A8","value":"HC::GCr -2"}
+{"address":"0x1401AD2B8","value":"HC::SCr -1"}
+{"address":"0x1401AD2C8","value":"HC::SCr -2"}
+{"address":"0x1401AD2E8","value":"HC::GCp -1"}
+{"address":"0x1401AD2F8","value":"HC::GCp -2"}
+{"address":"0x1401AD308","value":"Clszqjdkw#+`*#1327#az#Kf{#Nj`qlpzpwfnp#Swz#%#Qlpp.Wf`k/#OO@-"}
+{"address":"0x1401AD348","value":"Out-of-synch RX Packet with ID: %03X stacked in pos.%d, PC %d:"}
+{"address":"0x1401AD388","value":"HC::SCM-O -2"}
+{"address":"0x1401AD398","value":"Communication error"}
+{"address":"0x1401AD3B0","value":"%s: %d vs %d"}
+{"address":"0x1401AD4D8","value":"HEX-NET"}
+{"address":"0x1401AD4E0","value":"\\n\\nPLEASE NOTE:\\nThis specific update is only available\\n  through VCDS-Mobile (web interface).\\nYou WILL NOT be able to use the USB utility.\\nFor more info, join or visit forums.ross-tech.com .\\n"}
+{"address":"0x1401AD5A0","value":"Direct-%02X"}
+{"address":"0x1401AD5AC","value":"FW chk"}
+{"address":"0x1401AD5B8","value":"Generic UDS-DoIP attempt address %02X"}
+{"address":"0x1401AD5E0","value":"Setting XPAChassis to FALSE in HexNet::OC"}
+{"address":"0x1401AD610","value":"0x17: CANbits=0x%02X, is8E=%d, isNot8E=%d, tmp=0x%02X"}
+{"address":"0x1401AD648","value":"Generic UDS attempt address %02X"}
+{"address":"0x1401AD670","value":"No VIN under UDS; closing and forcing retrieval"}
+{"address":"0x1401AD6A0","value":"Address 0x%02X: %s. VINLimit: %d/%d"}
+{"address":"0x1401AD6C8","value":"Open CAN controller %02X"}
+{"address":"0x1401AD6E8","value":"Open DoIP controller %02X"}
+{"address":"0x1401AD708","value":"Open K controller %02X"}
+{"address":"0x1401AD720","value":", VIN: %s"}
+{"address":"0x1401AD730","value":", No valid VIN"}
+{"address":"0x1401AD740","value":"DoIP rechk"}
+{"address":"0x1401AD760","value":"%s %dbps KW:%02X%02X"}
+{"address":"0x1401AD780","value":"-TP1.6"}
+{"address":"0x1401AD790","value":"Error s%d. Please contact Ross-tech"}
+{"address":"0x1401AD7B8","value":"Pulling packet from buffer: *%02X* "}
+{"address":"0x1401AD7E0","value":"Discarding packet *%02X*, not matching expected response *%02X*, RespBufIndex=%d"}
+{"address":"0x1401AD834","value":"-r -f"}
+{"address":"0x1401AD840","value":"Buffering non-matching packet at depth %d: *%02X*: "}
+{"address":"0x1401AD880","value":"Discarding packet *%02X*, not matching expected response *%02X* "}
+{"address":"0x1401AD8C8","value":"CB Queue overflow"}
+{"address":"0x1401AD8E0","value":"Restarting session-GBR"}
+{"address":"0x1401AD8F8","value":"HN Pingstamp %d,roundtrip=%d, delta=%d, signal=%d%%"}
+{"address":"0x1401AD930","value":"HEXNET failed to ack, error: %02X"}
+{"address":"0x1401AD958","value":"HEXNET failed to ack, TIMEOUT"}
+{"address":"0x1401AD978","value":"HEXNET failed to ack, other command *%02X* "}
+{"address":"0x1401AD9A8","value":"Sending encrypted CB packet "}
+{"address":"0x1401AD9C8","value":"Sending CB packet "}
+{"address":"0x1401AD9DC","value":"*%02X "}
+{"address":"0x1401AD9E4","value":"%02X* "}
+{"address":"0x1401AD9F0","value":"Detected partial encrypted packet length %d"}
+{"address":"0x1401ADA20","value":"Detected concatenated packet starting with %02X (orglen=%d, explen=%d)"}
+{"address":"0x1401ADA68","value":"Received encrypted packet "}
+{"address":"0x1401ADA88","value":"Received packet "}
+{"address":"0x1401ADA9C","value":" NONE"}
+{"address":"0x1401ADAA8","value":" Debug len %d"}
+{"address":"0x1401ADAB8","value":"         (Timeout=%d)"}
+{"address":"0x1401ADAD0","value":"%d.%d.%d.%d"}
+{"address":"0x1401ADAE0","value":"\\n    IP: %d.%d.%d.%d"}
+{"address":"0x1401ADAF8","value":"HEX-V2"}
+{"address":"0x1401ADB00","value":"Interface busy"}
+{"address":"0x1401ADB10","value":"USB init failed\\n"}
+{"address":"0x1401ADB28","value":"\\n    CB: %d.%d.%d"}
+{"address":"0x1401ADB40","value":"\\n    FW: %d.%d"}
+{"address":"0x1401ADB50","value":"\\n    WiFi: %04X"}
+{"address":"0x1401ADB60","value":"0.4701"}
+{"address":"0x1401ADB68","value":"VIgn %d, VBatt %d"}
+{"address":"0x1401ADB80","value":"\\n    "}
+{"address":"0x1401ADB88","value":"\\n    VBat: %.2fV, VIgn: %.2fV"}
+{"address":"0x1401ADBA8","value":"Serial Corrupt!"}
+{"address":"0x1401ADBB8","value":"255.255.255.255"}
+{"address":"0x1401ADBC8","value":"Buffering non-ping packet at depth %d: *%02X*: "}
+{"address":"0x1401ADBF8","value":"HNet::Broadcast -9"}
+{"address":"0x1401ADC10","value":"DoIP Init..."}
+{"address":"0x1401ADC20","value":"DoIP DHCP..."}
+{"address":"0x1401ADC30","value":"DoIP UDP..."}
+{"address":"0x1401ADC40","value":"DoIP TCP..."}
+{"address":"0x1401ADC4C","value":"KLine"}
+{"address":"0x1401ADC58","value":"VBatt=0"}
+{"address":"0x1401ADC60","value":"Unknown stat"}
+{"address":"0x1401ADC70","value":"cur_time"}
+{"address":"0x1401ADC80","value":"ign_off_time"}
+{"address":"0x1401ADC90","value":"ign_on_time"}
+{"address":"0x1401ADCA0","value":"vbatt_off_time"}
+{"address":"0x1401ADCB0","value":"vbatt_on_time"}
+{"address":"0x1401ADCC0","value":"vusb_off_time"}
+{"address":"0x1401ADCD0","value":"vusb_on_time"}
+{"address":"0x1401ADCE0","value":"vin_check_time"}
+{"address":"0x1401ADCF8","value":"%s: %1.3fs; "}
+{"address":"0x1401ADD08","value":"VBatt: %dmV; VIgn: %dmV; GVL Xsum:%08X"}
+{"address":"0x1401ADD30","value":"Cmd: %d, RespInfo:"}
+{"address":"0x1401ADD48","value":"-KW1281"}
+{"address":"0x1401ADD50","value":"-KW2000"}
+{"address":"0x1401ADD58","value":"-TP2.0"}
+{"address":"0x1401ADD68","value":"-ISO15765"}
+{"address":"0x1401ADD78","value":"No valid VIN received"}
+{"address":"0x1401ADD90","value":"VIN %s invalid"}
+{"address":"0x1401ADDA0","value":"VIN %s ACCEPTED!"}
+{"address":"0x1401ADDB8","value":"%s %d%%"}
+{"address":"0x1401ADDC0","value":"H%s-%s.BIN"}
+{"address":"0x1401ADDD0","value":"HN%s-%s.BIN"}
+{"address":"0x1401ADDE0","value":"XOR CHK ERR: %02X"}
+{"address":"0x1401ADDF4","value":"sha256"}
+{"address":"0x1401ADDFC","value":"sprng"}
+{"address":"0x1401ADE10","value":"This interface appears to have an issue.\\nPlease contact Ross-Tech with error code:\\n%06X"}
+{"address":"0x1401ADE70","value":"Debug\\\\CBDebug-%s-%s.EDL"}
+{"address":"0x1401ADE88","value":"Writing CB debug to %s"}
+{"address":"0x1401ADEA8","value":"Discarding packet *%02X*"}
+{"address":"0x1401ADFE8","value":"uCan-h"}
+{"address":"0x1401ADFF0","value":"uCAN-h"}
+{"address":"0x1401ADFF8","value":"\\n    VBat: %.2fV"}
+{"address":"0x1401AE010","value":"Ross-Tech uCAN-h"}
+{"address":"0x1401AE028","value":"uCh::SendCommand -1"}
+{"address":"0x1401AE050","value":"uCh::SetMsgObj %d %X %X %X -1"}
+{"address":"0x1401AE070","value":"\\n**** Address %02X-%02X GetResponse() failed in SendCANMsg()"}
+{"address":"0x1401AE0B0","value":"\\n    K1: %s\\n    K2: %s"}
+{"address":"0x1401AE0C8","value":"UC1%05d.BIN"}
+{"address":"0x1401AE0D8","value":"UC2%05d.BIN"}
+{"address":"0x1401AE0E8","value":"UC3%05d.BIN"}
+{"address":"0x1401AE5C8","value":"HistoryDlg"}
+{"address":"0x1401AE740","value":".\\\\Logs\\\\Hist-"}
+{"address":"0x1401AE778","value":".\\\\VCDSScan.exe"}
+{"address":"0x1401AEA68","value":"HNSelectDlg"}
+{"address":"0x1401AEB20","value":"IP Address"}
+{"address":"0x1401AEB2C","value":"Serial"}
+{"address":"0x1401AEB38","value":"Selected"}
+{"address":"0x1401AEB48","value":"[...]%06d"}
+{"address":"0x1401AEB58","value":"Please select ONE interface"}
+{"address":"0x1401AEE50","value":"C:\\\\Program Files (x86)\\\\Microsoft Visual Studio 9.0\\\\VC\\\\atlmfc\\\\include\\\\afxwin2.inl"}
+{"address":"0x1401AEEA8","value":"MAPI32.DLL"}
+{"address":"0x1401AEEB8","value":"MAPISendMail"}
+{"address":"0x1401AEEC8","value":"Error %d sending mail"}
+{"address":"0x1401AEEE0","value":"debug\\\\HW-DEBUG.TXT"}
+{"address":"0x1401AEEF8","value":"Testing HNET..."}
+{"address":"0x1401AEF08","value":"HNET Test passed"}
+{"address":"0x1401AEF20","value":"HNET Test failed"}
+{"address":"0x1401AEF38","value":"Testing HC..."}
+{"address":"0x1401AEF48","value":"HC Test passed"}
+{"address":"0x1401AEF58","value":"HC Test failed"}
+{"address":"0x1401AEF68","value":"Testing uCh..."}
+{"address":"0x1401AEF78","value":"uCh Test passed"}
+{"address":"0x1401AEF88","value":"uCh Test failed"}
+{"address":"0x1401AEF98","value":"Testing KC..."}
+{"address":"0x1401AEFA8","value":"KC Test passed"}
+{"address":"0x1401AEFB8","value":"KC Test failed"}
+{"address":"0x1401AEFC8","value":"Testing KCA..."}
+{"address":"0x1401AEFD8","value":"KCA Test passed"}
+{"address":"0x1401AEFE8","value":"KCA Test failed"}
+{"address":"0x1401AEFF8","value":"Testing AC..."}
+{"address":"0x1401AF008","value":"AC Test passed"}
+{"address":"0x1401AF018","value":"AC Test failed"}
+{"address":"0x1401AF028","value":"Interface Adapter\\n\\nNot Initialized"}
+{"address":"0x1401AF050","value":"Interface Adapter\\n\\nNot Initialized!"}
+{"address":"0x1401AF078","value":"Interface Adapter\\n\\nDoesn't Support Turbo!"}
+{"address":"0x1401AF0A4","value":"d1.bin"}
+{"address":"0x1401AF0AC","value":"d2.bin"}
+{"address":"0x1401AF0B4","value":"d3.bin"}
+{"address":"0x1401AF0BC","value":"uCan-c"}
+{"address":"0x1401AF0C4","value":"uCAN-c"}
+{"address":"0x1401AF0D0","value":"Ross-Tech uCAN-c"}
+{"address":"0x1401AF0E8","value":"KC::SendCommand -1"}
+{"address":"0x1401AF100","value":"KC::ScrCAN msk=0"}
+{"address":"0x1401AF118","value":"KC::ScrCAN() -1"}
+{"address":"0x1401AF128","value":"KC::ScrCAN() -2"}
+{"address":"0x1401AF138","value":"KC::ScrCAN() -3"}
+{"address":"0x1401AF148","value":"UC7%05d.BIN"}
+{"address":"0x1401AF158","value":"UC6%05d.BIN"}
+{"address":"0x1401AF288","value":"KEY-COM"}
+{"address":"0x1401AF290","value":"Ross-Tech "}
+{"address":"0x1401AF2A8","value":"KEY-PRO"}
+{"address":"0x1401AF2B0","value":"KeyInit: %d"}
+{"address":"0x1401AF2C0","value":"KC1%05d.BIN"}
+{"address":"0x1401AF2D0","value":"KC2%05d.BIN"}
+{"address":"0x1401AF2E0","value":"KC3%05d.BIN"}
+{"address":"0x1401AF2F0","value":"KC4%05d.BIN"}
+{"address":"0x1401AF300","value":"KC5%05d.BIN"}
+{"address":"0x1401AF310","value":"KC::KLineTest() -2"}
+{"address":"0x1401AF448","value":"CLabel"}
+{"address":"0x1401AF534","value":"mailto"}
+{"address":"0x1401AF540","value":"mailto:"}
+{"address":"0x1401AF7E8","value":"s%02X "}
+{"address":"0x1401AF7F0","value":"<NoEcho> "}
+{"address":"0x1401AF800","value":"<WrongEcho> "}
+{"address":"0x1401AF810","value":"GetCanMsg() returned %d"}
+{"address":"0x1401AF828","value":"More than %ds since last req, aborting reception"}
+{"address":"0x1401AF860","value":"GetKW2K rcv packet %d[%X]: "}
+{"address":"0x1401AF880","value":"<brk1a> "}
+{"address":"0x1401AF890","value":"<brk1b> "}
+{"address":"0x1401AF8A0","value":"<brk1c> "}
+{"address":"0x1401AF8AC","value":"<ARB> "}
+{"address":"0x1401AF8B4","value":"<BLE> "}
+{"address":"0x1401AF8C0","value":"<brk2a> "}
+{"address":"0x1401AF8D0","value":"GKW71M: ComErr:%02X"}
+{"address":"0x1401AF8E8","value":"<brk2b> "}
+{"address":"0x1401AF8F8","value":"<brk2c> "}
+{"address":"0x1401AF908","value":"<brk3> "}
+{"address":"0x1401AF910","value":"GKW71M: Com.Err. Blk Body"}
+{"address":"0x1401AF930","value":"<brk3c> "}
+{"address":"0x1401AF940","value":"<brk4> "}
+{"address":"0x1401AF948","value":"GKW71M:Com.Err at EOM"}
+{"address":"0x1401AF960","value":"GKW71M: Exp. EOM, rec'd %02X\\r\\n"}
+{"address":"0x1401AF980","value":"<EPL %d reached> "}
+{"address":"0x1401AF998","value":"*** Unexpected KeepAlive "}
+{"address":"0x1401AF9B8","value":"No echo received"}
+{"address":"0x1401AF9CC","value":"g%02X "}
+{"address":"0x1401AF9D4","value":"p%02X "}
+{"address":"0x1401AF9E0","value":"\\nt%04d - %d  "}
+{"address":"0x1401AF9F0","value":"SioReset:COM%d"}
+{"address":"0x1401AFA00","value":"SioBaud"}
+{"address":"0x1401AFA08","value":"SioRxClear"}
+{"address":"0x1401AFA18","value":"SioFlow"}
+{"address":"0x1401AFB70","value":"Logs\\\\"}
+{"address":"0x1401AFB80","value":"-VCID:%s"}
+{"address":"0x1401AFB90","value":",%s %s (%s)"}
+{"address":"0x1401AFBC8","value":"OBD --- ---  --,\\n"}
+{"address":"0x1401AFBE0","value":",%s,PID %c - %03d-1,PID %c - %03d-2"}
+{"address":"0x1401AFC08","value":",%s,PID %c - %03d"}
+{"address":"0x1401AFC20","value":",%s,%s,%s"}
+{"address":"0x1401AFC70","value":"%s,%s, %s,,,"}
+{"address":"0x1401AFCA0","value":",%s, %s\\n"}
+{"address":"0x1401AFCB0","value":",,%s,%s,%s,%s,,%s,%s,%s,%s,,%s,%s,%s,%s\\n"}
+{"address":"0x1401AFCE0","value":",%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\\n"}
+{"address":"0x1401AFD10","value":"%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\\n"}
+{"address":"0x1401AFD48","value":",,,,,,,,,,,,,%s,%s,%s,%s,,%s,%s,%s,%s\\n"}
+{"address":"0x1401AFD70","value":",%s,,,,,,,,,,,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\\n"}
+{"address":"0x1401AFDA0","value":"%s,%s,,,,,,,,,,,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\\n"}
+{"address":"0x1401AFDD8","value":"%1.2f,%s"}
+{"address":"0x1401AFDF8","value":"%1.2f,%s,%s,%s,%s"}
+{"address":"0x1401AFE10","value":"%1.2f,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s"}
+{"address":"0x1401AFE40","value":",%1.2f,%s,%s,%s,%s"}
+{"address":"0x1401AFE60","value":",%1.2f,%s,%s,%s,%s\\n"}
+{"address":"0x1401AFEA0","value":"%s,%s - %s,"}
+{"address":"0x1401B0240","value":"Login"}
+{"address":"0x1401B05B0","value":"lch-loc.txt"}
+{"address":"0x1401B05C8","value":"to-LCH.txt"}
+{"address":"0x1401B05D8","value":"from-LCH.txt"}
+{"address":"0x1401B05E8","value":"stop-LCH.txt"}
+{"address":"0x1401B05F8","value":".\\\\labels\\\\temp.xpl"}
+{"address":"0x1401B0610","value":"LongCode"}
+{"address":"0x1401B0628","value":"%02X-%02d"}
+{"address":"0x1401B0638","value":"(%s/%s/%s),"}
+{"address":"0x1401B0648","value":"LC,%02d,%d~%d,%02X,%s,%s"}
+{"address":"0x1401B0668","value":"LC,%02d,%d,%s,0=%s"}
+{"address":"0x1401B0688","value":"LC,%02d,%d,%s,%s"}
+{"address":"0x1401B06A0","value":"LC,%02d,%d~%d,%d=%s"}
+{"address":"0x1401B06B8","value":"LC,%02d,%d,%d=%s"}
+{"address":"0x1401B06D0","value":"LC,%02d,%d~%d,%s (ASCII)"}
+{"address":"0x1401B06F0","value":"LC,%02d,%d~%d,%s (HEX)"}
+{"address":"0x1401B0708","value":"LC,%02d,%d,%s (HEX)"}
+{"address":"0x1401B0740","value":"LC,%02d,%d~%d,I,INFO: %s"}
+{"address":"0x1401B0760","value":"LC,%02d,%d,I,INFO: %s"}
+{"address":"0x1401B0778","value":"Using experimental coding info, %d bytes documented"}
+{"address":"0x1401B07B8","value":".\\\\Logs\\\\CodeBrute.txt"}
+{"address":"0x1401B07D0","value":"Cod %02X"}
+{"address":"0x1401B07E0","value":"\\nSuccess with value %02X"}
+{"address":"0x1401B0800","value":"\\n%s: Finished"}
+{"address":"0x1401B0830","value":"LC,%s\\n"}
+{"address":"0x1401B0838","value":"\\nCoding Bruteforce, byte %d from %02X to %02x\\n\\n"}
+{"address":"0x1401B0B38","value":"ST_RST_CNAR_ROW2"}
+{"address":"0x1401B0B50","value":"ST_CNAR"}
+{"address":"0x1401B0B58","value":"ST_RST_FIX_ESI"}
+{"address":"0x1401B0B68","value":"ST_RST_ESI"}
+{"address":"0x1401B0B78","value":"ST_MATTI"}
+{"address":"0x1401B0B88","value":"ST_MADTI"}
+{"address":"0x1401B0B98","value":"ST_MADOC"}
+{"address":"0x1401B0BD4","value":"ST_CUS"}
+{"address":"0x1401B0C38","value":"ST_GASOLINE"}
+{"address":"0x1401B0C48","value":"ST_DIESEL"}
+{"address":"0x1401B0C58","value":"ST_FLEXIBLE"}
+{"address":"0x1401B0C68","value":"ST_FIXED"}
+{"address":"0x1401B0C80","value":"ST_MATTS"}
+{"address":"0x1401B0C90","value":"ST_MITTS"}
+{"address":"0x1401B0CA0","value":"ST_MADTS"}
+{"address":"0x1401B0CB0","value":"ST_MIDTS"}
+{"address":"0x1401B0CCC","value":"ST_DSS"}
+{"address":"0x1401B0D00","value":"ST_DSOC"}
+{"address":"0x1401B0D08","value":"ST_DNOC"}
+{"address":"0x1401B0F00","value":".\\\\UDS_EV\\\\RM.ROD"}
+{"address":"0x1401B0F10","value":"%1.3f MLines per second"}
+{"address":"0x1401B0F28","value":"%1.3f pings per second"}
+{"address":"0x1401B0F40","value":"Benchmark"}
+{"address":"0x1401B0F50","value":"VCDSScan.exe"}
+{"address":"0x1401B0F78","value":"support@ross-tech.com"}
+{"address":"0x1401B0F90","value":"log-log.txt"}
+{"address":"0x1401B1298","value":"ACTIVATE"}
+{"address":"0x1401B1510","value":"VAGRounded Lt-normal"}
+{"address":"0x1401B1528","value":"Microsoft Sans Serif"}
+{"address":"0x1401B1540","value":"VCIConfig"}
+{"address":"0x1401B1550","value":".\\\\labels\\\\labelver.txt"}
+{"address":"0x1401B1568","value":".\\\\UDS_EV\\\\dsver.txt"}
+{"address":"0x1401B1580","value":"VAG-COM-Updater-Running"}
+{"address":"0x1401B1598","value":"VCDS.CFG"}
+{"address":"0x1401B15A4","value":"d4.bin"}
+{"address":"0x1401B15B0","value":"tst.bin"}
+{"address":"0x1401B15B8","value":"lcode.ini"}
+{"address":"0x1401B15C8","value":".\\\\Scaling\\\\VCPrefs.cfg"}
+{"address":"0x1401B15E0","value":"AdvMBUWd=%d\\n"}
+{"address":"0x1401B15F0","value":"http://www.ross-tech.com/vcds/download/current.html"}
+{"address":"0x1401B1624","value":"%s x64"}
+{"address":"0x1401B1630","value":"u\"%s %s\\n\""}
+{"address":"0x1401B164C","value":"  --  "}
+{"address":"0x1401B1660","value":"Activation updated"}
+{"address":"0x1401B1678","value":".\\\\UDS_EV\\\\RD.ROD"}
+{"address":"0x1401B1688","value":".\\\\UDS_EV\\\\RS.ROD"}
+{"address":"0x1401B1698","value":".\\\\UDS_EV\\\\RG.ROD"}
+{"address":"0x1401B16A8","value":".\\\\UDS_EV\\\\RA.ROD"}
+{"address":"0x1401B16B8","value":".\\\\UDS_EV\\\\RF.ROD"}
+{"address":"0x1401B16C8","value":".\\\\UDS_EV\\\\RX.ROD"}
+{"address":"0x1401B1DB0","value":"%d%%d%m"}
+{"address":"0x1401B1DC0","value":"ADP HEX"}
+{"address":"0x1401B1DC8","value":" (adphex-%02X*.CSV)|adphex-%02X*.CSV|"}
+{"address":"0x1401B1DF0","value":".\\\\logs\\\\adphex-%02X"}
+{"address":"0x1401B1E08","value":"adphex-%02X"}
+{"address":"0x1401B1E14","value":"\\\\Logs"}
+{"address":"0x1401B21A0","value":"%d km\\n%d miles"}
+{"address":"0x1401B21B0","value":"EDC15-16 %s: %d km  %d miles"}
+{"address":"0x1401B27C0","value":"%c%02X%02X"}
+{"address":"0x1401B27D0","value":"kPa rel"}
+{"address":"0x1401B27D8","value":"kPa abs"}
+{"address":"0x1401B27E0","value":"%s(%s)"}
+{"address":"0x1401B27E8","value":"OBD II (CARB)"}
+{"address":"0x1401B27F8","value":"OBD (EPA)"}
+{"address":"0x1401B2808","value":"OBD + OBD II"}
+{"address":"0x1401B2818","value":"OBD I"}
+{"address":"0x1401B2820","value":"Euro-OBD"}
+{"address":"0x1401B2830","value":"EOBD + OBD II"}
+{"address":"0x1401B2840","value":"OBD + EOBD"}
+{"address":"0x1401B2850","value":"OBD+OBD II+EOBD"}
+{"address":"0x1401B2868","value":"JOBD + OBD II"}
+{"address":"0x1401B2878","value":"JOBD + EOBD"}
+{"address":"0x1401B2888","value":"JOBD+EOBD+OBD II"}
+{"address":"0x1401B28A0","value":"HD Euro IV/B1"}
+{"address":"0x1401B28B0","value":"HD Euro V/B2"}
+{"address":"0x1401B28C0","value":"HD EURO EEC/C"}
+{"address":"0x1401B28D0","value":"Eng. Manuf. Diag"}
+{"address":"0x1401B28E8","value":"Eng. Manuf. Diag +"}
+{"address":"0x1401B2900","value":"HD OBD-C"}
+{"address":"0x1401B290C","value":"HD OBD"}
+{"address":"0x1401B2918","value":"WWH OBD"}
+{"address":"0x1401B2920","value":"HD EOBD-I"}
+{"address":"0x1401B2930","value":"HD EOBD-I M"}
+{"address":"0x1401B2940","value":"HD EOBD-II"}
+{"address":"0x1401B2950","value":"HD EOBD-II N"}
+{"address":"0x1401B2960","value":"OBDBr-1"}
+{"address":"0x1401B2968","value":"OBDBr-2"}
+{"address":"0x1401B2978","value":"IOBD I"}
+{"address":"0x1401B2980","value":"IOBD II"}
+{"address":"0x1401B2988","value":"HD EOBD-VI"}
+{"address":"0x1401B2998","value":"OBD+OBDII+HDOBD"}
+{"address":"0x1401B29A8","value":"OBDBr-3"}
+{"address":"0x1401B29B8","value":"Lambda"}
+{"address":"0x1401B29E0","value":"%1.0fh %1.0fmin"}
+{"address":"0x1401B29F0","value":"%1.0fh,%1.0fmin"}
+{"address":"0x1401B2A00","value":"Max eq. ratio %d"}
+{"address":"0x1401B2A18","value":"Max V O2s %d"}
+{"address":"0x1401B2A28","value":"Max A O2s %d"}
+{"address":"0x1401B2A38","value":"Max MAP %d"}
+{"address":"0x1401B2A48","value":"TQ_Max 1/2: %1.0f/%1.0f"}
+{"address":"0x1401B2A60","value":"TQ_Max 3/4: %1.0f/%1.0f"}
+{"address":"0x1401B2A78","value":"TQ_Max 5: %1.0f"}
+{"address":"0x1401B2A88","value":"PTO_STAT:"}
+{"address":"0x1401B2A9C","value":"OFF  "}
+{"address":"0x1401B2AA8","value":"N/D_STAT:"}
+{"address":"0x1401B2AB4","value":"NEUTR"}
+{"address":"0x1401B2ABC","value":"DRIVE"}
+{"address":"0x1401B2AC8","value":"MT_GEAR:"}
+{"address":"0x1401B2AD8","value":"NEUTR  "}
+{"address":"0x1401B2AE0","value":"GEAR  "}
+{"address":"0x1401B2AE8","value":"GPL_STAT:"}
+{"address":"0x1401B2B00","value":"GEAR_RCMD: "}
+{"address":"0x1401B2B0C","value":"MAF A:"}
+{"address":"0x1401B2B14","value":"MAF B:"}
+{"address":"0x1401B2B20","value":"ECT %d:"}
+{"address":"0x1401B2B28","value":"IAT 1%d/2%d:"}
+{"address":"0x1401B2B38","value":"IAT 1%d:"}
+{"address":"0x1401B2B48","value":"IAT 2%d:"}
+{"address":"0x1401B2B58","value":"EGR %c:"}
+{"address":"0x1401B2B60","value":"IAF_%c cmd/rel:"}
+{"address":"0x1401B2B70","value":"EGRTemp %d1/%d2:"}
+{"address":"0x1401B2B88","value":"THR %c cmd/rel:"}
+{"address":"0x1401B2B98","value":"FRP CMD:"}
+{"address":"0x1401B2BA8","value":"FRP ACT:"}
+{"address":"0x1401B2BB8","value":"FRTemp:"}
+{"address":"0x1401B2BC0","value":"ICP_%c cmd/rel:"}
+{"address":"0x1401B2BD0","value":"TC%c_PRESS: "}
+{"address":"0x1401B2BE0","value":"BP_%c "}
+{"address":"0x1401B2BE8","value":"cmd/act:"}
+{"address":"0x1401B2C04","value":"BP_%c:"}
+{"address":"0x1401B2C10","value":"VGT_%c cmd/act:"}
+{"address":"0x1401B2C20","value":"VGT_%c:"}
+{"address":"0x1401B2C28","value":"WG_%c cmd/act:"}
+{"address":"0x1401B2C38","value":"EP%d:"}
+{"address":"0x1401B2C40","value":"TC%c_RPM:"}
+{"address":"0x1401B2C50","value":"B%dS1/B%dS2:"}
+{"address":"0x1401B2C60","value":"B%dS1:"}
+{"address":"0x1401B2C68","value":"B%dS2:"}
+{"address":"0x1401B2C70","value":"S1/S2/S3/S4:"}
+{"address":"0x1401B2C88","value":"%dH%02ds"}
+{"address":"0x1401B2C98","value":"NOx%d1:"}
+{"address":"0x1401B2CA4","value":"PM%d1:"}
+{"address":"0x1401B2CAC","value":"mg/m3"}
+{"address":"0x1401B2CB8","value":"MAP_%c:"}
+{"address":"0x1401B2CC0","value":"PF_Regen:"}
+{"address":"0x1401B2CD0","value":"Status:"}
+{"address":"0x1401B2CEC","value":"Pass."}
+{"address":"0x1401B2CFC","value":"Regen:"}
+{"address":"0x1401B2D08","value":"DSulf:Y"}
+{"address":"0x1401B2D10","value":"DSulf:N"}
+{"address":"0x1401B2D18","value":"PF_Load: %1.1f"}
+{"address":"0x1401B2D28","value":"%dH%02dm"}
+{"address":"0x1401B2D38","value":"PF_Regen_Avg_T: %s"}
+{"address":"0x1401B2D50","value":"PF_Regen_Avg_D: %s"}
+{"address":"0x1401B2D68","value":"PF_Rgn_Avg_T/D:%skm %s"}
+{"address":"0x1401B2D80","value":"B%dS%d:"}
+{"address":"0x1401B2D88","value":"%1.3f/"}
+{"address":"0x1401B2D90","value":"%/lbd"}
+{"address":"0x1401B2DA0","value":"ACT:NO;REGN:NO"}
+{"address":"0x1401B2DB0","value":"ACT:YES;REGN:NO"}
+{"address":"0x1401B2DC0","value":"ACT:NO;REGN:YES"}
+{"address":"0x1401B2DD0","value":"ACT:YES;REGN:YES"}
+{"address":"0x1401B2DE8","value":"NOx eng. out:"}
+{"address":"0x1401B2DF8","value":"NOx tailpipe"}
+{"address":"0x1401B2E08","value":"HEV mode:"}
+{"address":"0x1401B2E20","value":"not PSA"}
+{"address":"0x1401B2E28","value":"BATT_V: %1.2f"}
+{"address":"0x1401B2E38","value":"BATT_A: %1.2f"}
+{"address":"0x1401B2E48","value":"DEF type"}
+{"address":"0x1401B2E58","value":"conc. too high"}
+{"address":"0x1401B2E68","value":"conc. too low"}
+{"address":"0x1401B2E78","value":"is diesel/other"}
+{"address":"0x1401B2E88","value":"conc. proper"}
+{"address":"0x1401B2E98","value":"conc. N/A"}
+{"address":"0x1401B2EA8","value":"sensor err."}
+{"address":"0x1401B2EB8","value":"reserved"}
+{"address":"0x1401B2EC8","value":"DEF_CON: "}
+{"address":"0x1401B2ED8","value":"DEF_T: "}
+{"address":"0x1401B2EE0","value":" %1.0f"}
+{"address":"0x1401B2EE8","value":"Engine: "}
+{"address":"0x1401B2EF8","value":"Vehicle: "}
+{"address":"0x1401B2F0C","value":"mg/str"}
+{"address":"0x1401B2F18","value":"Act. gear: "}
+{"address":"0x1401B2F28","value":"Ratio: "}
+{"address":"0x1401B3288","value":"OBD StartComms: %d\\n"}
+{"address":"0x1401B32A0","value":"tmp %d, result %d, dropped at top of OnTimer"}
+{"address":"0x1401B32D0","value":"case KeepAlive, incorrect response, time %d"}
+{"address":"0x1401B3300","value":"tmp %d, result %d, dropped at case KeepAlive"}
+{"address":"0x1401B3330","value":".\\\\Debug\\\\DEBUG-OBD.DLM"}
+{"address":"0x1401B3348","value":"CI Success"}
+{"address":"0x1401B3358","value":"CI Fail"}
+{"address":"0x1401B3360","value":"FI Fail"}
+{"address":"0x1401B3368","value":"FI Success"}
+{"address":"0x1401B3390","value":"%s: ISO15765-%dk-%dbit"}
+{"address":"0x1401B33A8","value":"StartComms: 15765"}
+{"address":"0x1401B33D0","value":"StartComms: 9141"}
+{"address":"0x1401B33F8","value":"StartComms: 14230"}
+{"address":"0x1401B3420","value":"StartComms: bad keywords %02x %02x"}
+{"address":"0x1401B3460","value":"%s %02X%s: %s"}
+{"address":"0x1401B3470","value":"%c%02X%02X - %s"}
+{"address":"0x1401B3480","value":"    PID%02X %s: %s%s %s%s"}
+{"address":"0x1401B34A0","value":"              ... %s%s %s%s"}
+{"address":"0x1401B34C0","value":"Supported PIDs:"}
+{"address":"0x1401B34D8","value":"%s  --  %s %02X"}
+{"address":"0x1401B34E8","value":"%s: %d"}
+{"address":"0x1401B34F0","value":"%s  --  %s: %s"}
+{"address":"0x1401B3528","value":"TID %02d"}
+{"address":"0x1401B3538","value":"TID %02d - %s "}
+{"address":"0x1401B3568","value":"%1.0f %s"}
+{"address":"0x1401B3578","value":"Supported Infotypes:"}
+{"address":"0x1401B3598","value":"Type 11 - WWH-OBD GTR"}
+{"address":"0x1401B35B0","value":" (%s %02X)"}
+{"address":"0x1401B35C0","value":"%02X%02X%02X%02X"}
+{"address":"0x1401B35D8","value":"%s%s : %d"}
+{"address":"0x1401B35E8","value":"%s%s %s %s %d : %d / %d"}
+{"address":"0x1401B3600","value":"%s%s %s : %d / %d"}
+{"address":"0x1401B3618","value":"Air Fuel Ratio Imbalance Monitor"}
+{"address":"0x1401B3640","value":"Particulate Filter Monitor"}
+{"address":"0x1401B3668","value":"Type 14 - Distance Traveled Since Evap Monitoring Decision:"}
+{"address":"0x1401B36A8","value":"%s%s %d km"}
+{"address":"0x1401B36C0","value":"Type 16 - Vehicle Operation Data - Engine Run-Idle Time, Recent/Lifetime:"}
+{"address":"0x1401B3710","value":"Ignition counter"}
+{"address":"0x1401B3728","value":"Fueled Engine Operation Ignition Cycle Counter"}
+{"address":"0x1401B3758","value":"Total Engine Run Time"}
+{"address":"0x1401B3770","value":"%s%s %s : %d s / %d s"}
+{"address":"0x1401B3788","value":"Total Idle Engine Run Time"}
+{"address":"0x1401B37B0","value":"Type 17 - Vehicle Operation Data - Distance-Fuel Used, Recent/Lifetime:"}
+{"address":"0x1401B37F8","value":"Total Distance Traveled"}
+{"address":"0x1401B3810","value":"%s%s %s : %1.1f km / %1.1f km"}
+{"address":"0x1401B3830","value":"Total Fuel Consumed"}
+{"address":"0x1401B3848","value":"%s%s %s : %1.2f L / %1.2f L"}
+{"address":"0x1401B3868","value":"Type 18 - Vehicle Operation Data - PKE-EOE, Recent/Lifetime:"}
+{"address":"0x1401B38A8","value":"Positive Kinetic Energy"}
+{"address":"0x1401B38C0","value":"%s%s %s : %d km/h2 / %d km/h2"}
+{"address":"0x1401B38E0","value":"Engine Output Energy"}
+{"address":"0x1401B38F8","value":"%s%s %s : %1.1f kWh / %1.1f kWh"}
+{"address":"0x1401B3918","value":"Type 19 - Vehicle Operation Data - PSA, Recent/Lifetime:"}
+{"address":"0x1401B3958","value":"Total Propulsion System Active Time"}
+{"address":"0x1401B3980","value":"Total Idle Propulsion System Active Time"}
+{"address":"0x1401B39B0","value":"Total City Propulsion System Active Time"}
+{"address":"0x1401B39E0","value":"Type 22 - Run Time for Stop-Start and Coasting Off-cycle Credit, Recent/Lifetime:"}
+{"address":"0x1401B3A38","value":"Idle Stop-Start Timer"}
+{"address":"0x1401B3A50","value":"Engine Running Coasting Timer"}
+{"address":"0x1401B3A70","value":"Engine Off Coasting Timer"}
+{"address":"0x1401B3A90","value":"Type 24 - Active Powertrain Warm-up Features Off-cycle Credit, Recent/Lifetime:"}
+{"address":"0x1401B3AE0","value":"Active Engine Warm-up Timer"}
+{"address":"0x1401B3B00","value":"Active Transmission Warm-up Timer"}
+{"address":"0x1401B40C0","value":".\\\\Debug\\\\DEBUG%02X.DLM"}
+{"address":"0x1401B40D8","value":"DTC Dialog requested"}
+{"address":"0x1401B40F8","value":"Close controller requested"}
+{"address":"0x1401B4120","value":"VCDS generated debug information\\nregarding the missing VIN issue (DEBUG-VIN.DLM).\\nWould you like VCDS to open its location\\nso you can send it to support@ross-tech.com?"}
+{"address":"0x1401B41C8","value":"/select, .\\\\Debug\\\\DEBUG-VIN.DLM"}
+{"address":"0x1401B41E8","value":"explorer.exe"}
+{"address":"0x1401B4208","value":"OpenCtrl init %02X..."}
+{"address":"0x1401B4220","value":"Protocol keywords: %02X %02X"}
+{"address":"0x1401B4250","value":"OBD-II/EOBD, %s"}
+{"address":"0x1401B4260","value":"%s, %s"}
+{"address":"0x1401B4268","value":"Wrong synch byte"}
+{"address":"0x1401B4280","value":"tmp=-99 in OnTimer case 0"}
+{"address":"0x1401B42A0","value":" (%s / %s)"}
+{"address":"0x1401B42B8","value":"ROD user-select %s"}
+{"address":"0x1401B42D8","value":"ASAM ID: "}
+{"address":"0x1401B4320","value":"%s=%d ms"}
+{"address":"0x1401B4338","value":"IC=%d  TE=%d   RE=%d"}
+{"address":"0x1401B4374","value":": CAN"}
+{"address":"0x1401B4388","value":"Address complement: %02X"}
+{"address":"0x1401B43A8","value":"Address complement mismatch: %02X vs %02X"}
+{"address":"0x1401B43E8","value":"CONTROLLER %s, COMPONENT %s"}
+{"address":"0x1401B4410","value":"Imp: %03d"}
+{"address":"0x1401B4420","value":"     WSC %05d"}
+{"address":"0x1401B4430","value":"WSC %05d"}
+{"address":"0x1401B4440","value":"Geraet %05d"}
+{"address":"0x1401B4450","value":"IMP %s, %s, %s"}
+{"address":"0x1401B4460","value":"Slave %d:CONTROLLER %s, COMPONENT %s, WSC:%s"}
+{"address":"0x1401B4490","value":"CONTROLLER %s"}
+{"address":"0x1401B44A0","value":"COMPONENT %s"}
+{"address":"0x1401B44B0","value":"SOFTINDEX %s"}
+{"address":"0x1401B44C0","value":"HWPart %s"}
+{"address":"0x1401B44D0","value":"WKS Name %s"}
+{"address":"0x1401B44E0","value":"ParamDataset %s"}
+{"address":"0x1401B44F0","value":"ParamDataver %s"}
+{"address":"0x1401B4500","value":"COMP. ID %s"}
+{"address":"0x1401B4510","value":"ADP IMP %03d, WSC %05d, Geraet %05d"}
+{"address":"0x1401B4538","value":"CONTROLLER:%s"}
+{"address":"0x1401B4548","value":"COMPONENT:%s"}
+{"address":"0x1401B4558","value":"Inv Msg Len"}
+{"address":"0x1401B4568","value":"CODING:%05d WSC:%05d"}
+{"address":"0x1401B4580","value":"CODING:%s"}
+{"address":"0x1401B4598","value":"EXTRA1:%s"}
+{"address":"0x1401B45B0","value":"EXTRA2:%s"}
+{"address":"0x1401B45C0","value":"EXTRA3:%s"}
+{"address":"0x1401B45D0","value":"EXTRA4:%s"}
+{"address":"0x1401B45E8","value":"Inv.Msg,Type:%02X"}
+{"address":"0x1401B4600","value":"CMD-%02X.TXT"}
+{"address":"0x1401B4620","value":"visloc.txt"}
+{"address":"0x1401B4638","value":"ADP Restore"}
+{"address":"0x1401B4648","value":"-------------------------"}
+{"address":"0x1401B4688","value":"4E0 910 181 B"}
+{"address":"0x1401B4698","value":"Hist-1A"}
+{"address":"0x1401B46A8","value":"Hist-D3"}
+{"address":"0x1401B46B0","value":"%s %d/11"}
+{"address":"0x1401B46C0","value":" (12.5V)"}
+{"address":"0x1401B46D0","value":" (12.2V)"}
+{"address":"0x1401B46E0","value":" (11.5V)"}
+{"address":"0x1401B46F0","value":" (50mA)"}
+{"address":"0x1401B46F8","value":" (1A)"}
+{"address":"0x1401B4700","value":"Hist-22"}
+{"address":"0x1401B4708","value":"Hist-UDS"}
+{"address":"0x1401B4E40","value":"\\nTest port %d\\n"}
+{"address":"0x1401B4E50","value":"  %s: %02X.%02X.%02X"}
+{"address":"0x1401B4E70","value":"\\n%s %d.%d.%d.%d"}
+{"address":"0x1401B4E80","value":"\\n    %d.%d.%d.%d"}
+{"address":"0x1401B4EA0","value":"%02X.%02X.%02X / %02X.%02X.%02X"}
+{"address":"0x1401B4EC0","value":"-w -f"}
+{"address":"0x1401B53A0","value":"640x480"}
+{"address":"0x1401B53A8","value":"800x600"}
+{"address":"0x1401B53B0","value":"1024x768"}
+{"address":"0x1401B53C0","value":"1280x1024"}
+{"address":"0x1401B53D0","value":"1600x1200"}
+{"address":"0x1401B53E0","value":"1920x1200"}
+{"address":"0x1401B56D0","value":"release"}
+{"address":"0x1401B56D8","value":"Port=COM"}
+{"address":"0x1401B56E4","value":"BInt="}
+{"address":"0x1401B56EC","value":"Baud="}
+{"address":"0x1401B56F8","value":"CANTimeOut="}
+{"address":"0x1401B5704","value":"CInt="}
+{"address":"0x1401B5710","value":"KW2Delay="}
+{"address":"0x1401B5720","value":"HexIntel="}
+{"address":"0x1401B5730","value":"BypassFastInit="}
+{"address":"0x1401B5740","value":"NETTimeOut="}
+{"address":"0x1401B5750","value":"SavedIP="}
+{"address":"0x1401B5760","value":"LastCB="}
+{"address":"0x1401B5768","value":"CInt2k="}
+{"address":"0x1401B5778","value":"Geraet="}
+{"address":"0x1401B5788","value":"RedCPU1="}
+{"address":"0x1401B5798","value":"RedCPU2="}
+{"address":"0x1401B57A8","value":"KP2Time="}
+{"address":"0x1401B57B4","value":"Sound="}
+{"address":"0x1401B57C0","value":"Verbau="}
+{"address":"0x1401B57C8","value":"NoBlkScr="}
+{"address":"0x1401B57D4","value":"Shop="}
+{"address":"0x1401B57E0","value":"PrintMargin="}
+{"address":"0x1401B57F0","value":"ForceK="}
+{"address":"0x1401B57F8","value":"BypassCAN="}
+{"address":"0x1401B5808","value":"BypassK="}
+{"address":"0x1401B5818","value":"BypassDoIP="}
+{"address":"0x1401B5828","value":"LastInterface="}
+{"address":"0x1401B5838","value":"Size="}
+{"address":"0x1401B5840","value":"Updates="}
+{"address":"0x1401B5850","value":"LastVer="}
+{"address":"0x1401B585C","value":"NPIC="}
+{"address":"0x1401B5868","value":"NetSerial="}
+{"address":"0x1401B5878","value":"AdvMBUWd="}
+{"address":"0x1401B5940","value":"; Please don't edit this file.\\n"}
+{"address":"0x1401B5960","value":"; Use the OPTIONS screen to set this stuff!\\n"}
+{"address":"0x1401B5990","value":"Port=COM%d\\n"}
+{"address":"0x1401B59B0","value":"CInt=%s\\n"}
+{"address":"0x1401B59C0","value":"CANTimeOut=%s\\n"}
+{"address":"0x1401B59D0","value":"KW2Delay=%s\\n"}
+{"address":"0x1401B59E0","value":"HexIntel=%d\\n"}
+{"address":"0x1401B59F0","value":"BypassFastInit=%d\\n"}
+{"address":"0x1401B5A08","value":"BInt=%s\\n"}
+{"address":"0x1401B5A18","value":"CInt2k=%s\\n"}
+{"address":"0x1401B5A28","value":"NETTimeOut=%s\\n"}
+{"address":"0x1401B5A38","value":"SavedIP=%X\\n"}
+{"address":"0x1401B5A48","value":"LastCB=%d\\n"}
+{"address":"0x1401B5A70","value":"Geraet=%s\\n"}
+{"address":"0x1401B5AA8","value":"KP2Time=%s\\n"}
+{"address":"0x1401B5AB8","value":"Sound=%d\\n"}
+{"address":"0x1401B5AC8","value":"Verbau=%d\\n"}
+{"address":"0x1401B5AD8","value":"NoBlkScr=%d\\n"}
+{"address":"0x1401B5AF8","value":"PrintMargin=%s\\n"}
+{"address":"0x1401B5B08","value":"ForceK=%d\\n"}
+{"address":"0x1401B5B18","value":"BypassCAN=%d\\n"}
+{"address":"0x1401B5B28","value":"BypassK=%d\\n"}
+{"address":"0x1401B5B38","value":"BypassDoIP=%d\\n"}
+{"address":"0x1401B5B48","value":"Size=%d\\n"}
+{"address":"0x1401B5B58","value":"LastInterface=%02d\\n"}
+{"address":"0x1401B5B70","value":"Updates=%d\\n"}
+{"address":"0x1401B5B80","value":"LastVer=%03X\\n"}
+{"address":"0x1401B5BA0","value":"NetSerial=%d\\n"}
+{"address":"0x1401B5BC0","value":"Ross-Tech Updater"}
+{"address":"0x1401B5BD4","value":"Update"}
+{"address":"0x1401B5EA8","value":"65535"}
+{"address":"0x1401B6000","value":"%s 0x%02X,%s,%s,%s"}
+{"address":"0x1401B6018","value":".\\\\Debug\\\\SOTLog.CSV"}
+{"address":"0x1401B6030","value":"Output %d [CODES.DAT Not Loaded]"}
+{"address":"0x1401B6058","value":"Output %d [Code Not Found]"}
+{"address":"0x1401B6078","value":"%06d %s"}
+{"address":"0x1401B6080","value":"%d - %s"}
+{"address":"0x1401B6088","value":"Close OutTest requested"}
+{"address":"0x1401B60A0","value":"SOT STOP: "}
+{"address":"0x1401B60B8","value":".\\\\Debug\\\\SOTLog.txt"}
+{"address":"0x1401B60D0","value":"Unable to open/create file"}
+{"address":"0x1401B60F0","value":"%s --- %s\\nBruteforcing start: %d\\n"}
+{"address":"0x1401B6118","value":"Bruteforcing stop: %d\\n\\n\\n"}
+{"address":"0x1401B6134","value":"T%d,\\n"}
+{"address":"0x1401B6140","value":"7F %02X %02X"}
+{"address":"0x1401B6150","value":"0123456789"}
+{"address":"0x1401B6160","value":"Error in %s; numeric digits only"}
+{"address":"0x1401B6188","value":"Error in %s; empty input"}
+{"address":"0x1401B61A8","value":"0123456789."}
+{"address":"0x1401B61B8","value":"Error in %s; %s"}
+{"address":"0x1401B61C8","value":"Error in %s; selection invalid"}
+{"address":"0x1401B61E8","value":"Internal error"}
+{"address":"0x1401B64C8","value":"dummy_argument"}
+{"address":"0x1401B65A0","value":"%s\\t%s\\t%s\\r\\n"}
+{"address":"0x1401B6938","value":"0000 0000"}
+{"address":"0x1401B6950","value":"ReadyScr"}
+{"address":"0x1401B6960","value":"Data: %02X %02X %02X %02X"}
+{"address":"0x1401B6980","value":"%s -- %s"}
+{"address":"0x1401B6CF0","value":"Recode"}
+{"address":"0x1401B6CF8","value":"%%0%dd"}
+{"address":"0x1401B6D00","value":"Recode EPB 7F78 repeat a"}
+{"address":"0x1401B6D20","value":"Recode EPB 7F78 repeat b"}
+{"address":"0x1401B6D40","value":"\\r %%0%dd - %%0%dd"}
+{"address":"0x1401B7028","value":"RODSelectDlg"}
+{"address":"0x1401B7140","value":"ASAM ID: %s %s, VIN: %s - %s"}
+{"address":"0x1401B7160","value":"%02X:%s-%s;"}
+{"address":"0x1401B716C","value":" => %s"}
+{"address":"0x1401B7178","value":"&carinfo="}
+{"address":"0x1401B9030","value":"  %02X-%s"}
+{"address":"0x1401B93D8","value":"%02X-%s"}
+{"address":"0x1401B9788","value":"SecAcc requested: %s"}
+{"address":"0x1401B97A0","value":" - Opt: "}
+{"address":"0x1401B97B0","value":".\\\\Debug\\\\SECLog.CSV"}
+{"address":"0x1401B97C8","value":"\\n%s,%s 0x%02X,%s,%s,%s"}
+{"address":"0x1401B97E0","value":"\\n,%s 0x%02X,%s,%s,%s"}
+{"address":"0x1401B97F8","value":"R%05d"}
+{"address":"0x1401B9800","value":"H%06d"}
+{"address":"0x1401B9808","value":"S%05d"}
+{"address":"0x1401B9810","value":"Please send an autoscan."}
+{"address":"0x1401B9830","value":"\\nRegards, Andy"}
+{"address":"0x1401B9840","value":"\\nRegards, Dana"}
+{"address":"0x1401B9850","value":"\\nRegards, Jef"}
+{"address":"0x1401B9860","value":"\\nRegards, Peter"}
+{"address":"0x1401B9870","value":"\\nRegards, Santos"}
+{"address":"0x1401B9888","value":"\\nRegards, Uwe"}
+{"address":"0x1401B9898","value":"B%05d"}
+{"address":"0x1401B98A0","value":".\\\\Logs\\\\SALog.txt"}
+{"address":"0x1401B98B8","value":"\\n%s --- %s\\nBruteforcing start: %d\\n"}
+{"address":"0x1401B98E0","value":"%s Bruteforcing complete at %d\\n"}
+{"address":"0x1401B9900","value":"Bruteforce complete"}
+{"address":"0x1401B9918","value":"Script-Refused-7F11"}
+{"address":"0x1401B9930","value":"Script-Refused-%02X%02X"}
+{"address":"0x1401B9948","value":"Script-Refused-InvLen"}
+{"address":"0x1401B9960","value":"Script-Refused-1:%02X,2:%02X"}
+{"address":"0x1401B9980","value":"Script-OK"}
+{"address":"0x1401B9990","value":"Trying %d, last valid %d"}
+{"address":"0x1401B99B0","value":"Trying %d"}
+{"address":"0x1401B9C98","value":"SessLogDlg"}
+{"address":"0x1401B9DB8","value":"%s\\n%d %s"}
+{"address":"0x1401BA438","value":"SFDDlg"}
+{"address":"0x1401BA5C8","value":"Logs\\\\sfd-%02X-%s_%s-%s.txt"}
+{"address":"0x1401BA5E8","value":"Logs\\\\sfd-%02X-%s-%s.txt"}
+{"address":"0x1401BA600","value":";SW:%s   HW:%s ---  %s"}
+{"address":"0x1401BA618","value":";%s:%s, %s:%s\\n"}
+{"address":"0x1401BA630","value":";%s  %s\\n"}
+{"address":"0x1401BA640","value":";%s %s\\n\\n"}
+{"address":"0x1401BA650","value":"VIN: %s\\n"}
+{"address":"0x1401BA938","value":"PUBLIC_MODULUS_M"}
+{"address":"0x1401BA950","value":"PER\\\\YSO]_TE\\\\ECO^"}
+{"address":"0x1401BA968","value":"BKE]RW@NKA]OMFWNWQ]L"}
+{"address":"0x1401BA980","value":".\\\\Debug\\\\DEBUG-REG.DLM"}
+{"address":"0x1401BADD8","value":"<No Data> "}
+{"address":"0x1401BADE8","value":"<Unknown code %d> "}
+{"address":"0x1401BAE00","value":"0000000"}
+{"address":"0x1401BB210","value":"-SRI%d.CLB"}
+{"address":"0x1401BB220","value":"Error in Label file"}
+{"address":"0x1401BB23C","value":"miles"}
+{"address":"0x1401BB244","value":"%s x%d"}
+{"address":"0x1401BB250","value":"\\nFirewall: %d"}
+{"address":"0x1401BB260","value":".\\\\Debug\\\\SRILog.txt"}
+{"address":"0x1401BB278","value":"%s:%s, %s:%s%s"}
+{"address":"0x1401BB288","value":"%s: %s -- %d/3"}
+{"address":"0x1401BB298","value":"%s\\t%s\\t%s\\t%s%s"}
+{"address":"0x1401BB2A8","value":"%s\\t%s\\t%s\\t%s\\t%s%s"}
+{"address":"0x1401BB9A0","value":".\\\\Debug\\\\DEBUG-TRA.DLM"}
+{"address":"0x1401BB9B8","value":"Transport"}
+{"address":"0x1401BBA18","value":"ClearAll-CAN"}
+{"address":"0x1401BBCF8","value":"bad allocation"}
+{"address":"0x1401BBD38","value":"%04d%02d%02d"}
+{"address":"0x1401BBD48","value":"%02X%02X"}
+{"address":"0x1401BBD70","value":",%Y,%H:%M:%S"}
+{"address":"0x1401BBD80","value":":%05d"}
+{"address":"0x1401BBD88","value":"P%04d"}
+{"address":"0x1401BBD90","value":"U%04d"}
+{"address":"0x1401BBD98","value":"%04X%06X%06X%04X"}
+{"address":"0x1401BBDB0","value":"%06X%08X%06X"}
+{"address":"0x1401BBDC0","value":"20260901"}
+{"address":"0x1401BBDD0","value":"DEBUG-CAL"}
+{"address":"0x1401BBDE0","value":"\\nt%04d VCDS Version %s (%s) / %d.%d.%d.%d"}
+{"address":"0x1401BBE10","value":"\\nt%04d "}
+{"address":"0x1401BBE20","value":"Computer: %s %s; VM %s; OS 0x%05X (%s); WMI:%s"}
+{"address":"0x1401BBE50","value":"%d MB ; %s"}
+{"address":"0x1401BBE60","value":"MAC%d: %s    "}
+{"address":"0x1401BBE70","value":"AutoMode %d,KW2Delay %d, BlkInt %d, CharInt %d, KP2Time %d, CANTO %d"}
+{"address":"0x1401BBEC0","value":"RedCPU1281 %d, RedCPU2K %d, ForceK %d, BpCAN/K/DoIP %d/%d/%d, COM %d, Upd %d"}
+{"address":"0x1401BBF10","value":"%s CS:%d CS2:%d CY:%d FR:%d SU:%d SUF:%d CL2:%d SGN:%d "}
+{"address":"0x1401BBF48","value":"Net Timeout %d, SavedIP %d.%d.%d.%d, ActualIP %d.%d.%d.%d"}
+{"address":"0x1401BBF98","value":"\\r\\n[d2_bin_s160]\\r\\nline_count=4"}
+{"address":"0x1401BBFB8","value":"\\r\\nline"}
+{"address":"0x1401BBFC8","value":"Turbo mode"}
+{"address":"0x1401BBFE0","value":"%.1fk"}
+{"address":"0x1401BBFF8","value":"abcdefghijklmnopqrstuvwxyz"}
+{"address":"0x1401BC028","value":"%s (0x%02X)"}
+{"address":"0x1401BC038","value":"Can't allocate memory"}
+{"address":"0x1401BC050","value":"Can't lock memory"}
+{"address":"0x1401BC068","value":"Can't unlock memory"}
+{"address":"0x1401BC080","value":"Cannot empty the Clipboard"}
+{"address":"0x1401BC0A0","value":"Unable to set Clipboard data"}
+{"address":"0x1401BC0C0","value":"\\r\\n\\r\\n\\r\\n"}
+{"address":"0x1401BC0C8","value":"%s %d.%d.%d.%d"}
+{"address":"0x1401BC0D8","value":"VCNAME"}
+{"address":"0x1401BC0E0","value":"VAG-COM"}
+{"address":"0x1401BC0E8","value":"ntdll.dll"}
+{"address":"0x1401BC0F8","value":"wine_get_version"}
+{"address":"0x1401BC110","value":"kernel32.dll"}
+{"address":"0x1401BC120","value":"PowerCreateRequest"}
+{"address":"0x1401BC138","value":"u\"VCDS Live Communications\""}
+{"address":"0x1401BC170","value":"PowerClearRequest"}
+{"address":"0x1401BC188","value":"PowerSetRequest"}
+{"address":"0x1401BC198","value":"Windows "}
+{"address":"0x1401BC1B0","value":"Vista"}
+{"address":"0x1401BC1E0","value":" CPU)"}
+{"address":"0x1401BC1E8","value":"RFGA$&<V^^"}
+{"address":"0x1401BC1F4","value":"WDB906"}
+{"address":"0x1401BC1FC","value":"W09YES"}
+{"address":"0x1401BC204","value":"W09AGT"}
+{"address":"0x1401BC210","value":"XXXXXXXXXXXXXXXXX"}
+{"address":"0x1401BC228","value":"FAHRGESTELL"}
+{"address":"0x1401BC238","value":"18D9370"}
+{"address":"0x1401BC240","value":"6R09370"}
+{"address":"0x1401BC250","value":"%d%d%d%d"}
+{"address":"0x1401BC260","value":"%01X%05X%02X%02X%02X%X"}
+{"address":"0x1401BC278","value":"-%04X"}
+{"address":"0x1401BC280","value":" SFD+SFD2"}
+{"address":"0x1401BC294","value":" SFD2"}
+{"address":"0x1401BC2A0","value":"This VIN does not appear plausible:\\n%s\\nAre you SURE you want to continue?"}
+{"address":"0x1401BC2F0","value":".\\\\Debug\\\\DEBUG-VINReg.DLM"}
+{"address":"0x1401BC310","value":"%s,%s,#%d/%d,%s,%s,\\n"}
+{"address":"0x1401BC328","value":".\\\\Debug\\\\VINRegLog.CSV"}
+{"address":"0x1401BC340","value":"(VMWare)"}
+{"address":"0x1401BC350","value":"(Parallels)"}
+{"address":"0x1401BC360","value":"(VirtualBox)"}
+{"address":"0x1401BC370","value":"(Virtual PC)"}
+{"address":"0x1401BC380","value":"(Wine "}
+{"address":"0x1401BC390","value":"u\"ROOT\\\\CIMV2\""}
+{"address":"0x1401BC3A8","value":"SELECT * FROM Win32_ComputerSystem"}
+{"address":"0x1401BC3CE","value":"u\"LModel\""}
+{"address":"0x1401BC3E0","value":"u\"Manufacturer\""}
+{"address":"0x1401BC400","value":"u\"TotalPhysicalMemory\""}
+{"address":"0x1401BC428","value":"Virtual Machine"}
+{"address":"0x1401BC438","value":"VMware"}
+{"address":"0x1401BC440","value":"innotek GmbH"}
+{"address":"0x1401BC450","value":"VirtualBox"}
+{"address":"0x1401BC460","value":"SELECT * FROM Win32_Processor"}
+{"address":"0x1401BC480","value":"u\"Name\""}
+{"address":"0x1401BC490","value":"u\"Architecture\""}
+{"address":"0x1401BC4B4","value":"Alpha"}
+{"address":"0x1401BC4C0","value":"PowerPC"}
+{"address":"0x1401BC4D4","value":"arm64"}
+{"address":"0x1401BC4E0","value":"Unknown arch %d"}
+{"address":"0x1401BC4F0","value":"SELECT Version FROM Win32_OperatingSystem"}
+{"address":"0x1401BC520","value":"u\"Version\""}
+{"address":"0x1401BC530","value":"%d.%d.%d"}
+{"address":"0x1401BC55C","value":"\\\\m{|("}
+{"address":"0x1401BC570","value":"ZmilAL("}
+{"address":"0x1401BC5B0","value":"^IOAFA\\\\"}
+{"address":"0x1401BC5B8","value":"Kgfnao"}
+{"address":"0x1401BC5C0","value":"KIFEglm"}
+{"address":"0x1401BC5C8","value":"Om|Zm{x"}
+{"address":"0x1401BC5D0","value":"Om|KIFE{o"}
+{"address":"0x1401BC5E0","value":"[mflKIFE{o"}
+{"address":"0x1401BC5F8","value":"Logs\\\\%02X-%s_%s-%s.PL%s"}
+{"address":"0x1401BC610","value":"Logs\\\\%02X-%s-%s.PL%s"}
+{"address":"0x1401BC630","value":"Logs\\\\adphex-"}
+{"address":"0x1401BC640","value":"Logs\\\\adplog-"}
+{"address":"0x1401BC650","value":".\\\\Logs\\\\blockmap-OBD"}
+{"address":"0x1401BC664","value":"block"}
+{"address":"0x1401BC670","value":"advid"}
+{"address":"0x1401BC680","value":"Logs\\\\%s-%02X-%s_%s-%s.txt"}
+{"address":"0x1401BC6A0","value":"Logs\\\\%s-%02X-%s-%s.txt"}
+{"address":"0x1401BC6B8","value":"Logs\\\\%smap-%02X-%s_%s-%s.CSV"}
+{"address":"0x1401BC6D8","value":"Logs\\\\%smap-%02X-%s-%s.CSV"}
+{"address":"0x1401BC6FC","value":"%S.CSV"}
+{"address":"0x1401BC708","value":";33-OBD2\\n"}
+{"address":"0x1401BC718","value":";SW:%s   HW:%s ---  %02X: %s"}
+{"address":"0x1401BC738","value":" --- SA: "}
+{"address":"0x1401BC748","value":".\\\\VCIConfig.exe"}
+{"address":"0x1401BCA08","value":"update"}
+{"address":"0x1401BCA10","value":"VAG-COM-Running"}
+{"address":"0x1401BCA28","value":"PUBLIC_MODULUS_N"}
+{"address":"0x1401BCA40","value":"PUBLIC_MODULUS_O"}
+{"address":"0x1401BCA58","value":"BIG_PUBLIC_MODULUS_N"}
+{"address":"0x1401BCA70","value":"BIG_PUBLIC_MODULUS_M"}
+{"address":"0x1401BCC00","value":"20070101"}
+{"address":"0x1401BCC10","value":"ueqtap;ama"}
+{"address":"0x1401BCC1C","value":"%Y%m%d"}
+{"address":"0x1401BCC28","value":"L,%s,%s,%s,"}
+{"address":"0x1401BCC38","value":"E,%s,%s,%X,"}
+{"address":"0x1401BCC48","value":"tqg`:d|d"}
+{"address":"0x1401BCC58","value":"vucfq8sns"}
+{"address":"0x1401BCC68","value":"cvqqfmw-sks<how>&31[%qso>&p"}
+{"address":"0x1401BCC88","value":"&hjm;#60^"}
+{"address":"0x1401BCC98","value":"&qtd#b;#u"}
+{"address":"0x1401BCCA8","value":"&ja`;#62^ rtm;#62^"}
+{"address":"0x1401BCCC0","value":"&bju;#60^"}
+{"address":"0x1401BCCD0","value":"&drv;#64^"}
+{"address":"0x1401BCCE0","value":"&nrl;#60^"}
+{"address":"0x1401BCCF0","value":"&tur;#62^ ter;#62^"}
+{"address":"0x1401BCD08","value":"&pue;#62^"}
+{"address":"0x1401BCD18","value":"&usu;#62^"}
+{"address":"0x1401BCD28","value":"&jed;#62^"}
+{"address":"0x1401BCE28","value":"CLGFP-GBW"}
+{"address":"0x1401BCE38","value":"CLGFP-WNS"}
+{"address":"0x1401BCE48","value":"Abbdqu;!udyu.+-!+.+]s]oTrds,@fdou;!W@F,BNL!Tqe`uds.0/8]s]o"}
+{"address":"0x1401BCE88","value":"VWQ;UY[6uyczr6xyb6uyxxsub6by6b~s6cfrwbs6esd`sd7"}
+{"address":"0x1401BCEC0","value":"Fojc&eisjb&hir&dc&`ishb&ih&rnc&qcduorc'"}
+{"address":"0x1401BCF40","value":"h||x2''-{'-{"}
+{"address":"0x1401BCF50","value":"T|q4adpu`q4r}xq4w{axp4z{`4vq4gubqp5"}
+{"address":"0x1401BCF78","value":"Dksjhke`mjc$ravwmkj$!w***Xj!`$oF$kb$!`$oF$,!`!!-"}
+{"address":"0x1401BCFB0","value":"Dksjhke`$pmia`$kqp*XjGhmgo$KO$pk$`ksjhke`$plvkqcl$}kqv$fvkswav*"}
+{"address":"0x1401BCFF8","value":" _m#Vpfq#Jmwfqqvswfg---"}
+{"address":"0x1401BD070","value":"%d%02d"}
+{"address":"0x1401BD480","value":"%dkm-%dmi"}
+{"address":"0x1401BD4A0","value":" (Log-%s*.txt)|Log-%s*.txt|"}
+{"address":"0x1401BD4C0","value":".\\\\Logs\\\\Log"}
+{"address":"0x1401BD7A8","value":"\\\\\\\\.\\\\COM%d"}
+{"address":"0x1401BD7B8","value":"/dev/urandom"}
+{"address":"0x1401BD7C8","value":"/dev/random"}
+{"address":"0x1401BD7D8","value":"Microsoft Base Cryptographic Provider v1.0"}
+{"address":"0x1401EC122","value":"CreateStdAccessibleObject"}
+{"address":"0x1401EC13E","value":"LresultFromObject"}
+{"address":"0x1401F0048","value":".?AVCAfxStringMgr@@"}
+{"address":"0x1401F0070","value":".?AUIAtlStringMgr@ATL@@"}
+{"address":"0x1401F00C0","value":".PEAVCMemoryException@@"}
+{"address":"0x1401F00E8","value":".PEAVCSimpleException@@"}
+{"address":"0x1401F0110","value":".PEAVCObject@@"}
+{"address":"0x1401F0148","value":".PEAVCNotSupportedException@@"}
+{"address":"0x1401F0178","value":".PEAVCInvalidArgException@@"}
+{"address":"0x1401F01A8","value":".?AVCSimpleException@@"}
+{"address":"0x1401F01D0","value":".?AVCException@@"}
+{"address":"0x1401F01F8","value":".?AVCObject@@"}
+{"address":"0x1401F0218","value":".?AVCMemoryException@@"}
+{"address":"0x1401F0240","value":".?AVCNotSupportedException@@"}
+{"address":"0x1401F0270","value":".?AVCInvalidArgException@@"}
+{"address":"0x1401F04E8","value":".?AVCOleException@@"}
+{"address":"0x1401F0510","value":".PEAVCOleException@@"}
+{"address":"0x1401F0630","value":".?AVXAccessible@CWnd@@"}
+{"address":"0x1401F0658","value":".?AVXAccessibleServer@CWnd@@"}
+{"address":"0x1401F0688","value":".?AV_AFX_HTMLHELP_STATE@@"}
+{"address":"0x1401F06B8","value":".?AVCNoTrackObject@@"}
+{"address":"0x1401F06E0","value":".?AVCTestCmdUI@@"}
+{"address":"0x1401F0708","value":".PEAVCUserException@@"}
+{"address":"0x1401F0730","value":".?AV?$IAccessibleProxyImpl@VCAccessibleProxy@ATL@@@ATL@@"}
+{"address":"0x1401F0780","value":".?AUIAccessible@@"}
+{"address":"0x1401F07A8","value":".?AUIDispatch@@"}
+{"address":"0x1401F07C8","value":".?AUIUnknown@@"}
+{"address":"0x1401F07E8","value":".?AUIAccessibleProxy@@"}
+{"address":"0x1401F0810","value":".?AV?$CMFCComObject@VCAccessibleProxy@ATL@@@@"}
+{"address":"0x1401F0850","value":".?AVCAccessibleProxy@ATL@@"}
+{"address":"0x1401F0880","value":".?AV?$CComObjectRootEx@VCComSingleThreadModel@ATL@@@ATL@@"}
+{"address":"0x1401F08D0","value":".?AVCComObjectRootBase@ATL@@"}
+{"address":"0x1401F0900","value":".?AUIOleWindow@@"}
+{"address":"0x1401F0928","value":".?AVCStatic@@"}
+{"address":"0x1401F0968","value":".?AVCComboBox@@"}
+{"address":"0x1401F09A8","value":".PEAVCResourceException@@"}
+{"address":"0x1401F09D8","value":".?AVCResourceException@@"}
+{"address":"0x1401F0A08","value":".?AVCUserException@@"}
+{"address":"0x1401F0A30","value":".?AVCGdiObject@@"}
+{"address":"0x1401F0A78","value":".?AVCClientDC@@"}
+{"address":"0x1401F0B18","value":".?AV_AFX_THREAD_STATE@@"}
+{"address":"0x1401F0B40","value":".?AVAFX_MODULE_THREAD_STATE@@"}
+{"address":"0x1401F0B70","value":".?AVAFX_MODULE_STATE@@"}
+{"address":"0x1401F0B98","value":".?AVCDllIsolationWrapperBase@@"}
+{"address":"0x1401F0BC8","value":".?AVCComCtlWrapper@@"}
+{"address":"0x1401F0BF0","value":".?AVCCommDlgWrapper@@"}
+{"address":"0x1401F0C18","value":".?AVCShellWrapper@@"}
+{"address":"0x1401F0C40","value":".?AV_AFX_BASE_MODULE_STATE@@"}
+{"address":"0x1401F0CB0","value":".?AVCCommonDialog@@"}
+{"address":"0x1401F0CD8","value":".?AVXFileDialogEvents@CFileDialog@@"}
+{"address":"0x1401F0D10","value":".?AUIFileDialogEvents@@"}
+{"address":"0x1401F0D38","value":".?AVXFileDialogControlEvents@CFileDialog@@"}
+{"address":"0x1401F0D78","value":".?AUIFileDialogControlEvents@@"}
+{"address":"0x1401F0DA8","value":".?AVCFileDialog@@"}
+{"address":"0x1401F0DD0","value":".?AVCListCtrl@@"}
+{"address":"0x1401F0DF0","value":".?AVCSliderCtrl@@"}
+{"address":"0x1401F0E18","value":".?AVCProgressCtrl@@"}
+{"address":"0x1401F0E60","value":".?AVCRichEditCtrl@@"}
+{"address":"0x1401F0E88","value":".?AVCImageList@@"}
+{"address":"0x1401F0ED0","value":".?AVCIPAddressCtrl@@"}
+{"address":"0x1401F0F38","value":".?AVCFileFind@@"}
+{"address":"0x1401F0F58","value":".?AVCPrintDialog@@"}
+{"address":"0x1401F10B0","value":".?AVCWinThread@@"}
+{"address":"0x1401F10D8","value":".?AVCCommandLineInfo@@"}
+{"address":"0x1401F1100","value":".?AV_AFX_RICHEDIT_STATE@@"}
+{"address":"0x1401F1130","value":".?AV_AFX_EDIT_STATE@@"}
+{"address":"0x1401F1158","value":".?AVCCriticalSection@@"}
+{"address":"0x1401F1180","value":".?AVCSyncObject@@"}
+{"address":"0x1401F11A8","value":".?AVCSessionMapPtrToPtr@@"}
+{"address":"0x1401F11D8","value":".?AVCMapPtrToPtr@@"}
+{"address":"0x1401F1200","value":".?AVCInternetException@@"}
+{"address":"0x1401F1230","value":".?AVCInternetSession@@"}
+{"address":"0x1401F1258","value":".?AVCInternetFile@@"}
+{"address":"0x1401F1280","value":".?AVCStdioFile@@"}
+{"address":"0x1401F12C8","value":".?AVCInternetConnection@@"}
+{"address":"0x1401F12F8","value":".?AVCHttpConnection@@"}
+{"address":"0x1401F1320","value":".?AVCHttpFile@@"}
+{"address":"0x1401F1340","value":".?AVCFileException@@"}
+{"address":"0x1401F1368","value":".PEAVCArchiveException@@"}
+{"address":"0x1401F1398","value":".?AVCArchiveException@@"}
+{"address":"0x1401F13C0","value":".?AUCThreadData@@"}
+{"address":"0x1401F13E8","value":".?AVCHandleMap@@"}
+{"address":"0x1401F1418","value":".PEAVCFileException@@"}
+{"address":"0x1401F1470","value":".?AVCByteArray@@"}
+{"address":"0x1401F1488","value":"Apartment"}
+{"address":"0x1401F14B8","value":".?AVCObArray@@"}
+{"address":"0x1401F14F0","value":".?AV?$CArray@W4LoadArrayObjType@CArchive@@AEBW412@@@"}
+{"address":"0x1401F1568","value":".?AVCPtrArray@@"}
+{"address":"0x1401F1598","value":".?AVtype_info@@"}
+{"address":"0x1401F1DEE","value":"abcdefghijklmnopqrstuvwxyz"}
+{"address":"0x1401F1E0E","value":"ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
+{"address":"0x1401F2001","value":"abcdefghijklmnopqrstuvwxyz"}
+{"address":"0x1401F2021","value":"ABCDEFGHIJKLMNOPQRSTUVWXYZ"}
+{"address":"0x1401F2D68","value":".?AVbad_exception@std@@"}
+{"address":"0x1401F2D90","value":".?AVexception@std@@"}
+{"address":"0x1401F31E0","value":".?AV_com_error@@"}
+{"address":"0x1401F3230","value":".PEAVCException@@"}
+{"address":"0x1401F3258","value":"\\\\\\\\.\\\\COM1"}
+{"address":"0x14020B1E0","value":"How to Copy and Paste\\n\\nVAG-COM is a program that runs on Microsoft Windows.\\nIn order to perform certain functions, you may need to use\\nthe Copy and Paste functions.\\n\\nYour mouse or pointing device may not look exactly like the one below.\\nIf it does not, please see the owner's manual for your mouse or computer to find out\\nhow to move the cursor and where the left and right mouse buttons are located.\\n\\n    *\\n\\n      Using your mouse, place your cursor at the beginning of the text in the first box below.\\n    *\\n\\n      Hold down the left mouse button, while dragging your cursor over the text by moving the mouse to the right until you reach the end of the text.\\n    *\\n\\n      This should highlight the text. Now release the left mouse button.\\n    *\\n\\n      Next using your mouse, place your cursor over the highlighted text.\\n    *\\n\\n      Press and release the right mouse button and a list of options will appear.\\n    *\\n\\n      Using your mouse, move the cursor up or down the list until it highlights 'Copy'.\\n    *\\n\\n      Press and release the left mouse button.\\n    *\\n\\n      You have just copied the text! It has been copied to an invisible clipboard.\\n    *\\n\\n       Now using your mouse, place your cursor over the second box below (the empty one).\\n    *\\n\\n       Press and release the right mouse button and a list of options will appear.\\n    *\\n\\n       Using your mouse, move the cursor up or down the list until it highlights 'Paste'.\\n    *\\n\\n       Press and release the left mouse button.\\n    *\\n\\n       You have just pasted the text!  You can now copy and paste, even between different programs!"}
+{"address":"0x140210DF0","value":".PEAVCInternetException@@"}
+{"address":"0x140214F60","value":"C:\\\\Ross-Tech\\\\VCDS\\\\VCDS.EXE"}
+{"address":"0xFF000002D0","value":""}
+{"address":"0xFF000002EE","value":""}
+{"address":"0xFF00001268","value":"u\"\""}

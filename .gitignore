@@ -8,8 +8,14 @@ app/build/
 /screen_*.jpg
 /window_dump.xml
 /sample_log.csv
+
 __pycache__/
 *.pyc
+
+# SQLite local databases
+*.db
+*.sqlite3
+vcds-kb/*.db
 
 # Research traces, captures, and logs
 *.pcap

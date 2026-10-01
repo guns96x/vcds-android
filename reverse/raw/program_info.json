@@ -1,0 +1,8 @@
+{
+  "name": "VCDS_unpacked.exe",
+  "image_base": "140000000",
+  "creation_date": "Wed Sep 23 00:18:24 EEST 2026",
+  "language_id": "x86:LE:64:default",
+  "executable_path": "/C:/Users/Admin/Desktop/vcds_re_project/VCDS_unpacked.exe",
+  "executable_sha256": "4f9ba9b39523512aa1f985fb4afa77d21987d345baeef12ad9ced62d35a09ab5"
+}

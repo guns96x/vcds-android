@@ -1,0 +1,240 @@
+REFERENCES TO VTABLE 0x1401AD3C0:
+  From: 14007ca81 | Type: DATA | In: FUN_14007ca6c (14007ca6c)
+  From: 14007ca9f | Type: DATA | In: FUN_14007ca6c (14007ca6c)
+
+DECOMPILING TARGET FUNCTIONS:
+
+============================================================
+FUNCTION: FUN_14007ca6c @ 14007ca6c
+============================================================
+
+undefined8 * FUN_14007ca6c(undefined8 *param_1)
+
+{
+  FUN_140098af8();
+  DAT_1405a554c = 0xffffffff;
+  *(undefined1 *)((longlong)param_1 + 0x4c) = 1;
+  *(undefined1 *)((longlong)param_1 + 0x49) = 1;
+  *param_1 = &PTR_LAB_1401ad3c0;
+  *(undefined1 *)((longlong)param_1 + 0x4b) = 1;
+  *(undefined1 *)(param_1 + 9) = 1;
+  *(undefined1 *)(param_1 + 7) = 0;
+  *(undefined1 *)((longlong)param_1 + 0x9cd) = 0;
+  *(undefined1 *)(param_1 + 0x36) = 0;
+  FUN_140158320(param_1 + 0x39,0,0x800);
+  *(undefined4 *)(param_1 + 0x139) = 0;
+  *(undefined1 *)(param_1 + 0x113c) = 0;
+  return param_1;
+}
+
+
+Function not found at: 140080988
+Function not found at: 140080d80
+Function not found at: 140082000
+Function not found at: 1400830a8
+Function not found at: 14007febc
+Function not found at: 14007cad8
+
+============================================================
+FUNCTION: FUN_14007e3b4 @ 14007e3b4
+============================================================
+
+undefined4 FUN_14007e3b4(longlong *param_1)
+
+{
+  char cVar1;
+  uint uVar2;
+  int iVar3;
+  byte bVar4;
+  undefined4 uVar5;
+  longlong lVar6;
+  bool bVar7;
+  char local_108;
+  undefined4 local_107;
+  char local_103;
+  char local_102;
+  
+  FUN_1400a14b8(DAT_1405a55e4,0x1c200);
+  bVar7 = false;
+  lVar6 = 8;
+  bVar4 = (byte)DAT_1401f6818;
+  do {
+    if ((bVar4 & 1) != 0) {
+      bVar7 = (bool)(bVar7 ^ 1);
+    }
+    bVar4 = (char)bVar4 >> 1;
+    lVar6 = lVar6 + -1;
+  } while (lVar6 != 0);
+  uVar2 = DAT_1401f6818;
+  if ((DAT_1401f6818 != 0x33) && (!bVar7)) {
+    uVar2 = (uint)(byte)((byte)DAT_1401f6818 | 0x80);
+  }
+  local_107 = (uVar2 & 0xff) << 8;
+  local_107._0_3_ = CONCAT12((undefined1)DAT_1401f3564,(undefined2)local_107);
+  local_108 = '\x04';
+  local_107 = CONCAT31((uint3)local_107 >> 8,0x84);
+  local_107 = CONCAT13(3,(uint3)local_107);
+  FUN_140111ddc(DAT_1405a55e4);
+  DAT_1401f6e4c = 0xce4;
+  (**(code **)(*param_1 + 0x108))(param_1,&local_108);
+  iVar3 = (**(code **)(*param_1 + 0x110))(param_1);
+  if (iVar3 < 0) {
+    FUN_1401215b8(&DAT_140701ec0,0,0xd);
+    return 0xffffffff;
+  }
+  if (((DAT_140702384 != '\0') && (cVar1 = FUN_140118378(&DAT_140701ec0), cVar1 != '\0')) &&
+     (bVar4 = (*DAT_14018c730)(), (bVar4 & 3) == 3)) {
+    local_108 = -1;
+  }
+  if (local_108 == -0x7c) {
+    if (DAT_140702490 != '\0') {
+      cVar1 = FUN_140118890(&DAT_140701ec0);
+      if (cVar1 != '\0') {
+        DAT_140702492 = 1;
+      }
+      bVar4 = (*DAT_14018c730)();
+      if (((bVar4 & 3) == 3) && (cVar1 = FUN_1401189f4(&DAT_140701ec0), cVar1 != '\0')) {
+        DAT_140702492 = 1;
+      }
+    }
+    bVar7 = DAT_1401f6818 != 2;
+    DAT_14070229c = local_107;
+    *(undefined4 *)(param_1 + 2) = 0x55;
+    DAT_1405a71ec = local_107;
+    DAT_14062fb4d = local_102;
+    DAT_14062fb4c = local_103;
+    if (((bVar7) || (local_103 != '\x04')) || (local_102 != '\x04')) {
+      return 0;
+    }
+    FUN_140111f1c(DAT_1405a55e4,0x41);
+    FUN_1400a143c(1);
+    FUN_140111f1c(DAT_1405a55e4,0x43);
+    FUN_1400a143c(1);
+    FUN_140111ddc(DAT_1405a55e4);
+    (**(code **)(*param_1 + 0xc0))(param_1);
+    (**(code **)(*param_1 + 0x28))(param_1,0);
+    uVar5 = 0xfffffffb;
+  }
+  else {
+    if ((char)local_107 == '\x03') {
+      if (local_108 == -1) {
+        uVar5 = 0xfffffffe;
+        goto LAB_14007e4d0;
+      }
+    }
+    else if ((char)local_107 == '\t') {
+      if (local_108 == -1) {
+        uVar5 = 0xfffffffd;
+        goto LAB_14007e4d0;
+      }
+    }
+    else if ((char)local_107 == '\x04') {
+      if (local_108 == -1) {
+        uVar5 = 0xfffffffc;
+        goto LAB_14007e4d0;
+      }
+    }
+    else if (local_108 == -1) {
+      uVar5 = 0xffffff9e;
+      goto LAB_14007e4d0;
+    }
+    uVar5 = 0xffffff9d;
+  }
+LAB_14007e4d0:
+  FUN_1401215b8(&DAT_140701ec0,0,0xd,uVar5);
+  return uVar5;
+}
+
+
+
+============================================================
+FUNCTION: FUN_14005911c @ 14005911c
+============================================================
+
+void FUN_14005911c(CWnd *param_1)
+
+{
+  int *piVar1;
+  LPCSTR lpCaption;
+  int iVar2;
+  longlong *plVar3;
+  longlong lVar4;
+  size_t sVar5;
+  FILE *_File;
+  CWnd *this;
+  LPCSTR local_res10;
+  LPCSTR local_res18 [2];
+  undefined1 local_208 [512];
+  
+  plVar3 = (longlong *)FUN_14013a630();
+  if (plVar3 == (longlong *)0x0) {
+                    /* WARNING: Subroutine does not return */
+    FUN_140001000(0x80004005);
+  }
+  lVar4 = (**(code **)(*plVar3 + 0x18))(plVar3);
+  local_res18[0] = (LPCSTR)(lVar4 + 0x18);
+  plVar3 = (longlong *)FUN_14013a630();
+  if (plVar3 == (longlong *)0x0) {
+                    /* WARNING: Subroutine does not return */
+    FUN_140001000(0x80004005);
+  }
+  lVar4 = (**(code **)(*plVar3 + 0x18))(plVar3);
+  local_res10 = (LPCSTR)(lVar4 + 0x18);
+  sVar5 = strlen("VCDS");
+  FUN_140001a34(&local_res10,&DAT_14019aec0,sVar5 & 0xffffffff);
+  sVar5 = strlen(": Error");
+  FUN_14000d230(&local_res10,": Error",sVar5 & 0xffffffff);
+  _File = (FILE *)FUN_140156994("VCScope.txt",&DAT_14019d090);
+  if (_File == (FILE *)0x0) {
+    FUN_140156be0(local_208,"VCSCOPE.EXE");
+  }
+  else {
+    FUN_140065420(_File,local_208,0);
+    fclose(_File);
+  }
+  iVar2 = FUN_1400f2e8c("MB-PIPE.TXT",local_208);
+  lpCaption = local_res10;
+  if (iVar2 == -2) {
+    DAT_140631f58 = 0xffffffff;
+    DAT_140630e28 = 0;
+    FUN_140003cf0(local_res18,"Can\'t spawn %s",local_208);
+    FID_conflict_MessageBoxA((HWND)param_1,local_res18[0],lpCaption,0x10);
+  }
+  else if (iVar2 == -1) {
+    DAT_140631f58 = 0xffffffff;
+    DAT_140630e28 = 0;
+    FID_conflict_MessageBoxA
+              ((HWND)param_1,"Can\'t create Control File MB-PIPE.TXT",local_res10,0x10);
+  }
+  else if (iVar2 == 0) {
+    DAT_140631f58 = 1;
+    (*DAT_14018ccc8)(*(undefined8 *)(param_1 + 0x40),4,1000);
+    this = CWnd::GetDlgItem(param_1,0x4c3);
+    CWnd::EnableWindow(this,0);
+  }
+  else {
+    DAT_140631f58 = 0xffffffff;
+    DAT_140630e28 = 0;
+    FID_conflict_MessageBoxA((HWND)param_1,"Unexpected Error in BlockDlg::OnGraph",local_res10,0x10)
+    ;
+  }
+  LOCK();
+  piVar1 = (int *)(lpCaption + -8);
+  iVar2 = *piVar1;
+  *piVar1 = *piVar1 + -1;
+  UNLOCK();
+  if (iVar2 + -1 < 1) {
+    (**(code **)(**(longlong **)(lpCaption + -0x18) + 8))();
+  }
+  LOCK();
+  piVar1 = (int *)(local_res18[0] + -8);
+  iVar2 = *piVar1;
+  *piVar1 = *piVar1 + -1;
+  UNLOCK();
+  if (iVar2 + -1 < 1) {
+    (**(code **)(**(longlong **)(local_res18[0] + -0x18) + 8))();
+  }
+  return;
+}
+
+
