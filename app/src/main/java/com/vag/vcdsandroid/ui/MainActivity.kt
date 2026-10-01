@@ -334,6 +334,10 @@ class MainActivity : AppCompatActivity() {
 
         // Log toggle button
         binding.btnUploadGitHub.setOnClickListener { onUploadLatestLogClicked() }
+        binding.btnUploadGitHub.setOnLongClickListener {
+            shareDiagnosticLog()
+            true
+        }
 
         binding.btnToggleLog.setOnClickListener {
             if (recordingStartRequested.get() || recordingStopRequested.get()) {
@@ -561,14 +565,18 @@ class MainActivity : AppCompatActivity() {
                             .show()
                     },
                     onFailure = { error ->
-                        binding.tvSubStatus.text = "Interface handshake failed"
+                        binding.tvSubStatus.text = "01-Engine not verified; smart probe silent"
                         DiagLog.e("B03_M1", "Interface probe failed: ${error.message}")
                         AlertDialog.Builder(this@MainActivity)
-                            .setTitle("INTERFACE HANDSHAKE FAILED")
+                            .setTitle("01-ENGINE NOT VERIFIED")
                             .setMessage(
                                 "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
                                     "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
-                                    (error.message ?: "Unknown interface error")
+                                    "M2 direct K-Line: ${directKLineFailure ?: "not attempted"}\n\n" +
+                                    "Smart-mode probe: ${error.message ?: "Unknown interface error"}\n\n" +
+                                    "A silent smart probe after the K-Line attempt is expected if the " +
+                                    "cable is now in dumb (transparent) mode. Details are in " +
+                                    "VCDS_Logs/${DiagLog.FILE_NAME} (VCDS_DUMB / VCDS_SLOW_INIT lines)."
                             )
                             .setPositiveButton("OK", null)
                             .show()
@@ -2314,6 +2322,33 @@ class MainActivity : AppCompatActivity() {
         return files.filter { it.name.startsWith(preferredPrefix) }
             .maxByOrNull { it.lastModified() }
             ?: files.maxByOrNull { it.lastModified() }
+    }
+
+    /**
+     * Shares connection_diagnostics.log through the Android share sheet, so a
+     * field connection attempt can be sent without configuring a GitHub token.
+     */
+    private fun shareDiagnosticLog() {
+        val file = DiagLog.currentFile()
+        if (file == null || !file.exists() || file.length() == 0L) {
+            Toast.makeText(this, "No diagnostic log recorded yet.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(
+                this, "$packageName.logs", file
+            )
+            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                putExtra(android.content.Intent.EXTRA_SUBJECT, file.name)
+                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(android.content.Intent.createChooser(intent, "Share ${file.name}"))
+        } catch (e: Exception) {
+            DiagLog.e("DIAG_LOG", "Share failed: ${e.message}")
+            Toast.makeText(this, "Share failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     /**

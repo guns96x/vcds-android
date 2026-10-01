@@ -19,6 +19,7 @@ import com.vag.vcdsandroid.adapters.HexB03Constants
 import com.vag.vcdsandroid.adapters.HexB03Frame
 import com.vag.vcdsandroid.adapters.HexB03FrameCodec
 import com.vag.vcdsandroid.adapters.HexB03StreamDecoder
+import com.vag.vcdsandroid.diagnostics.DiagLog
 import com.vag.vcdsandroid.protocol.KLineByteReader
 import com.vag.vcdsandroid.protocol.KwpSlowInit
 import java.io.IOException
@@ -199,7 +200,7 @@ class UsbKwpTransport(private val context: Context) {
         // framing is opened by HexB03Adapter, never by guessing a 500 kbaud UART.
         val initialBaud = baudRate ?: KLINE_BAUD_RATE
 
-        android.util.Log.i("VCDS_USB", "connect(): VID:PID=${info.vidPidHex} name=${info.displayName} devName=${deviceToOpen.deviceName}")
+        DiagLog.i("VCDS_USB", "connect(): VID:PID=${info.vidPidHex} name=${info.displayName} devName=${deviceToOpen.deviceName}")
 
         val prober = createProber()
         // Re-probe with fresh device reference
@@ -215,14 +216,14 @@ class UsbKwpTransport(private val context: Context) {
 
         // Check permission before trying to open
         if (!usbManager.hasPermission(driver.device)) {
-            android.util.Log.w("VCDS_USB", "No USB permission for ${driver.device.deviceName}")
+            DiagLog.w("VCDS_USB", "No USB permission for ${driver.device.deviceName}")
             return false
         }
 
         val connection = try {
             usbManager.openDevice(driver.device)
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_USB", "openDevice() failed: ${e.message}, retrying with fresh scan...")
+            DiagLog.e("VCDS_USB", "openDevice() failed: ${e.message}, retrying with fresh scan...")
             // One more attempt: re-scan and get completely fresh UsbDevice
             val freshDev = findAvailableDevice() ?: return false
             currentDevice = freshDev
@@ -230,13 +231,13 @@ class UsbKwpTransport(private val context: Context) {
             try {
                 usbManager.openDevice(freshDriver.device)
             } catch (e2: Exception) {
-                android.util.Log.e("VCDS_USB", "openDevice() retry also failed: ${e2.message}")
+                DiagLog.e("VCDS_USB", "openDevice() retry also failed: ${e2.message}")
                 null
             }
         }
 
         if (connection == null) {
-            android.util.Log.e("VCDS_USB", "openDevice() returned null")
+            DiagLog.e("VCDS_USB", "openDevice() returned null")
             return false
         }
 
@@ -276,15 +277,15 @@ class UsbKwpTransport(private val context: Context) {
             port.rts = false
             serialPort = port
             isPortOpen = true
-            android.util.Log.i("VCDS_USB", "Serial port opened OK at $initialBaud baud")
+            DiagLog.i("VCDS_USB", "Serial port opened OK at $initialBaud baud")
 
             // FTDI latency timer: reduce default 16ms buffer delay to 1ms for high-speed diagnostic response
             if (deviceToOpen.vendorId == 0x0403) {
                 try {
                     val res = connection.controlTransfer(0x40, 0x09, 1, 1, null, 0, 500)
-                    android.util.Log.i("VCDS_USB", "FTDI Latency Timer set to 1ms (result=$res)")
+                    DiagLog.i("VCDS_USB", "FTDI Latency Timer set to 1ms (result=$res)")
                 } catch (e: Exception) {
-                    android.util.Log.w("VCDS_USB", "Could not set FTDI latency timer: ${e.message}")
+                    DiagLog.w("VCDS_USB", "Could not set FTDI latency timer: ${e.message}")
                 }
             }
 
@@ -295,7 +296,7 @@ class UsbKwpTransport(private val context: Context) {
 
             return true
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_USB", "Port open failed: ${e.message}")
+            DiagLog.e("VCDS_USB", "Port open failed: ${e.message}")
             try {
                 port.close()
             } catch (_: Exception) {}
@@ -329,7 +330,7 @@ class UsbKwpTransport(private val context: Context) {
         val buf = ByteArray(128)
         val txHex = request.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
 
-        android.util.Log.i(
+        DiagLog.i(
             "VCDS_DUMB",
             "FA24 CTRL TX opcode=0x%02X expected=0x%02X bytes=[$txHex]"
                 .format(opcode.toInt() and 0xFF, expectedOpcode.toInt() and 0xFF)
@@ -350,7 +351,7 @@ class UsbKwpTransport(private val context: Context) {
 
             val chunk = buf.copyOf(count)
             val rxHex = chunk.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
-            android.util.Log.i("VCDS_DUMB", "FA24 CTRL RX raw=[$rxHex]")
+            DiagLog.i("VCDS_DUMB", "FA24 CTRL RX raw=[$rxHex]")
 
             val frames = decoder.feed(chunk)
             if (frames.isNotEmpty()) {
@@ -360,12 +361,12 @@ class UsbKwpTransport(private val context: Context) {
                         frame.payload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
                     )
                 }
-                android.util.Log.i("VCDS_DUMB", "FA24 CTRL decoded $decoded")
+                DiagLog.i("VCDS_DUMB", "FA24 CTRL decoded $decoded")
             }
             val match = frames.firstOrNull { it.opcode == expectedOpcode }
             if (match != null) return match
         }
-        android.util.Log.w(
+        DiagLog.w(
             "VCDS_DUMB",
             "FA24 CTRL timeout waiting for opcode=0x%02X after ${timeoutMs}ms"
                 .format(expectedOpcode.toInt() and 0xFF)
@@ -399,7 +400,7 @@ class UsbKwpTransport(private val context: Context) {
         if (deviceToOpen.vendorId != 0x0403 ||
             deviceToOpen.productId !in setOf(0xFA20, 0xFA24, 0xFA25)
         ) {
-            android.util.Log.w(
+            DiagLog.w(
                 "VCDS_DUMB",
                 "Direct K-Line open refused for non-legacy Ross-Tech VID:PID=%04X:%04X"
                     .format(deviceToOpen.vendorId, deviceToOpen.productId)
@@ -408,7 +409,7 @@ class UsbKwpTransport(private val context: Context) {
         }
 
         if (!usbManager.hasPermission(deviceToOpen)) {
-            android.util.Log.w("VCDS_DUMB", "No USB permission for direct K-Line open")
+            DiagLog.w("VCDS_DUMB", "No USB permission for direct K-Line open")
             return false
         }
 
@@ -420,7 +421,7 @@ class UsbKwpTransport(private val context: Context) {
         val connection = try {
             usbManager.openDevice(serialDriver.device)
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_DUMB", "openDevice failed: ${e.message}")
+            DiagLog.e("VCDS_DUMB", "openDevice failed: ${e.message}")
             null
         } ?: return false
 
@@ -438,7 +439,7 @@ class UsbKwpTransport(private val context: Context) {
                 try {
                     port.setLatencyTimer(2)
                 } catch (e: Exception) {
-                    android.util.Log.w("VCDS_DUMB", "Could not set FTDI latency: ${e.message}")
+                    DiagLog.w("VCDS_DUMB", "Could not set FTDI latency: ${e.message}")
                 }
             }
 
@@ -477,7 +478,7 @@ class UsbKwpTransport(private val context: Context) {
                     )
                     )?.payload?.firstOrNull()
 
-                android.util.Log.i(
+                DiagLog.i(
                     "VCDS_DUMB",
                     "HC::ReadBoot before switch = " +
                         (bootBefore?.let { "0x%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY")
@@ -510,18 +511,18 @@ class UsbKwpTransport(private val context: Context) {
                                 (bootAfter?.let { "0x%02X".format(it.toInt() and 0xFF) } ?: "NO_REPLY")
                         )
                     }
-                    android.util.Log.i(
+                    DiagLog.i(
                         "VCDS_DUMB",
                         "PHONE-ONLY SMART->DUMB VERIFIED: ReadBoot=0x00"
                     )
                 } else if (bootBefore == HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
-                    android.util.Log.i("VCDS_DUMB", "Interface already reports Legacy Dumb Mode (0x00)")
+                    DiagLog.i("VCDS_DUMB", "Interface already reports Legacy Dumb Mode (0x00)")
                 } else if (bootBefore == null) {
                     // A cable already booted in dumb mode (e.g. set once in Windows VCDS)
                     // is a transparent K-Line and cannot answer S-frames at all. Nothing
                     // is switched here; the five-baud init that follows is the only
                     // proof, so continue without claiming any mode.
-                    android.util.Log.w(
+                    DiagLog.w(
                         "VCDS_DUMB",
                         "No HC::ReadBoot reply: cable may already be transparent (dumb). " +
                             "Mode UNVERIFIED; the ECU slow init decides."
@@ -533,7 +534,7 @@ class UsbKwpTransport(private val context: Context) {
                     )
                 }
             } catch (e: Exception) {
-                android.util.Log.e(
+                DiagLog.e(
                     "VCDS_DUMB",
                     "Automatic FA24 smart-to-dumb transition failed: ${e.message}"
                 )
@@ -562,13 +563,13 @@ class UsbKwpTransport(private val context: Context) {
 
             serialPort = port
             isPortOpen = true
-            android.util.Log.i(
+            DiagLog.i(
                 "VCDS_DUMB",
                 "K-Line serial path OPEN at $KLINE_BAUD_RATE baud; no echo probe sent"
             )
             return true
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_DUMB", "Direct K-Line open failed: ${e.message}")
+            DiagLog.e("VCDS_DUMB", "Direct K-Line open failed: ${e.message}")
             try { port.close() } catch (_: Exception) {}
             try { connection.close() } catch (_: Exception) {}
             serialPort = null
@@ -802,7 +803,7 @@ class UsbKwpTransport(private val context: Context) {
                 dtrAsserted = dtrAsserted
             )
         } catch (e: Exception) {
-            android.util.Log.e("VCDS_SLOW_INIT", "Five-baud init exception: ${e.message}")
+            DiagLog.e("VCDS_SLOW_INIT", "Five-baud init exception: ${e.message}")
             failure("EXCEPTION_${e.javaClass.simpleName}")
         } finally {
             try {
@@ -812,7 +813,7 @@ class UsbKwpTransport(private val context: Context) {
     }
 
     private fun markPortDead(reason: String) {
-        android.util.Log.w("VCDS_USB", reason)
+        DiagLog.w("VCDS_USB", reason)
         try { serialPort?.close() } catch (_: Exception) {}
         serialPort = null
         isPortOpen = false
@@ -823,7 +824,7 @@ class UsbKwpTransport(private val context: Context) {
         for (dev in usbManager.deviceList.values) {
             if (dev.vendorId == stale.vendorId && dev.productId == stale.productId) {
                 if (dev.deviceName != stale.deviceName) {
-                    android.util.Log.w("VCDS_USB", "USB device path changed: ${stale.deviceName} -> ${dev.deviceName}")
+                    DiagLog.w("VCDS_USB", "USB device path changed: ${stale.deviceName} -> ${dev.deviceName}")
                 }
                 return dev
             }
@@ -922,7 +923,7 @@ class UsbKwpTransport(private val context: Context) {
         } catch (e: Exception) {
             // e.g. IllegalArgumentException for a too-small FTDI buffer: a code
             // bug, not a timeout. Never swallow it silently.
-            android.util.Log.e("VCDS_USB", "USB read rejected: ${e.javaClass.simpleName}: ${e.message}")
+            DiagLog.e("VCDS_USB", "USB read rejected: ${e.javaClass.simpleName}: ${e.message}")
             0
         }
     }
