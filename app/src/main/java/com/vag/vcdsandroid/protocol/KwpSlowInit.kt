@@ -59,4 +59,37 @@ object KwpSlowInit {
         require(value in 0..0xFF)
         return value xor 0xFF
     }
+
+    /** DTR level per connection attempt: clear, clear, then asserted. */
+    fun dtrAssertedForAttempt(attempt: Int): Boolean = attempt >= 3
+
+    /** Human-readable cause of a failed five-baud init, shown to the user. */
+    fun describeFailure(
+        stage: String?,
+        sync: Int?,
+        key1: Int?,
+        key2: Int?,
+        klineEchoSeen: Boolean,
+        dtrAsserted: Boolean
+    ): String {
+        fun hex(v: Int?) = v?.let { "%02X".format(it) } ?: "--"
+        val bytes = "(sync=${hex(sync)}, KB1=${hex(key1)}, KB2=${hex(key2)}, " +
+            "DTR=${if (dtrAsserted) "ON" else "OFF"})"
+        val hint = when {
+            stage == "KW1281_KEYWORDS" ->
+                "ECU answered with KW1281 keywords 01 8A; this app only speaks KWP2000 on K-Line."
+            stage == "WAIT_SYNC_55" && !klineEchoSeen ->
+                "No K-Line echo at all: the interface is not passing K-Line " +
+                    "(still in intelligent mode, or no power on OBD pin 16)."
+            stage == "WAIT_SYNC_55" ->
+                "K-Line echo seen but no 0x55 sync: ignition off, or ECU 01 is not on K-Line."
+            stage == "W4_MISSED" ->
+                "ECU keywords received but the phone answered outside the 25-50 ms W4 window."
+            stage == "WAIT_ADDRESS_COMPLEMENT" ->
+                "ECU did not confirm the key-byte complement."
+            else -> null
+        }
+        return "01-Engine slow init failed at ${stage ?: "UNKNOWN"} $bytes." +
+            (hint?.let { " $it" } ?: "")
+    }
 }

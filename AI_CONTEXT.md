@@ -11,6 +11,18 @@
 - Current active milestone: **M2 = reliable 01-Engine connection over dumb K-Line**, with UI/features frozen.
 - M3 measuring groups remain disabled until M2 produces a checksum-valid KWP reply from ECU source address `0x01`.
 
+## M2 code fixes (2026-10-01) — not yet tested on the car
+
+Found by code review, not by a car log. Status: **UNVERIFIED on hardware**.
+
+1. **Slow init could never see sync 0x55.** It read the FTDI port into a 1-byte buffer. usb-serial-for-android 3.8.0 `FtdiSerialPort.read()` throws `IllegalArgumentException("Read buffer too small")` for buffers of 2 bytes or less, and the exception was swallowed as "0 bytes". Every five-baud init therefore ended at `WAIT_SYNC_55`. Fixed with `protocol/KLineByteReader` (256-byte packet reads plus a byte queue). W4 is measured from the arrival time of the KB2 packet.
+2. **The `1A 9B` identity reply was rejected.** VAG identity replies are longer than 63 bytes and use the extended header `80 F1 01 LL ...`. `KwpFrameParser` skipped `length == 0`, so the M2 gate could not pass even with a live ECU. Extended length is now parsed.
+3. **A cable that was already in dumb mode was refused.** A transparent cable cannot answer `HC::ReadBoot`, and the code aborted on "no reply". It now continues to the slow init, which is the only proof, and logs the mode as UNVERIFIED. An unknown ReadBoot value is still refused.
+4. **DTR.** Neither DTR level is proven for dumb mode. The M1 link that works uses DTR clear, and DTR# is believed to drive ATmega reset (INFERRED). Attempts 1 and 2 now use DTR clear and attempt 3 uses DTR set. The log line `VCDS_SLOW_INIT ... dtr=ON|OFF klineEcho=true|false` records which level was used.
+5. Failure messages now separate these cases: no K-Line echo (cable not passing K-Line), echo but no sync (ignition off or ECU not on K-Line), KW1281 keywords `01 8A` (not supported, no retry), and a W4 miss.
+
+Next car test, stationary, ignition on: Connect, then save `connection_diagnostics.log` with the `VCDS_DUMB`, `VCDS_SLOW_INIT` and `B03_M2` lines.
+
 Read this before changing the project.
 
 ## Ground truth

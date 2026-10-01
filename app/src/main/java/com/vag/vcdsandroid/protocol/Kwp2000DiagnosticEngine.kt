@@ -188,7 +188,14 @@ class Kwp2000DiagnosticEngine(
                             delay(KwpSlowInit.RETRY_QUIET_MS)
                         }
 
-                        val slow = transport.performFiveBaudSlowInit(targetEcuAddress.toInt() and 0xFF)
+                        // The HEX DTR wiring is not proven on this PCB. Attempts 1-2 keep
+                        // DTR clear (interface MCU running, as in the proven M1 link);
+                        // attempt 3 asserts DTR, the legacy third-party KKL convention.
+                        val dtrAsserted = KwpSlowInit.dtrAssertedForAttempt(attempt)
+                        val slow = transport.performFiveBaudSlowInit(
+                            address = targetEcuAddress.toInt() and 0xFF,
+                            dtrAsserted = dtrAsserted
+                        )
                         lastSlowInitResult = slow
 
                         val ignoredHex = slow.ignoredBeforeSync.joinToString(" ") {
@@ -202,7 +209,8 @@ class Kwp2000DiagnosticEngine(
                                 "kb2=${slow.keyByte2?.let { "%02X".format(it) } ?: "--"} " +
                                 "addrComp=${slow.addressComplement?.let { "%02X".format(it) } ?: "--"} " +
                                 "w4=${slow.w4SendDelayMs ?: -1}ms elapsed=${slow.elapsedMs}ms " +
-                                "ignored=[$ignoredHex]"
+                                "dtr=${if (slow.dtrAsserted) "ON" else "OFF"} " +
+                                "klineEcho=${slow.klineEchoSeen} ignored=[$ignoredHex]"
                         )
 
                         if (slow.success) {
@@ -246,11 +254,20 @@ class Kwp2000DiagnosticEngine(
                             return@withContext false
                         }
 
-                        lastError =
-                            "01-Engine slow init failed at ${slow.failureStage ?: "UNKNOWN"} " +
-                                "(sync=${slow.syncByte?.let { "%02X".format(it) } ?: "--"}, " +
-                                "KB1=${slow.keyByte1?.let { "%02X".format(it) } ?: "--"}, " +
-                                "KB2=${slow.keyByte2?.let { "%02X".format(it) } ?: "--"})."
+                        lastError = KwpSlowInit.describeFailure(
+                            stage = slow.failureStage,
+                            sync = slow.syncByte,
+                            key1 = slow.keyByte1,
+                            key2 = slow.keyByte2,
+                            klineEchoSeen = slow.klineEchoSeen,
+                            dtrAsserted = slow.dtrAsserted
+                        )
+
+                        if (slow.isKw1281Keywords) {
+                            // Retrying cannot change the ECU's protocol.
+                            state = DiagState.ERROR
+                            return@withContext false
+                        }
 
                         if (attempt < 3) {
                             // Keep the same USB handle/OBD power. The next iteration waits
@@ -538,6 +555,8 @@ class Kwp2000DiagnosticEngine(
             if (nowNs >= deadlineNs) break
 
             val remainingMs = ((deadlineNs - nowNs) / 1_000_000L).coerceAtLeast(1L).toInt()
+            // FTDI reads need a packet-sized buffer; never shrink it near the end.
+            if (maxBytes - used < 64) break
             val chunk = ByteArray(minOf(128, maxBytes - used))
             val count = transport.read(chunk, minOf(80, remainingMs))
 

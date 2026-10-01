@@ -26,6 +26,11 @@ package com.vag.vcdsandroid.protocol
  *   fmt bits 5..0 = payload length (0 means "length in a separate byte")
  *   checksum      = sum of all preceding bytes, mod 256
  * ```
+ *
+ * Payloads longer than 63 bytes use the extended form
+ * `[0x80] [target] [source] [len] [payload ...] [checksum]`. The VAG identity
+ * reply to `1A 9B` (part number, software, description, coding) is normally
+ * longer than 63 bytes, so this form must be accepted for the M2 gate.
  */
 object KwpFrameParser {
 
@@ -82,13 +87,22 @@ object KwpFrameParser {
                 if (target != TESTER_ADDRESS) continue
             }
 
-            val length = fmt and 0x3F
             // length == 0 selects the extended form, where the real length lives
-            // in a separate byte after the header. Not produced by EDC16U34 for
-            // measuring groups; treated as unsupported rather than misparsed.
-            if (length == 0) continue
+            // in a separate byte after the header.
+            val inlineLength = fmt and 0x3F
+            val headerLen: Int
+            val length: Int
+            if (inlineLength != 0) {
+                headerLen = HEADER_LEN
+                length = inlineLength
+            } else {
+                if (i + HEADER_LEN >= count) continue
+                headerLen = HEADER_LEN + 1
+                length = buffer[i + HEADER_LEN].toInt() and 0xFF
+                if (length == 0) continue
+            }
 
-            val totalMsgLen = length + HEADER_LEN + 1
+            val totalMsgLen = length + headerLen + 1
             if (i + totalMsgLen > count) continue
 
             var calculated = 0
@@ -98,7 +112,7 @@ object KwpFrameParser {
             if ((calculated and 0xFF) != (buffer[i + totalMsgLen - 1].toInt() and 0xFF)) continue
 
             val payload = ByteArray(length)
-            System.arraycopy(buffer, i + HEADER_LEN, payload, 0, length)
+            System.arraycopy(buffer, i + headerLen, payload, 0, length)
             return payload
         }
         return null

@@ -137,4 +137,46 @@ class KwpFrameParserTest {
             payload
         )
     }
+    /** ECU reply using the extended header: fmt=0x80, separate length byte. */
+    private fun extendedReply(payload: ByteArray, source: Byte = ecuAddress): ByteArray {
+        val msg = ByteArray(payload.size + 5)
+        msg[0] = 0x80.toByte()
+        msg[1] = KwpFrameParser.TESTER_ADDRESS.toByte()
+        msg[2] = source
+        msg[3] = payload.size.toByte()
+        System.arraycopy(payload, 0, msg, 4, payload.size)
+        var cs = 0
+        for (k in 0 until msg.size - 1) cs += (msg[k].toInt() and 0xFF)
+        msg[msg.size - 1] = (cs and 0xFF).toByte()
+        return msg
+    }
+
+    /** 1A 9B identity replies are longer than 63 bytes on VAG controllers. */
+    private fun longIdentityPayload(): ByteArray =
+        byteArrayOf(0x5A, 0x9B.toByte()) + ByteArray(78) { (0x30 + it % 10).toByte() }
+
+    @Test
+    fun `extended length identity reply after echo is extracted`() {
+        val echo = KwpFrameParser.buildMessage(ecuAddress, byteArrayOf(0x1A, 0x9B.toByte()))
+        val reply = extendedReply(longIdentityPayload())
+        val buffer = echo + reply
+
+        val payload = KwpFrameParser.extractPayload(buffer, buffer.size, expectedSource = 0x01)
+            ?: error("expected the long identity reply to be extracted")
+
+        assertArrayEquals(longIdentityPayload(), payload)
+    }
+
+    @Test
+    fun `truncated extended length reply is rejected`() {
+        val reply = extendedReply(longIdentityPayload())
+        val truncated = reply.copyOf(reply.size - 1)
+        assertNull(KwpFrameParser.extractPayload(truncated, truncated.size, expectedSource = 0x01))
+    }
+
+    @Test
+    fun `extended length frame from the tester is still treated as echo`() {
+        val echo = extendedReply(longIdentityPayload(), source = KwpFrameParser.TESTER_ADDRESS.toByte())
+        assertNull(KwpFrameParser.extractPayload(echo, echo.size))
+    }
 }

@@ -19,6 +19,7 @@ import com.vag.vcdsandroid.adapters.HexB03Constants
 import com.vag.vcdsandroid.adapters.HexB03Frame
 import com.vag.vcdsandroid.adapters.HexB03FrameCodec
 import com.vag.vcdsandroid.adapters.HexB03StreamDecoder
+import com.vag.vcdsandroid.protocol.KLineByteReader
 import com.vag.vcdsandroid.protocol.KwpSlowInit
 import java.io.IOException
 
@@ -43,8 +44,19 @@ data class FiveBaudSlowInitResult(
     val failureStage: String? = null,
     val ignoredBeforeSync: ByteArray = byteArrayOf(),
     val w4SendDelayMs: Long? = null,
-    val elapsedMs: Long = 0L
-)
+    val elapsedMs: Long = 0L,
+    val dtrAsserted: Boolean = false
+) {
+    /**
+     * Bytes seen while the address was being clocked out. On a transparent
+     * K-Line the tester's own BREAK periods come back as 0x00/garbage bytes, so
+     * an empty list at WAIT_SYNC_55 means the interface did not loop the line.
+     */
+    val klineEchoSeen: Boolean get() = ignoredBeforeSync.isNotEmpty()
+
+    /** VAG KW1281 keywords (01 8A): the ECU does not speak KWP2000 here. */
+    val isKw1281Keywords: Boolean get() = keyByte1 == 0x01 && keyByte2 == 0x8A
+}
 
 /**
  * Low-level USB OTG transport wrapper for K-Line / KWP2000 communication.
@@ -449,12 +461,21 @@ class UsbKwpTransport(private val context: Context) {
                 port.rts = false
                 port.purgeHwBuffers(true, true)
 
-                val bootBefore = sendFa24Control(
-                    port = port,
-                    opcode = HexB03Constants.OPCODE_READ_BOOT,
-                    expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
-                    timeoutMs = 700
-                )?.payload?.firstOrNull()
+                // One retry: the first framed request after open can be lost while
+                // the MCU settles. A cable that never answers is handled below.
+                val bootBefore = (
+                    sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_READ_BOOT,
+                        expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                        timeoutMs = 700
+                    ) ?: sendFa24Control(
+                        port = port,
+                        opcode = HexB03Constants.OPCODE_READ_BOOT,
+                        expectedOpcode = HexB03Constants.OPCODE_READ_BOOT,
+                        timeoutMs = 700
+                    )
+                    )?.payload?.firstOrNull()
 
                 android.util.Log.i(
                     "VCDS_DUMB",
@@ -495,9 +516,20 @@ class UsbKwpTransport(private val context: Context) {
                     )
                 } else if (bootBefore == HexB03Constants.BOOT_MODE_LEGACY_DUMB) {
                     android.util.Log.i("VCDS_DUMB", "Interface already reports Legacy Dumb Mode (0x00)")
+                } else if (bootBefore == null) {
+                    // A cable already booted in dumb mode (e.g. set once in Windows VCDS)
+                    // is a transparent K-Line and cannot answer S-frames at all. Nothing
+                    // is switched here; the five-baud init that follows is the only
+                    // proof, so continue without claiming any mode.
+                    android.util.Log.w(
+                        "VCDS_DUMB",
+                        "No HC::ReadBoot reply: cable may already be transparent (dumb). " +
+                            "Mode UNVERIFIED; the ECU slow init decides."
+                    )
                 } else {
                     throw IOException(
-                        "Unable to establish FA24 boot mode before K-Line open; refusing guessed transition"
+                        "HC::ReadBoot returned unknown mode 0x%02X; refusing guessed transition"
+                            .format(bootBefore.toInt() and 0xFF)
                     )
                 }
             } catch (e: Exception) {
@@ -520,9 +552,10 @@ class UsbKwpTransport(private val context: Context) {
                 UsbSerialPort.PARITY_NONE
             )
 
-            // Preserve the control-line state already used by the M2 experiment,
-            // but do not infer success from it. ECU traffic is the only proof.
-            port.dtr = true
+            // Keep the interface MCU running: the proven M1 control link uses DTR
+            // clear, and DTR# is believed to drive the ATmega reset. The slow init
+            // sets the DTR level per attempt; ECU traffic is the only proof.
+            port.dtr = false
             port.rts = false
             try { port.setBreak(false) } catch (_: Exception) {}
             port.purgeHwBuffers(true, true)
@@ -560,15 +593,26 @@ class UsbKwpTransport(private val context: Context) {
      * No diagnostic service is sent here. A successful result proves the physical
      * ECU at [address] completed the slow-init handshake.
      */
-    fun performFiveBaudSlowInit(address: Int = 0x01): FiveBaudSlowInitResult = synchronized(ioLock) {
+    fun performFiveBaudSlowInit(
+        address: Int = 0x01,
+        dtrAsserted: Boolean = false
+    ): FiveBaudSlowInitResult = synchronized(ioLock) {
         val port = serialPort ?: return@synchronized FiveBaudSlowInitResult(
             success = false,
             address = address,
-            failureStage = "PORT_NOT_OPEN"
+            failureStage = "PORT_NOT_OPEN",
+            dtrAsserted = dtrAsserted
         )
 
         val startedNs = System.nanoTime()
         val ignored = ArrayList<Byte>(16)
+        val reader = KLineByteReader(readChunk = { buf, timeoutMs ->
+            try {
+                port.read(buf, timeoutMs)
+            } catch (_: IOException) {
+                0
+            }
+        })
 
         fun elapsedMs(): Long = (System.nanoTime() - startedNs) / 1_000_000L
 
@@ -590,7 +634,8 @@ class UsbKwpTransport(private val context: Context) {
                 failureStage = stage,
                 ignoredBeforeSync = ignored.toByteArray(),
                 w4SendDelayMs = w4,
-                elapsedMs = elapsedMs()
+                elapsedMs = elapsedMs(),
+                dtrAsserted = dtrAsserted
             )
         }
 
@@ -611,22 +656,9 @@ class UsbKwpTransport(private val context: Context) {
             }
         }
 
-        fun readOneUntil(deadlineNs: Long): Int? {
-            val one = ByteArray(1)
-            while (System.nanoTime() < deadlineNs) {
-                val remainingMs = ((deadlineNs - System.nanoTime()) / 1_000_000L)
-                    .coerceAtLeast(1L)
-                    .coerceAtMost(5L)
-                    .toInt()
-                val n = try {
-                    port.read(one, remainingMs)
-                } catch (_: Exception) {
-                    0
-                }
-                if (n > 0) return one[0].toInt() and 0xFF
-            }
-            return null
-        }
+        // A 1-byte USB read is rejected by the FTDI driver, so bytes are always
+        // read in whole packets and served from a queue.
+        fun readOneUntil(deadlineNs: Long): Int? = reader.readByteUntil(deadlineNs)
 
         val tid = Process.myTid()
         val previousPriority = try {
@@ -648,10 +680,11 @@ class UsbKwpTransport(private val context: Context) {
                 UsbSerialPort.STOPBITS_1,
                 UsbSerialPort.PARITY_NONE
             )
-            port.dtr = true
+            port.dtr = dtrAsserted
             port.rts = false
             port.setBreak(false)
             port.purgeHwBuffers(true, true)
+            reader.clear()
 
             // Leave the bus quiet after the raw echo/probe before initiating a
             // real controller wake-up. This comfortably exceeds W0 and avoids
@@ -692,8 +725,7 @@ class UsbKwpTransport(private val context: Context) {
             }
             if (sync != 0x55) return@synchronized failure("WAIT_SYNC_55")
 
-            // Read one byte at a time so no key byte is accidentally consumed in
-            // the same USB read as the sync byte. Low FTDI latency is essential.
+            // Sync and key bytes may share one USB packet; the reader queues them.
             val key1 = readOneUntil(
                 System.nanoTime() + (KwpSlowInit.W2_KEY1_MAX_MS + 10L) * 1_000_000L
             ) ?: return@synchronized failure("WAIT_KEY1", sync = sync)
@@ -702,8 +734,15 @@ class UsbKwpTransport(private val context: Context) {
                 System.nanoTime() + (KwpSlowInit.W3_KEY2_MAX_MS + 10L) * 1_000_000L
             ) ?: return@synchronized failure("WAIT_KEY2", sync = sync, key1 = key1)
 
+            if (key1 == 0x01 && key2 == 0x8A) {
+                // KW1281 keywords: this engine only speaks KWP2000. Do not send the
+                // complement; the ECU drops the session on its own.
+                return@synchronized failure("KW1281_KEYWORDS", sync = sync, key1 = key1, key2 = key2)
+            }
+
             // W4 is the critical part. Do no logging/string formatting here.
-            val lastKeyReadNs = System.nanoTime()
+            // Measure from when KB2 actually arrived, not from when it was dequeued.
+            val lastKeyReadNs = reader.lastChunkNs
             val earliestComplementNs =
                 lastKeyReadNs + KwpSlowInit.W4_COMPLEMENT_MIN_MS * 1_000_000L
             val latestComplementNs =
@@ -759,7 +798,8 @@ class UsbKwpTransport(private val context: Context) {
                 sessionBaud = KwpSlowInit.PRIMARY_SESSION_BAUD,
                 ignoredBeforeSync = ignored.toByteArray(),
                 w4SendDelayMs = w4DelayMs,
-                elapsedMs = elapsedMs()
+                elapsedMs = elapsedMs(),
+                dtrAsserted = dtrAsserted
             )
         } catch (e: Exception) {
             android.util.Log.e("VCDS_SLOW_INIT", "Five-baud init exception: ${e.message}")
@@ -880,6 +920,9 @@ class UsbKwpTransport(private val context: Context) {
             }
             0
         } catch (e: Exception) {
+            // e.g. IllegalArgumentException for a too-small FTDI buffer: a code
+            // bug, not a timeout. Never swallow it silently.
+            android.util.Log.e("VCDS_USB", "USB read rejected: ${e.javaClass.simpleName}: ${e.message}")
             0
         }
     }

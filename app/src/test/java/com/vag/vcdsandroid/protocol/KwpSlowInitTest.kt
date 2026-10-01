@@ -2,6 +2,8 @@ package com.vag.vcdsandroid.protocol
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class KwpSlowInitTest {
@@ -27,5 +29,32 @@ class KwpSlowInitTest {
     fun `complements are byte exact`() {
         assertEquals(0xFE, KwpSlowInit.expectedAddressComplement(0x01))
         assertEquals(0x70, KwpSlowInit.byteComplement(0x8F))
+    }
+    @Test
+    fun `first two attempts keep DTR clear and the third asserts it`() {
+        assertFalse(KwpSlowInit.dtrAssertedForAttempt(1))
+        assertFalse(KwpSlowInit.dtrAssertedForAttempt(2))
+        assertTrue(KwpSlowInit.dtrAssertedForAttempt(3))
+    }
+
+    @Test
+    fun `silent line without echo is reported as interface not passing K-Line`() {
+        val msg = KwpSlowInit.describeFailure("WAIT_SYNC_55", null, null, null, false, false)
+        assertTrue(msg, msg.contains("No K-Line echo"))
+        assertTrue(msg, msg.contains("DTR=OFF"))
+    }
+
+    @Test
+    fun `echo without sync points at ignition or ECU instead of the cable`() {
+        val msg = KwpSlowInit.describeFailure("WAIT_SYNC_55", null, null, null, true, true)
+        assertTrue(msg, msg.contains("no 0x55 sync"))
+        assertTrue(msg, msg.contains("DTR=ON"))
+    }
+
+    @Test
+    fun `KW1281 keywords are named explicitly`() {
+        val msg = KwpSlowInit.describeFailure("KW1281_KEYWORDS", 0x55, 0x01, 0x8A, true, false)
+        assertTrue(msg, msg.contains("KW1281"))
+        assertTrue(msg, msg.contains("KB1=01, KB2=8A"))
     }
 }
