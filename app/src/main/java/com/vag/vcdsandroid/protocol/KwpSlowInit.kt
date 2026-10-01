@@ -7,6 +7,9 @@ package com.vag.vcdsandroid.protocol
  */
 object KwpSlowInit {
     const val PRIMARY_SESSION_BAUD = 10_400
+
+    /** ISO 14230-4 OBD functional address, the one the ELM proved on this car. */
+    const val OBD_FUNCTIONAL_ADDRESS = 0x33
     const val SECONDARY_SESSION_BAUD = 9_600
 
     const val BIT_TIME_MS = 200L
@@ -91,5 +94,32 @@ object KwpSlowInit {
         }
         return "01-Engine slow init failed at ${stage ?: "UNKNOWN"} $bytes." +
             (hint?.let { " $it" } ?: "")
+    }
+    data class AttemptSummary(val dtrAsserted: Boolean, val stage: String?, val klineEchoSeen: Boolean)
+
+    /**
+     * Final M2 error text: every attempt's DTR level and outcome, the last
+     * detailed failure, and the verdict of the OBD 0x33 control init if it ran.
+     */
+    fun summarizeAttempts(
+        attempts: List<AttemptSummary>,
+        lastFailure: String,
+        obdControlSuccess: Boolean?,
+        obdControlStage: String?
+    ): String {
+        val perAttempt = attempts.mapIndexed { i, a ->
+            "#${i + 1} DTR=${if (a.dtrAsserted) "ON" else "OFF"} " +
+                "${a.stage ?: "OK"} echo=${if (a.klineEchoSeen) "yes" else "no"}"
+        }.joinToString("; ")
+        val verdict = when (obdControlSuccess) {
+            true ->
+                "OBD control init on address 33 SUCCEEDED: cable and K-Line work. " +
+                    "ECU does not accept VAG address 01 on K-Line; 01-Engine needs CAN/TP2.0."
+            false ->
+                "OBD control init on address 33 also failed (${obdControlStage ?: "UNKNOWN"}): " +
+                    "the phone-cable K-Line path itself is not working yet."
+            null -> null
+        }
+        return "Attempts: $perAttempt.\n$lastFailure" + (verdict?.let { "\n$it" } ?: "")
     }
 }

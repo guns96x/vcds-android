@@ -57,4 +57,28 @@ class KwpSlowInitTest {
         assertTrue(msg, msg.contains("KW1281"))
         assertTrue(msg, msg.contains("KB1=01, KB2=8A"))
     }
+    @Test
+    fun `summary lists every attempt and the 33 control verdict`() {
+        val attempts = listOf(
+            KwpSlowInit.AttemptSummary(false, "WAIT_SYNC_55", false),
+            KwpSlowInit.AttemptSummary(false, "WAIT_SYNC_55", false),
+            KwpSlowInit.AttemptSummary(true, "WAIT_SYNC_55", true)
+        )
+        val ok = KwpSlowInit.summarizeAttempts(attempts, "last", true, null)
+        assertTrue(ok, ok.contains("#1 DTR=OFF WAIT_SYNC_55 echo=no"))
+        assertTrue(ok, ok.contains("#3 DTR=ON WAIT_SYNC_55 echo=yes"))
+        assertTrue(ok, ok.contains("address 33 SUCCEEDED"))
+
+        val bad = KwpSlowInit.summarizeAttempts(attempts, "last", false, "WAIT_SYNC_55")
+        assertTrue(bad, bad.contains("path itself is not working"))
+
+        val none = KwpSlowInit.summarizeAttempts(attempts, "last", null, null)
+        assertFalse(none, none.contains("address 33"))
+    }
+
+    @Test
+    fun `OBD functional address has odd parity in five baud form`() {
+        val bits = KwpSlowInit.addressBits7O1(KwpSlowInit.OBD_FUNCTIONAL_ADDRESS)
+        assertEquals(1, bits.slice(1..8).count { it } % 2)
+    }
 }

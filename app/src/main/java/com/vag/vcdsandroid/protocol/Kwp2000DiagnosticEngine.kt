@@ -53,6 +53,10 @@ class Kwp2000DiagnosticEngine(
     var lastSlowInitResult: FiveBaudSlowInitResult? = null
         private set
 
+    /** Result of the OBD address 0x33 control init run after ECU 01 stays silent. */
+    var lastObdControlInitResult: FiveBaudSlowInitResult? = null
+        private set
+
     private var targetEcuAddress: Byte = 0x01
     private val commMutex = Mutex()
     private val dtcLookup = HashMap<String, Pair<String, String>>()
@@ -118,6 +122,8 @@ class Kwp2000DiagnosticEngine(
             lastEcuIdentityPayload = null
             lastEcuVerificationPayload = null
             lastSlowInitResult = null
+            lastObdControlInitResult = null
+            val slowInitHistory = ArrayList<FiveBaudSlowInitResult>(3)
             stopKeepAlive()
 
             if (mode == TransportMode.SIMULATOR_DEMO) {
@@ -198,6 +204,7 @@ class Kwp2000DiagnosticEngine(
                             dtrAsserted = dtrAsserted
                         )
                         lastSlowInitResult = slow
+                        slowInitHistory += slow
 
                         val ignoredHex = slow.ignoredBeforeSync.joinToString(" ") {
                             "%02X".format(it.toInt() and 0xFF)
@@ -276,6 +283,39 @@ class Kwp2000DiagnosticEngine(
                             continue
                         }
 
+                        // ECU 01 never sent sync. The car is proven to answer a five-baud
+                        // init on the OBD address 0x33 (ELM: ISO 14230-4 KWP 5BAUD). One
+                        // read-only control init on 0x33 separates "cable/K-Line path
+                        // broken" from "ECU does not accept address 01 on K-Line".
+                        // Only the handshake is performed; no OBD service is sent.
+                        if (slowInitHistory.all { it.failureStage == "WAIT_SYNC_55" }) {
+                            val controlDtr = slowInitHistory.firstOrNull { it.klineEchoSeen }
+                                ?.dtrAsserted ?: false
+                            delay(KwpSlowInit.RETRY_QUIET_MS)
+                            val control = transport.performFiveBaudSlowInit(
+                                address = KwpSlowInit.OBD_FUNCTIONAL_ADDRESS,
+                                dtrAsserted = controlDtr
+                            )
+                            lastObdControlInitResult = control
+                            DiagLog.i(
+                                "VCDS_SLOW_INIT",
+                                "OBD control init addr=33 success=${control.success} " +
+                                    "stage=${control.failureStage ?: "OK"} " +
+                                    "kb1=${control.keyByte1?.let { "%02X".format(it) } ?: "--"} " +
+                                    "kb2=${control.keyByte2?.let { "%02X".format(it) } ?: "--"} " +
+                                    "dtr=${if (control.dtrAsserted) "ON" else "OFF"} " +
+                                    "klineEcho=${control.klineEchoSeen}"
+                            )
+                        }
+
+                        lastError = KwpSlowInit.summarizeAttempts(
+                            attempts = slowInitHistory.map {
+                                KwpSlowInit.AttemptSummary(it.dtrAsserted, it.failureStage, it.klineEchoSeen)
+                            },
+                            lastFailure = lastError ?: "",
+                            obdControlSuccess = lastObdControlInitResult?.success,
+                            obdControlStage = lastObdControlInitResult?.failureStage
+                        )
                         state = DiagState.ERROR
                         return@withContext false
                     }
