@@ -3,6 +3,7 @@ package com.vag.vcdsandroid.protocol
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -178,5 +179,102 @@ class KwpFrameParserTest {
     fun `extended length frame from the tester is still treated as echo`() {
         val echo = extendedReply(longIdentityPayload(), source = KwpFrameParser.TESTER_ADDRESS.toByte())
         assertNull(KwpFrameParser.extractPayload(echo, echo.size))
+    }
+
+    // ---- fragmentation, multiple frames, garbage, bounds
+
+    @Test
+    fun `reply delivered in fragments is found only once complete`() {
+        val buffer = group11Request() + group11Reply()
+        val firstReplyByte = group11Request().size
+        // Every strict prefix that cuts the reply short must yield nothing: no partial frame is ever decoded.
+        for (n in 0 until buffer.size) {
+            assertNull(
+                "prefix of $n bytes (reply starts at $firstReplyByte) must not decode",
+                KwpFrameParser.extractPayload(buffer, n, expectedSource = 0x01)
+            )
+        }
+        val whole = KwpFrameParser.extractPayload(buffer, buffer.size, expectedSource = 0x01)
+        assertArrayEquals(
+            byteArrayOf(0x61, 0x0B, 0x05, 0x64.toByte(), 0x0A, 0x32, 0x0A, 0x28, 0x03, 0x2D),
+            whole
+        )
+    }
+
+    @Test
+    fun `several frames in one USB packet are all returned in order`() {
+        val pending = ByteArray(7).also {
+            it[0] = 0x83.toByte(); it[1] = 0xF1.toByte(); it[2] = 0x01
+            it[3] = 0x7F; it[4] = 0x21; it[5] = 0x78
+            it[6] = ((it[0] + it[1] + it[2] + it[3] + it[4] + it[5]) and 0xFF).toByte()
+        }
+        val buffer = group11Request() + pending + group11Reply()
+
+        val all = KwpFrameParser.extractAll(buffer, buffer.size, expectedSource = 0x01)
+
+        assertEquals(2, all.size)
+        assertArrayEquals(byteArrayOf(0x7F, 0x21, 0x78), all[0])
+        assertEquals(0x61, all[1][0].toInt() and 0xFF)
+        // extractPayload keeps returning the first one.
+        assertArrayEquals(all[0], KwpFrameParser.extractPayload(buffer, buffer.size, expectedSource = 0x01))
+        // limit stops early.
+        assertEquals(1, KwpFrameParser.extractAll(buffer, buffer.size, expectedSource = 0x01, limit = 1).size)
+    }
+
+    @Test
+    fun `a corrupt frame does not hide the good frame behind it`() {
+        val bad = group11Reply().copyOf().also { it[it.size - 1] = (it[it.size - 1] + 1).toByte() }
+        val buffer = bad + group11Reply()
+        val all = KwpFrameParser.extractAll(buffer, buffer.size, expectedSource = 0x01)
+        assertEquals(1, all.size)
+        assertEquals(0x61, all[0][0].toInt() and 0xFF)
+    }
+
+    @Test
+    fun `garbage between frames is skipped`() {
+        val garbage = byteArrayOf(0x00, 0x80.toByte(), 0xFF.toByte(), 0x13)
+        val buffer = group11Reply() + garbage + group11Reply()
+        assertEquals(2, KwpFrameParser.extractAll(buffer, buffer.size, expectedSource = 0x01).size)
+    }
+
+    @Test
+    fun `bytes inside a payload are not re-read as a new header`() {
+        // The payload itself holds a complete, checksum-valid frame from the ECU address.
+        val inner = byteArrayOf(0x81.toByte(), 0xF1.toByte(), 0x01, 0x3E).let {
+            it + (it.sumOf { b -> b.toInt() and 0xFF } and 0xFF).toByte()
+        }
+        val reply = extendedReply(byteArrayOf(0x5A) + inner + ByteArray(3))
+        assertEquals(
+            "sanity: the inner frame decodes on its own",
+            1, KwpFrameParser.extractAll(inner, inner.size, expectedSource = 0x01).size
+        )
+        val all = KwpFrameParser.extractAll(reply, reply.size, expectedSource = 0x01)
+        assertEquals("only the outer frame counts", 1, all.size)
+    }
+
+    @Test
+    fun `scan is bounded on a large buffer of garbage and honours the byte count`() {
+        val noise = ByteArray(65_536) { (it * 31 + 7).toByte() }
+        // Must terminate quickly with no result (no valid, checksum-matching, ECU-sourced frame).
+        val started = System.nanoTime()
+        val result = KwpFrameParser.extractAll(noise, noise.size, expectedSource = 0x01)
+        val elapsedMs = (System.nanoTime() - started) / 1_000_000L
+        assertTrue("scan took $elapsedMs ms", elapsedMs < 2_000)
+        assertTrue(result.isEmpty())
+
+        // Bytes beyond `count` are never read: a valid reply placed after count is invisible.
+        val reply = group11Reply()
+        val padded = ByteArray(reply.size + 4)
+        System.arraycopy(reply, 0, padded, 4, reply.size)
+        assertTrue(KwpFrameParser.extractAll(padded, 6, expectedSource = 0x01).isEmpty())
+        // A count larger than the array is clamped instead of crashing.
+        assertEquals(1, KwpFrameParser.extractAll(reply, reply.size + 100, expectedSource = 0x01).size)
+    }
+
+    @Test
+    fun `tester echo of several requests never produces a payload`() {
+        val buffer = group11Request() + group11Request() +
+            KwpFrameParser.buildMessage(ecuAddress, byteArrayOf(0x1A, 0x9B.toByte()))
+        assertTrue(KwpFrameParser.extractAll(buffer, buffer.size, expectedSource = null).isEmpty())
     }
 }

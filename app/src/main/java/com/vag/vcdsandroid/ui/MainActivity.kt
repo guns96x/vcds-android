@@ -43,12 +43,16 @@ import com.vag.vcdsandroid.sensors.PhoneBarometerProvider
 import com.vag.vcdsandroid.sensors.PhoneBaroReading
 
 import com.vag.vcdsandroid.protocol.TransportMode
+import com.vag.vcdsandroid.adapters.B03ProbeException
 import com.vag.vcdsandroid.adapters.HexB03Adapter
 import com.vag.vcdsandroid.adapters.HexB03Constants
 import com.vag.vcdsandroid.diagnostics.DiagLog
 import com.vag.vcdsandroid.registry.AdapterRegistry
 import com.vag.vcdsandroid.usb.AndroidUsbProbe
 import com.vag.vcdsandroid.usb.HardwareProfile
+import com.vag.vcdsandroid.usb.UsbConnectResult
+import com.vag.vcdsandroid.usb.UsbConnectionState
+import com.vag.vcdsandroid.usb.UsbConnectionTracker
 import com.vag.vcdsandroid.usb.UsbKwpTransport
 import com.vag.vcdsandroid.upload.GitHubSettings
 import com.vag.vcdsandroid.upload.GitHubUploader
@@ -143,6 +147,9 @@ class MainActivity : AppCompatActivity() {
     private var currentDevice: UsbDevice? = null
     private var activeB03Adapter: HexB03Adapter? = null
     private var activeB03Identity: String? = null
+
+    /** Progress and outcome of the latest USB connection attempt; also written to DiagLog. */
+    private val usbTracker = UsbConnectionTracker(sink = { DiagLog.i("USB_STATE", it) })
 
     private var pollingJob: Job? = null
     private var tickerJob: Job? = null
@@ -505,11 +512,15 @@ class MainActivity : AppCompatActivity() {
 
         val dev = currentDevice ?: transport.findAvailableDevice()
         if (dev == null) {
+            usbTracker.reset()
+            usbTracker.finish(UsbConnectResult.USB_DEVICE_NOT_FOUND)
             Toast.makeText(this, "No USB HEX / FTDI cable detected.", Toast.LENGTH_LONG).show()
             updateStatusUI()
             return
         }
         if (!transport.hasPermission(dev)) {
+            usbTracker.reset()
+            usbTracker.advance(UsbConnectionState.USB_DETECTED, "%04X:%04X".format(dev.vendorId, dev.productId))
             isPermissionRequested = true
             transport.requestPermission(dev)
             updateStatusUI()
@@ -547,43 +558,18 @@ class MainActivity : AppCompatActivity() {
                 val hex = data.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
                 DiagLog.i("B03_M1", "$direction $hex")
             }
+            adapter.noteListener = { DiagLog.i("B03_M2", it) }
 
             connectInProgress = true
+            usbTracker.reset()
+            usbTracker.advance(UsbConnectionState.USB_DETECTED, "%04X:%04X".format(dev.vendorId, dev.productId))
+            usbTracker.advance(UsbConnectionState.USB_PERMISSION, "granted")
             lifecycleScope.launch {
                 binding.btnConnect.isEnabled = false
-                binding.tvSubStatus.text = "Opening Ross-Tech interface (Smart Mode)..."
-
-                // 1. First probe interface in intelligent mode
-                var probeResult = adapter.probeInterface()
-
-                // 2. If probe failed or timed out, attempt automatic hardware rescue (pulse DTR, SetBoot 2)
-                if (probeResult.isFailure) {
-                    binding.tvSubStatus.text = "Cable unresponsive/dumb; executing hardware rescue..."
-                    DiagLog.w("B03_RESCUE", "Initial probe failed, executing forceIntelligentModeRescue...")
-                    val rescueOk = adapter.forceIntelligentModeRescue()
-                    if (rescueOk.isSuccess) {
-                        DiagLog.i("B03_RESCUE", "Hardware rescue succeeded, re-probing...")
-                        probeResult = adapter.probeInterface()
-                    }
-                }
-
+                binding.tvSubStatus.text = "Opening HEX interface..."
+                connectHexInterface(adapter, dev)
                 binding.btnConnect.isEnabled = true
-
-                probeResult.fold(
-                    onSuccess = { probe ->
-                        activeB03Adapter = adapter
-                        activeB03Identity = probe.identityText
-                        currentDevice = dev
-                        binding.tvSubStatus.text = "Smart mode: ${probe.identityText}"
-                        updateStatusUI()
-                        showRossTechReadyDialog(adapter, probe)
-                    },
-                    onFailure = { error ->
-                        binding.tvSubStatus.text = "Cable probe failed"
-                        DiagLog.e("B03_M1", "Interface probe failed: ${error.message}")
-                        showRossTechFailedDialog(adapter, dev, identity, error)
-                    }
-                )
+                updateStatusUI()
             }.invokeOnCompletion { connectInProgress = false }
             return
         }
@@ -641,154 +627,131 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun wakeUpEngine01Intelligent(adapter: HexB03Adapter) {
-        lifecycleScope.launch {
-            binding.tvSubStatus.text = "Waking up 01-Engine via MCU Opcode 0x84..."
-            binding.btnConnect.isEnabled = false
-
-            val result = adapter.init5Baud(address = 0x01, timeoutMs = 3500)
-            binding.btnConnect.isEnabled = true
-
-            result.fold(
-                onSuccess = { initRes ->
-                    val kb1Hex = "%02X".format(initRes.keyByte1)
-                    val kb2Hex = "%02X".format(initRes.keyByte2)
-                    val syncHex = "%02X".format(initRes.syncByte)
-                    val rawHex = initRes.rawPayload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
-
-                    DiagLog.i(
-                        "B03_01_ENGINE",
-                        "01-ENGINE 5-BAUD SUCCESS! Baud=${initRes.baudRate} bps, " +
-                            "KB1=0x$kb1Hex, KB2=0x$kb2Hex, Sync=0x$syncHex, Raw=[$rawHex] in ${initRes.elapsedMs}ms"
-                    )
-                    binding.tvSubStatus.text = "01-Engine Connected (${initRes.baudRate} bps, KB1=$kb1Hex KB2=$kb2Hex)"
-                    updateStatusUI()
-
-                    AlertDialog.Builder(this@MainActivity)
-                        .setTitle("01-ENGINE CONNECTED (SMART 0x84)")
-                        .setMessage(
-                            "ECU Address: 0x01 (Engine)\n" +
-                            "Detected Baud Rate: ${initRes.baudRate} bps\n" +
-                            "KeyByte 1: 0x$kb1Hex\n" +
-                            "KeyByte 2: 0x$kb2Hex (${if (initRes.keyByte2 == 0x89) "KWP2000" else if (initRes.keyByte2 == 0x01) "KWP1281" else "Protocol unknown"})\n" +
-                            "Sync Byte: 0x$syncHex (0x55 OK)\n" +
-                            "Wake-Up Time: ${initRes.elapsedMs} ms\n\n" +
-                            "Physical K-Line link established by ATmega162!"
-                        )
-                        .setPositiveButton("OK", null)
-                        .show()
-                },
-                onFailure = { error ->
-                    DiagLog.e("B03_01_ENGINE", "01-Engine init failed: ${error.message}")
-                    binding.tvSubStatus.text = "01-Engine 5-baud init failed"
-                    AlertDialog.Builder(this@MainActivity)
-                        .setTitle("01-ENGINE WAKE-UP FAILED")
-                        .setMessage(
-                            "Opcode 0x84 did not receive 0x55 sync from ECU.\n\n" +
-                            "Error: ${error.message}\n\n" +
-                            "Check:\n" +
-                            "1. Ignition is turned ON (key in position II, dashboard lit).\n" +
-                            "2. Cable is firmly seated in the OBD-II port."
-                        )
-                        .setPositiveButton("RETRY") { _, _ ->
-                            wakeUpEngine01Intelligent(adapter)
-                        }
-                        .setNegativeButton("CLOSE", null)
-                        .show()
-                }
-            )
+    /**
+     * USB OEM connection to the FA24 interface, one pass, read-only:
+     * probe the interface -> read its mode -> wake 01-Engine (opcode 0x84).
+     * The phone never writes the cable's boot mode (no SetBoot) and never resets
+     * the interface MCU through DTR. Every step is recorded in [usbTracker].
+     */
+    private suspend fun connectHexInterface(adapter: HexB03Adapter, dev: UsbDevice) {
+        val probeResult = adapter.probeInterface()
+        val probe = probeResult.getOrNull()
+        if (probe == null) {
+            val failure = probeResult.exceptionOrNull() as? B03ProbeException
+            val reason = failure?.result ?: UsbConnectResult.UNEXPECTED_ADAPTER_RESPONSE
+            val detail = failure?.message ?: probeResult.exceptionOrNull()?.message ?: "unknown"
+            DiagLog.w("B03_M1", "Interface probe failed: ${reason.name} $detail")
+            val opened = reason != UsbConnectResult.PERMISSION_DENIED &&
+                reason != UsbConnectResult.SERIAL_OPEN_FAILED
+            if (opened) usbTracker.advance(UsbConnectionState.INTERFACE_OPENED, "serial port open, probe failed")
+            if (reason == UsbConnectResult.ADAPTER_ECHO_ONLY) {
+                // A powered cable that only loops our bytes back is transparent. The
+                // direct K-Line path is read-only: the slow init is the only proof.
+                connectDirectKLine(dev, detail)
+                return
+            }
+            finishUsbAttempt(reason, detail)
+            return
         }
-    }
 
-    private fun showRossTechReadyDialog(adapter: HexB03Adapter, probe: com.vag.vcdsandroid.adapters.B03InterfaceProbeResult) {
-        val probeHex = probe.probePayload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
-        val statusHex = probe.statusPayload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
-        val modeHex = probe.modePayload.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }
-        val isSmartMode = probe.modePayload.isNotEmpty() && probe.modePayload[0] == HexB03Constants.BOOT_MODE_SMART
-
+        usbTracker.advance(UsbConnectionState.INTERFACE_OPENED, "serial port open")
+        usbTracker.advance(UsbConnectionState.INTERFACE_IDENTIFIED, probe.identityText)
+        val mode = probe.modePayload.firstOrNull()
+        val modeHex = mode?.let { "%02X".format(it.toInt() and 0xFF) } ?: "none"
+        usbTracker.advance(UsbConnectionState.ADAPTER_MODE_DETECTED, "ReadBoot=$modeHex")
         DiagLog.i(
             "B03_M1",
-            "INTERFACE RESPONDED identity=${probe.identityText}, " +
-                "probePayload=[$probeHex], status=[$statusHex], mode=[$modeHex], " +
-                "elapsedMs=${probe.elapsedMs}"
+            "INTERFACE RESPONDED identity=${probe.identityText} ReadBoot=$modeHex elapsedMs=${probe.elapsedMs}"
         )
+        activeB03Adapter = adapter
+        activeB03Identity = probe.identityText
+        currentDevice = dev
 
-        AlertDialog.Builder(this)
-            .setTitle("ROSS-TECH ADAPTER READY")
-            .setMessage(
-                "Model: ${probe.identityText}\n" +
-                "Mode: ${if (isSmartMode) "SMART / INTELLIGENT (0x02)" else "DUMB (0x00)"}\n" +
-                "K-Line Status: $statusHex\n" +
-                "Response time: ${probe.elapsedMs} ms\n\n" +
-                "Ready to wake up 01-Engine using hardware-accelerated 5-baud init (Opcode 0x84)."
+        if (mode != HexB03Constants.BOOT_MODE_SMART) {
+            finishUsbAttempt(
+                UsbConnectResult.UNEXPECTED_ADAPTER_RESPONSE,
+                "ReadBoot=$modeHex, expected 02 (intelligent). The phone does not change the boot mode."
             )
-            .setPositiveButton("01-ENGINE (0x84)") { _, _ ->
-                wakeUpEngine01Intelligent(adapter)
-            }
-            .setNeutralButton("RESCUE SMART") { _, _ ->
-                runSmartModeRescue(adapter)
-            }
-            .setNegativeButton("CLOSE", null)
-            .show()
+            return
+        }
+        runSmartEngineWakeUp(adapter, probe.identityText)
     }
 
-    private fun showRossTechFailedDialog(
-        adapter: HexB03Adapter,
-        dev: UsbDevice,
-        identity: com.vag.vcdsandroid.adapters.AdapterIdentity,
-        error: Throwable
-    ) {
-        AlertDialog.Builder(this)
-            .setTitle("INTERFACE PROBE FAILED")
-            .setMessage(
-                "Hardware: VID %04X, PID %04X\n".format(dev.vendorId, dev.productId) +
-                    "Serial: ${identity.serialNumber ?: "N/A"}\n\n" +
-                    (error.message ?: "Unknown interface error") + "\n\n" +
-                    "Tap 'RESCUE SMART' to reset MCU and force Intelligent Mode."
-            )
-            .setPositiveButton("RESCUE SMART") { _, _ ->
-                runSmartModeRescue(adapter)
-            }
-            .setNegativeButton("CLOSE") { _, _ ->
-                lifecycleScope.launch(Dispatchers.IO) {
-                    try { adapter.close() } catch (_: Exception) {}
-                }
-            }
-            .show()
-    }
-
-    private fun runSmartModeRescue(adapter: HexB03Adapter) {
-        lifecycleScope.launch {
-            binding.tvSubStatus.text = "Executing Smart Mode rescue..."
-            binding.btnConnect.isEnabled = false
-            val res = adapter.forceIntelligentModeRescue()
-            binding.btnConnect.isEnabled = true
-            res.fold(
-                onSuccess = {
-                    Toast.makeText(this@MainActivity, "Cable rescued to SMART mode!", Toast.LENGTH_SHORT).show()
-                    binding.tvSubStatus.text = "Cable rescued; probing interface..."
-                    val probeResult = adapter.probeInterface()
-                    probeResult.fold(
-                        onSuccess = { probe ->
-                            activeB03Adapter = adapter
-                            activeB03Identity = probe.identityText
-                            currentDevice = (adapter.driver as? com.vag.vcdsandroid.hardware.UsbSerialDriverBase)?.usbDevice
-                            binding.tvSubStatus.text = "Smart mode: ${probe.identityText}"
-                            updateStatusUI()
-                            showRossTechReadyDialog(adapter, probe)
-                        },
-                        onFailure = { probeErr ->
-                            binding.tvSubStatus.text = "Probe failed: ${probeErr.message}"
-                            Toast.makeText(this@MainActivity, "Probe failed after rescue: ${probeErr.message}", Toast.LENGTH_LONG).show()
-                        }
-                    )
-                },
-                onFailure = { err ->
-                    Toast.makeText(this@MainActivity, "Rescue failed: ${err.message}", Toast.LENGTH_LONG).show()
-                    binding.tvSubStatus.text = "Rescue failed"
-                }
+    /**
+     * Intelligent-mode M2 step: the interface MCU wakes ECU 01 (opcode 0x84,
+     * spec V2, PROVEN_STATIC). No diagnostic service is sent afterwards: the
+     * adapter framing for KWP services is UNKNOWN, so this path can reach
+     * "ECU reply" but never claims an active session.
+     */
+    private suspend fun runSmartEngineWakeUp(adapter: HexB03Adapter, identityText: String) {
+        usbTracker.advance(UsbConnectionState.ECU_INITIALIZATION, "opcode 0x84 addr=01")
+        binding.tvSubStatus.text = "Smart mode: waking 01-Engine (0x84, up to ~7 s)..."
+        val init = adapter.init5BaudKLine(0x01)
+        val outcome = init.outcome()
+        DiagLog.i("B03_M2", "0x84 init result:\n${init.describe()}")
+        if (outcome == UsbConnectResult.ECU_INIT_ANSWERED || outcome == UsbConnectResult.UNSUPPORTED_PROTOCOL) {
+            val r = init.success?.reply
+            usbTracker.advance(
+                UsbConnectionState.ECU_REPLY,
+                r?.let { "KB1=%02X KB2=%02X".format(it.keyByte1, it.keyByte2) } ?: ""
             )
         }
+        finishUsbAttempt(outcome, "Interface: $identityText\n${init.describe()}")
+    }
+
+    /**
+     * Direct K-Line to 01-Engine for a cable that only echoes (transparent mode).
+     * Reuses the engine's read-only slow init; the verdict comes from what the
+     * ECU sends back, not from the port opening.
+     */
+    private suspend fun connectDirectKLine(dev: UsbDevice, probeDetail: String) {
+        usbTracker.advance(UsbConnectionState.ECU_INITIALIZATION, "direct K-Line 5-baud init, addr=01")
+        binding.tvSubStatus.text = "Cable is transparent; trying direct K-Line to 01-Engine..."
+        val opened = withContext(Dispatchers.IO) { transport.connectDumbRossTech(dev) }
+        if (!opened) {
+            finishUsbAttempt(
+                UsbConnectResult.SERIAL_OPEN_FAILED,
+                "Direct K-Line port could not be opened. Cable: ${transport.lastBootModeReport}\n$probeDetail"
+            )
+            return
+        }
+        val connected = engine.connect(targetDevice = dev, targetAddress = 0x01, allowRossTechDumbMode = true)
+        if (connected) {
+            val verification = engine.lastEcuVerificationPayload?.joinToString(" ") {
+                "%02X".format(it.toInt() and 0xFF)
+            } ?: "(missing)"
+            usbTracker.advance(UsbConnectionState.ECU_REPLY, "KWP frame from ECU 01")
+            usbTracker.advance(UsbConnectionState.SESSION_ACTIVE, "verification=[$verification]")
+            finishUsbAttempt(UsbConnectResult.CONNECTION_ESTABLISHED, "Path: direct K-Line\nVerification reply: $verification")
+            return
+        }
+        val slow = engine.lastSlowInitResult
+        val reason = when {
+            slow == null -> UsbConnectResult.ECU_NOT_RESPONDING
+            slow.isKw1281Keywords -> UsbConnectResult.UNSUPPORTED_PROTOCOL
+            slow.success -> UsbConnectResult.ECU_NOT_RESPONDING
+            slow.failureStage == "WAIT_SYNC_55" && !slow.klineEchoSeen -> UsbConnectResult.NO_KLINE_ADAPTER_RESPONSE
+            slow.failureStage == "WAIT_SYNC_55" -> UsbConnectResult.ECU_NOT_RESPONDING
+            else -> UsbConnectResult.INIT_TIMEOUT
+        }
+        val detail = (engine.lastError ?: "No verified response from ECU address 01") +
+            "\nCable: ${transport.lastBootModeReport}"
+        transport.disconnect()
+        finishUsbAttempt(reason, detail)
+    }
+
+    /** Records the outcome, updates the screen and offers the log through the share sheet. */
+    private fun finishUsbAttempt(result: UsbConnectResult, detail: String) {
+        usbTracker.finish(result, detail.replace('\n', ' '))
+        binding.tvSubStatus.text = result.title
+        AlertDialog.Builder(this)
+            .setTitle("${if (result.isFailure) "FAIL" else "OK"}: ${result.title}")
+            .setMessage(
+                usbTracker.progressText() + "\n\nEvidence: ${result.evidence}\n\n" + detail
+            )
+            .setPositiveButton("OK", null)
+            .setNeutralButton("SHARE DIAGNOSTICS") { _, _ -> shareDiagnosticLog() }
+            .show()
     }
 
     private fun stopPolling() {
@@ -2477,40 +2440,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Intelligent-mode M2 gate: the interface MCU wakes ECU 01 (opcode 0x84,
-     * spec V2 on audit/vcds-ghidra-proof, PROVEN_STATIC). The 0x55 sync and the
-     * key bytes in the reply are produced by the ECU itself, so they prove the
-     * engine answered. No diagnostic service is sent: the adapter framing for
-     * KWP services is UNKNOWN (quarantined by the red-team audit).
-     */
-    private suspend fun runSmartEngineWakeUp(adapter: HexB03Adapter, identityText: String) {
-        binding.tvSubStatus.text = "Smart mode: waking 01-Engine (0x84, ~3 s)..."
-        val init = adapter.init5BaudKLine(0x01)
-        DiagLog.i("B03_M2", "0x84 init result:\n${init.describe()}")
-
-        val woke = init.success?.reply
-        val title = if (woke != null) "01-ENGINE RESPONDED (SMART)" else "01-ENGINE NOT VERIFIED (SMART)"
-        binding.tvSubStatus.text = if (woke != null) "01-Engine answered 5-baud init" else "01-Engine not verified (smart)"
-        val verdict = if (woke != null) {
-            "ECU 01 answered: sync 55, KB1=%02X KB2=%02X (%s).".format(
-                woke.keyByte1, woke.keyByte2,
-                if (woke.keyByte2 == 0x8A) "KW1281" else "KWP2000"
-            ) + " M2 link proven. Reading groups needs the next step (data framing is not proven yet)."
-        } else {
-            "No 0x55 from the ECU. Check ignition ON and that the cable sits fully in the OBD port."
-        }
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(
-                "Interface: $identityText\n\n" +
-                    "5-baud init by cable (0x84):\n${init.describe()}\n\n" +
-                    verdict
-            )
-            .setPositiveButton("OK", null)
-            .show()
-    }
-
-    /**
      * Shares connection_diagnostics.log through the Android share sheet, so a
      * field connection attempt can be sent without configuring a GitHub token.
      */
@@ -2674,9 +2603,12 @@ private fun updateStatusUI() {
             }
             AppConnectionMode.USB_HARDWARE -> {
                 if (activeB03Adapter?.driver?.isConnected == true) {
-                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_green)
-                    binding.tvStatus.text = "Interface Connected (USB HEX)"
-                    binding.tvSubStatus.text = activeB03Identity ?: "FA24 interface responded"
+                    // The port being open proves only the cable link. Green is reserved for
+                    // a session, which the smart path cannot reach yet (KWP framing UNKNOWN).
+                    binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_yellow)
+                    binding.tvStatus.text = "USB HEX linked: ${usbTracker.result?.title ?: usbTracker.state.label}"
+                    binding.tvSubStatus.text =
+                        "${activeB03Identity ?: "FA24 interface"} | no diagnostic session"
                     binding.btnConnect.text = "Disconnect"
                     binding.btnConnect.backgroundTintList =
                         ColorStateList.valueOf(Color.parseColor("#30363D"))
@@ -2699,7 +2631,7 @@ private fun updateStatusUI() {
                     }
                     DiagState.ERROR -> {
                         binding.statusIndicator.setBackgroundResource(R.drawable.ic_status_dot_red)
-                        binding.tvStatus.text = "Error Connecting"
+                        binding.tvStatus.text = usbTracker.result?.takeIf { it.isFailure }?.title ?: "Error Connecting"
                         binding.tvSubStatus.text = engine.lastError ?: "USB timeout"
                         binding.btnConnect.text = "Retry"
                         binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
@@ -2730,8 +2662,11 @@ private fun updateStatusUI() {
                                 binding.btnConnect.text = "Probe Device"
                                 binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#8957E5"))
                             } else {
+                                val last = usbTracker.result?.takeIf { it.isFailure }
                                 binding.tvStatus.text = "Ready: ${identity.profileName}"
-                                binding.tvSubStatus.text = "Ignition ON -> Tap Connect"
+                                binding.tvSubStatus.text =
+                                    if (last != null) "Last attempt: ${last.title}. Ignition ON -> Tap Connect"
+                                    else "Ignition ON -> Tap Connect"
                                 binding.btnConnect.text = "Connect"
                                 binding.btnConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#388BFD"))
                             }

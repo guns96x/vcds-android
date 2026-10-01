@@ -4,6 +4,8 @@ import androidx.annotation.VisibleForTesting
 import com.vag.vcdsandroid.hardware.ConnectionParameters
 import com.vag.vcdsandroid.hardware.HardwareDriver
 import com.vag.vcdsandroid.hardware.UsbFtdiDriver
+import com.vag.vcdsandroid.usb.B03RxClassifier
+import com.vag.vcdsandroid.usb.UsbConnectResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -17,15 +19,15 @@ data class B03InterfaceProbeResult(
     val elapsedMs: Long
 )
 
-data class FiveBaudInitResult(
-    val success: Boolean,
-    val baudRate: Int,
-    val keyByte1: Int,
-    val keyByte2: Int,
-    val syncByte: Int,
-    val rawPayload: ByteArray,
-    val elapsedMs: Long
-)
+/**
+ * Probe failure that carries the classified cause and the raw bytes seen, so the
+ * screen and the log can say why instead of "probe failed".
+ */
+class B03ProbeException(
+    val result: UsbConnectResult,
+    message: String,
+    val rawRx: ByteArray = ByteArray(0)
+) : IllegalStateException(message)
 
 /**
  * Adapter transport for Ross-Tech HEX-USB+CAN / B03-V2 FTDI clones (VID 0403, PID FA24).
@@ -42,7 +44,13 @@ class HexB03Adapter(
     override val driver: HardwareDriver,
     val serialNumber: String? = null,
     val configuredBaudRate: Int? = null,
-    private val isDebugBuild: Boolean = com.vag.vcdsandroid.BuildConfig.DEBUG
+    private val isDebugBuild: Boolean = com.vag.vcdsandroid.BuildConfig.DEBUG,
+    /**
+     * HC::SetBoot rewrites the cable's persistent boot mode (a dumb-mode write
+     * survives re-plug and needed Windows VCDS to undo). Off unless a caller
+     * opts in explicitly; no code path in the app does.
+     */
+    private val allowBootModeWrites: Boolean = false
 ) : AdapterTransport {
 
     companion object {
@@ -72,6 +80,10 @@ class HexB03Adapter(
     }
 
     private var traceListener: ((direction: String, data: ByteArray) -> Unit)? = null
+
+    /** Receives one human-readable line per decision (retry, outcome, timing). */
+    @Volatile
+    var noteListener: ((String) -> Unit)? = null
     private val streamDecoder = HexB03StreamDecoder(expectedMarker = HexB03Constants.MARKER_CABLE)
 
     override val identity: AdapterIdentity
@@ -139,8 +151,13 @@ class HexB03Adapter(
 
             val openResult = openFa24Transport()
             if (openResult.isFailure) {
+                val cause = openResult.exceptionOrNull()
                 return@withContext Result.failure(
-                    openResult.exceptionOrNull() ?: IllegalStateException("Unable to open FA24 interface")
+                    B03ProbeException(
+                        if (cause is SecurityException) UsbConnectResult.PERMISSION_DENIED
+                        else UsbConnectResult.SERIAL_OPEN_FAILED,
+                        "FA24 open failed: ${cause?.message ?: "unable to open interface"}"
+                    )
                 )
             }
 
@@ -148,28 +165,28 @@ class HexB03Adapter(
                 opcode = HexB03Constants.OPCODE_PROBE,
                 timeoutMs = timeoutMs
             ) ?: run {
+                val failure = probeFailure("probe 0x02", HexB03Constants.OPCODE_PROBE)
                 close()
-                return@withContext Result.failure(
-                    IllegalStateException("FA24 probe timed out: no valid 0x02 reply")
-                )
+                return@withContext Result.failure(failure)
             }
 
             val identifyFrame = sendInterfaceCommand(
                 opcode = HexB03Constants.OPCODE_IDENTIFY,
                 timeoutMs = timeoutMs
             ) ?: run {
+                val failure = probeFailure("identify 0x04", HexB03Constants.OPCODE_IDENTIFY)
                 close()
-                return@withContext Result.failure(
-                    IllegalStateException("FA24 identify timed out: no valid 0x04 reply")
-                )
+                return@withContext Result.failure(failure)
             }
 
             val identityText = parseInterfaceIdentity(identifyFrame.payload)
                 ?: run {
                     close()
                     return@withContext Result.failure(
-                        IllegalStateException(
-                            "FA24 identify replied, but the ROSSTECH identity string was not present"
+                        B03ProbeException(
+                            UsbConnectResult.ADAPTER_IDENTIFY_FAILED,
+                            "FA24 identify replied, but the ROSSTECH identity string was not present",
+                            identifyFrame.payload
                         )
                     )
                 }
@@ -181,20 +198,18 @@ class HexB03Adapter(
                 opcode = HexB03Constants.OPCODE_STATUS,
                 timeoutMs = timeoutMs
             ) ?: run {
+                val failure = probeFailure("status 0x82", HexB03Constants.OPCODE_STATUS)
                 close()
-                return@withContext Result.failure(
-                    IllegalStateException("FA24 status query timed out: no valid 0x82 reply")
-                )
+                return@withContext Result.failure(failure)
             }
 
             val modeFrame = sendInterfaceCommand(
                 opcode = HexB03Constants.OPCODE_READ_BOOT,
                 timeoutMs = timeoutMs
             ) ?: run {
+                val failure = probeFailure("mode 0x0D", HexB03Constants.OPCODE_READ_BOOT)
                 close()
-                return@withContext Result.failure(
-                    IllegalStateException("FA24 mode query timed out: no valid 0x0D reply")
-                )
+                return@withContext Result.failure(failure)
             }
 
             // Success is intentionally left OPEN. This is the M1/M2 staging state:
@@ -257,6 +272,11 @@ class HexB03Adapter(
      * to the OBD-II K-Line (transceiver SI9243A/L9637D), allowing standard 10400-baud KWP slow-init.
      */
     suspend fun setLegacyDumbMode(timeoutMs: Long = 1000): Result<Boolean> = withContext(Dispatchers.IO) {
+        if (!allowBootModeWrites) {
+            return@withContext Result.failure(
+                IllegalStateException("setLegacyDumbMode is disabled: boot-mode writes are off by default")
+            )
+        }
         if (!driver.isConnected) {
             val opened = openFa24Transport()
             if (opened.isFailure) {
@@ -303,6 +323,11 @@ class HexB03Adapter(
      * Wire reply frame:   [0x4D, 0x04, 0xFE, 0xB7] (opcode 0xFE ACK).
      */
     suspend fun setIntelligentMode(timeoutMs: Long = 1000): Result<Boolean> = withContext(Dispatchers.IO) {
+        if (!allowBootModeWrites) {
+            return@withContext Result.failure(
+                IllegalStateException("setIntelligentMode is disabled: boot-mode writes are off by default")
+            )
+        }
         if (!driver.isConnected) {
             val opened = openFa24Transport()
             if (opened.isFailure) {
@@ -346,6 +371,11 @@ class HexB03Adapter(
      * 6. Strictly verifies transition with HC::ReadBoot (0x0D) expecting 0x02.
      */
     suspend fun forceIntelligentModeRescue(timeoutMs: Long = 1500): Result<Boolean> = withContext(Dispatchers.IO) {
+        if (!allowBootModeWrites) {
+            return@withContext Result.failure(
+                IllegalStateException("forceIntelligentModeRescue is disabled: boot-mode writes are off by default")
+            )
+        }
         try {
             if (!driver.isConnected) {
                 val opened = openFa24Transport()
@@ -437,106 +467,80 @@ class HexB03Adapter(
     }
 
     /**
-     * Executes the hardware-accelerated 5-baud wake-up sequence on the ATmega162 microcontroller (Opcode 0x84).
-     * Dispatched via VCDS HC::Init5Baud (0x14007E3B4).
-     *
-     * In Intelligent Mode, the MCU drives the K-line pin with exact 5-baud pulses, receives the ECU sync 0x55
-     * and KeyBytes KB1, KB2, and returns:
-     * [0x4D, 0x0A, 0x84, Baud0, Baud1, Baud2, Baud3, KB1, KB2, Checksum]
-     * where Baud0..Baud3 is a 32-bit little-endian integer (e.g. 0x000028A0 = 10400 bps),
-     * KB1/KB2 are the keyword bytes, and 0x55 sync byte is assigned locally per FUN_14007E3B4.
-     */
-    suspend fun init5Baud(address: Int = 0x01, timeoutMs: Long = 3500): Result<FiveBaudInitResult> = withContext(Dispatchers.IO) {
-        val started = System.currentTimeMillis()
-        if (!driver.isConnected) {
-            val opened = openFa24Transport()
-            if (opened.isFailure) {
-                return@withContext Result.failure(opened.exceptionOrNull() ?: IllegalStateException("Port not open"))
-            }
-        }
-
-        val payload = CandidateB03Command.Init5Baud.encode5BaudPayload(address)
-        val reply = sendInterfaceCommand(
-            opcode = HexB03Constants.OPCODE_INIT_5BAUD,
-            payload = payload,
-            expectedOpcode = HexB03Constants.OPCODE_INIT_5BAUD,
-            timeoutMs = timeoutMs
-        ) ?: return@withContext Result.failure(
-            IllegalStateException("HC::Init5Baud (0x84) timed out after ${timeoutMs}ms (no sync from ECU)")
-        )
-
-        if (reply.payload.size < 6) {
-            return@withContext Result.failure(
-                IllegalStateException("HC::Init5Baud returned short payload: ${reply.payload.size} bytes (expected >= 6)")
-            )
-        }
-
-        // Canonical FUN_14007e3b4:
-        // Bytes 0..3: 32-bit uint little endian baud rate (e.g. A0 28 00 00 = 10400 bps)
-        val b0 = reply.payload[0].toInt() and 0xFF
-        val b1 = reply.payload[1].toInt() and 0xFF
-        val b2 = reply.payload[2].toInt() and 0xFF
-        val b3 = reply.payload[3].toInt() and 0xFF
-        val baud = b0 or (b1 shl 8) or (b2 shl 16) or (b3 shl 24)
-        // Bytes 4..5: KeyBytes KB1, KB2
-        val kb1 = reply.payload[4].toInt() and 0xFF
-        val kb2 = reply.payload[5].toInt() and 0xFF
-        // Sync byte 0x55 is canonical per FUN_14007E3B4 (*(undefined4 *)(param_1 + 2) = 0x55)
-        val sync = 0x55
-
-        Result.success(
-            FiveBaudInitResult(
-                success = true,
-                baudRate = baud,
-                keyByte1 = kb1,
-                keyByte2 = kb2,
-                syncByte = sync,
-                rawPayload = reply.payload,
-                elapsedMs = System.currentTimeMillis() - started
-            )
-        )
-    }
-
-    /**
      * Smart-mode K-Line wake-up of [address] performed by the interface MCU
      * (opcode 0x84, see [Hex5BaudInit]). Requires a live link from [probeInterface].
      *
      * Read-only towards the car: the MCU sends the 5-baud address and completes
-     * the key-byte handshake; no diagnostic service is sent. Each address-byte
-     * variant is tried once and every reply is kept as evidence.
+     * the key-byte handshake; no diagnostic service is sent. The one canonical
+     * request is made up to [maxAttempts] times, only while the cable stays
+     * silent (a cable that echoed or answered will not behave differently the
+     * second time). Every reply is kept as evidence.
      */
-    suspend fun init5BaudKLine(address: Int = 0x01): Hex5BaudInitResult = withContext(Dispatchers.IO) {
-        val attempts = ArrayList<Hex5BaudAttempt>(2)
-        for (addressByte in Hex5BaudInit.addressByteVariants(address)) {
+    suspend fun init5BaudKLine(
+        address: Int = 0x01,
+        maxAttempts: Int = 2,
+        replyTimeoutMs: Long = Hex5BaudInit.TIMEOUT_MS + 300L,
+        retryGapMs: Long = 2_600L
+    ): Hex5BaudInitResult =
+        withContext(Dispatchers.IO) {
+            val attempts = ArrayList<Hex5BaudAttempt>(maxAttempts)
+            val addressByte = Hex5BaudInit.specAddressByte(address)
             val request = Hex5BaudInit.encodeRequest(addressByte)
-            val (match, frames, raw) = sendAndCollect(
-                request = request,
-                isReply = { it.opcode == Hex5BaudInit.OPCODE_5BAUD_INIT },
-                timeoutMs = Hex5BaudInit.TIMEOUT_MS + 300L
-            )
-            val reply = match?.let { Hex5BaudInit.parseReply(it.payload) }
-            attempts += Hex5BaudAttempt(addressByte, request, frames, raw, reply)
-            if (reply != null) break
-            // ISO 9141 W5: keep the K-Line idle before the next wake-up attempt.
-            delay(2_600)
+            for (n in 1..maxAttempts) {
+                val startedNs = System.nanoTime()
+                val (match, frames, raw) = sendAndCollect(
+                    request = request,
+                    isReply = { it.opcode == Hex5BaudInit.OPCODE_5BAUD_INIT },
+                    timeoutMs = replyTimeoutMs,
+                    flushFirst = true
+                )
+                val reply = match?.let { Hex5BaudInit.parseReply(it.payload) }
+                val attempt = Hex5BaudAttempt(addressByte, request, frames, raw, reply)
+                attempts += attempt
+                noteListener?.invoke(
+                    "init5baud attempt=$n/$maxAttempts timeout=${replyTimeoutMs}ms " +
+                        "elapsed=${(System.nanoTime() - startedNs) / 1_000_000L}ms " +
+                        "addr=%02X outcome=${attempt.outcome().name}".format(addressByte)
+                )
+                // Only a silent cable is worth asking again.
+                val silent = reply == null && frames.isEmpty() && raw.isEmpty()
+                if (!silent || n == maxAttempts) break
+                // ISO 9141 W5: keep the K-Line idle before the next wake-up attempt.
+                delay(retryGapMs)
+            }
+            Hex5BaudInitResult(address, attempts)
         }
-        Hex5BaudInitResult(address, attempts)
-    }
 
-    /** Writes [request] and keeps every decoded frame and raw byte until [isReply] matches. */
+    /**
+     * Writes [request] and keeps every decoded frame and raw byte until [isReply]
+     * matches or [timeoutMs] expires. With [flushFirst], stale bytes from an
+     * earlier exchange are dropped first, so an old frame can never be taken for
+     * this reply.
+     */
     private suspend fun sendAndCollect(
         request: ByteArray,
         isReply: (HexB03Frame) -> Boolean,
-        timeoutMs: Long
+        timeoutMs: Long,
+        flushFirst: Boolean = false
     ): Triple<HexB03Frame?, List<HexB03Frame>, ByteArray> {
         val frames = ArrayList<HexB03Frame>()
         val raw = java.io.ByteArrayOutputStream()
+        // The proven M1 probe sequence runs without a flush; only the 0x84 wake-up
+        // asks for one, because a stale frame there could be taken for the ECU answer.
+        if (flushFirst) {
+            driver.purge()
+            streamDecoder.reset()
+        }
         traceListener?.invoke("TX", request)
-        if (driver.write(request) != request.size) return Triple(null, frames, raw.toByteArray())
+        if (driver.write(request) != request.size) {
+            lastExchange = B03Exchange(request, raw.toByteArray(), frames)
+            return Triple(null, frames, raw.toByteArray())
+        }
 
         val deadlineNs = System.nanoTime() + timeoutMs * 1_000_000L
         val readBuffer = ByteArray(512)
-        while (System.nanoTime() < deadlineNs) {
+        var match: HexB03Frame? = null
+        while (match == null && System.nanoTime() < deadlineNs) {
             val remainingMs = ((deadlineNs - System.nanoTime()) / 1_000_000L).coerceAtLeast(1L)
             val count = driver.read(readBuffer, minOf(100L, remainingMs))
             if (count < 0) break
@@ -549,10 +553,10 @@ class HexB03Adapter(
             if (raw.size() < 256) raw.write(chunk, 0, minOf(chunk.size, 256 - raw.size()))
             val decoded = streamDecoder.feed(chunk)
             frames += decoded
-            val match = decoded.firstOrNull(isReply)
-            if (match != null) return Triple(match, frames, raw.toByteArray())
+            match = decoded.firstOrNull(isReply)
         }
-        return Triple(null, frames, raw.toByteArray())
+        lastExchange = B03Exchange(request, raw.toByteArray(), frames)
+        return Triple(match, frames, raw.toByteArray())
     }
 
     suspend fun openFa24Transport(): Result<Unit> {
@@ -592,6 +596,12 @@ class HexB03Adapter(
         }
     }
 
+    /** What the most recent command wrote and received, for failure classification. */
+    class B03Exchange(val request: ByteArray, val raw: ByteArray, val frames: List<HexB03Frame>)
+
+    @Volatile
+    private var lastExchange: B03Exchange? = null
+
     private suspend fun sendInterfaceCommand(
         opcode: Byte,
         payload: ByteArray = ByteArray(0),
@@ -603,31 +613,33 @@ class HexB03Adapter(
             opcode = opcode,
             payload = payload
         )
-        traceListener?.invoke("TX", request)
+        return sendAndCollect(
+            request = request,
+            isReply = { it.opcode == expectedOpcode },
+            timeoutMs = timeoutMs
+        ).first
+    }
 
-        val written = driver.write(request)
-        if (written != request.size) return null
-
-        val deadlineNs = System.nanoTime() + timeoutMs * 1_000_000L
-        val readBuffer = ByteArray(512)
-
-        while (System.nanoTime() < deadlineNs) {
-            val remainingMs = ((deadlineNs - System.nanoTime()) / 1_000_000L)
-                .coerceAtLeast(1L)
-            val count = driver.read(readBuffer, minOf(100L, remainingMs))
-            if (count < 0) return null
-            if (count == 0) {
-                delay(2)
-                continue
-            }
-
-            val chunk = readBuffer.copyOf(count)
-            traceListener?.invoke("RX", chunk)
-            val frames = streamDecoder.feed(chunk)
-            val matched = frames.firstOrNull { it.opcode == expectedOpcode }
-            if (matched != null) return matched
+    /** Builds the typed failure for a probe step that got no valid reply. */
+    private fun probeFailure(step: String, expectedOpcode: Byte): B03ProbeException {
+        val ex = lastExchange
+        val result = if (ex == null) {
+            UsbConnectResult.INTERFACE_NOT_POWERED
+        } else {
+            B03RxClassifier.classifyNoReply(
+                stage = B03RxClassifier.Stage.INTERFACE_PROBE,
+                request = ex.request,
+                raw = ex.raw,
+                frames = ex.frames,
+                expectedOpcode = expectedOpcode
+            )
         }
-        return null
+        val rawHex = ex?.raw?.joinToString(" ") { "%02X".format(it.toInt() and 0xFF) }?.ifEmpty { "none" } ?: "none"
+        return B03ProbeException(
+            result,
+            "FA24 $step: ${result.title} (rx=[$rawHex])",
+            ex?.raw ?: ByteArray(0)
+        )
     }
 
     private fun parseInterfaceIdentity(payload: ByteArray): String? {

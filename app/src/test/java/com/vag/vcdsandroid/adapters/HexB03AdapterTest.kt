@@ -344,7 +344,7 @@ class HexB03AdapterTest {
                 )
             )
         }
-        val adapter = HexB03Adapter(driver)
+        val adapter = HexB03Adapter(driver, allowBootModeWrites = true)
 
         val result = adapter.setLegacyDumbMode()
         assertTrue(result.isSuccess)
@@ -374,7 +374,7 @@ class HexB03AdapterTest {
                 )
             )
         }
-        val adapter = HexB03Adapter(driver)
+        val adapter = HexB03Adapter(driver, allowBootModeWrites = true)
 
         val result = adapter.setLegacyDumbMode()
         assertTrue(result.isSuccess)
@@ -398,7 +398,7 @@ class HexB03AdapterTest {
             )
             // No reply to 0x0E
         }
-        val adapter = HexB03Adapter(driver)
+        val adapter = HexB03Adapter(driver, allowBootModeWrites = true)
 
         val result = adapter.setLegacyDumbMode(timeoutMs = 100)
         assertTrue(result.isFailure)
@@ -432,7 +432,7 @@ class HexB03AdapterTest {
                 )
             )
         }
-        val adapter = HexB03Adapter(driver)
+        val adapter = HexB03Adapter(driver, allowBootModeWrites = true)
 
         val result = adapter.setIntelligentMode()
         assertTrue(result.isSuccess)

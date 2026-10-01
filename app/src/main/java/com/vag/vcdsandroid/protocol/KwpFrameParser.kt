@@ -61,30 +61,53 @@ object KwpFrameParser {
      * echo: a checksum-valid frame from another controller must not prove that the
      * requested ECU answered.
      */
-    fun extractPayload(buffer: ByteArray, count: Int, expectedSource: Int?): ByteArray? {
-        if (count < HEADER_LEN + 1) return null
-        return scan(buffer, count, requireAddressedToTester = true, expectedSource = expectedSource)
-            ?: scan(buffer, count, requireAddressedToTester = false, expectedSource = expectedSource)
+    fun extractPayload(buffer: ByteArray, count: Int, expectedSource: Int?): ByteArray? =
+        extractAll(buffer, count, expectedSource, limit = 1).firstOrNull()
+
+    /**
+     * Extracts every payload attributable to the ECU, in the order the frames
+     * appear, for the case where one USB packet holds several frames (for
+     * example a 0x7F..0x78 "response pending" followed by the real answer).
+     *
+     * Frames never overlap: after a valid frame the scan resumes after its
+     * checksum, so bytes inside a payload are not re-read as a new header.
+     * The strict pass (addressed to the tester) wins; the tolerant pass runs
+     * only when the strict one found nothing. Both reject tester echo.
+     *
+     * Pure and bounded: the work is linear in [count], with no state kept
+     * between calls and no wait, so an incomplete tail simply yields nothing.
+     *
+     * @param limit stop after this many payloads (0 = no limit)
+     */
+    fun extractAll(buffer: ByteArray, count: Int, expectedSource: Int?, limit: Int = 0): List<ByteArray> {
+        if (count < HEADER_LEN + 1) return emptyList()
+        val n = minOf(count, buffer.size)
+        val strict = scan(buffer, n, requireAddressedToTester = true, expectedSource = expectedSource, limit = limit)
+        if (strict.isNotEmpty()) return strict
+        return scan(buffer, n, requireAddressedToTester = false, expectedSource = expectedSource, limit = limit)
     }
 
     private fun scan(
         buffer: ByteArray,
         count: Int,
         requireAddressedToTester: Boolean,
-        expectedSource: Int?
-    ): ByteArray? {
-        for (i in 0..count - (HEADER_LEN + 1)) {
+        expectedSource: Int?,
+        limit: Int
+    ): List<ByteArray> {
+        val found = ArrayList<ByteArray>(2)
+        var i = 0
+        while (i <= count - (HEADER_LEN + 1)) {
             val fmt = buffer[i].toInt() and 0xFF
-            if ((fmt and 0xC0) != 0x80) continue
+            if ((fmt and 0xC0) != 0x80) { i++; continue }
 
             val source = buffer[i + 2].toInt() and 0xFF
             // Our own transmission echoed back. Never a reply, in either pass.
-            if (source == TESTER_ADDRESS) continue
-            if (expectedSource != null && source != (expectedSource and 0xFF)) continue
+            if (source == TESTER_ADDRESS) { i++; continue }
+            if (expectedSource != null && source != (expectedSource and 0xFF)) { i++; continue }
 
             if (requireAddressedToTester) {
                 val target = buffer[i + 1].toInt() and 0xFF
-                if (target != TESTER_ADDRESS) continue
+                if (target != TESTER_ADDRESS) { i++; continue }
             }
 
             // length == 0 selects the extended form, where the real length lives
@@ -96,26 +119,28 @@ object KwpFrameParser {
                 headerLen = HEADER_LEN
                 length = inlineLength
             } else {
-                if (i + HEADER_LEN >= count) continue
+                if (i + HEADER_LEN >= count) { i++; continue }
                 headerLen = HEADER_LEN + 1
                 length = buffer[i + HEADER_LEN].toInt() and 0xFF
-                if (length == 0) continue
+                if (length == 0) { i++; continue }
             }
 
             val totalMsgLen = length + headerLen + 1
-            if (i + totalMsgLen > count) continue
+            if (i + totalMsgLen > count) { i++; continue }
 
             var calculated = 0
             for (k in i until i + totalMsgLen - 1) {
                 calculated += (buffer[k].toInt() and 0xFF)
             }
-            if ((calculated and 0xFF) != (buffer[i + totalMsgLen - 1].toInt() and 0xFF)) continue
+            if ((calculated and 0xFF) != (buffer[i + totalMsgLen - 1].toInt() and 0xFF)) { i++; continue }
 
             val payload = ByteArray(length)
             System.arraycopy(buffer, i + headerLen, payload, 0, length)
-            return payload
+            found += payload
+            if (limit > 0 && found.size >= limit) break
+            i += totalMsgLen
         }
-        return null
+        return found
     }
 
     /**

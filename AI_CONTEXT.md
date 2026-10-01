@@ -11,6 +11,42 @@
 - Current active milestone: **M2 = reliable 01-Engine connection over dumb K-Line**, with UI/features frozen.
 - M3 measuring groups remain disabled until M2 produces a checksum-valid KWP reply from ECU source address `0x01`.
 
+## M2 audit (2026-10-01, master 7bb956a) — fixed in code, UNVERIFIED on the car
+
+Audit of the code that actually ran, not of the notes. Master (a consolidation merge) had drifted from the notes above: the notes described the `ccr-6bd6a0fe-368cq3` build, the code still had the older flow.
+
+| # | Finding in master | Evidence | Fix |
+|---|---|---|---|
+| 1 | The live "01-ENGINE (0x84)" button called a second, older `init5Baud()`. It sent `53 07 84 01 00 03 D2` (payload `[addr,00,03]`) instead of `53 07 84 03 01 00 D2`. XOR is order-blind, so the checksum is equal and the old unit test passed. | code | Removed `init5Baud()` and `CandidateB03Command.Init5Baud`; `Hex5BaudInit` is the only encoder. Test pins the byte order. |
+| 2 | The same function demanded >= 6 payload bytes and read a 4-byte LE baud. The documented reply carries 5 (`BH BL KB1 KB2 55`), so a correct reply would have been rejected as "short payload". | code vs spec | Gone with #1. `parseReply` now requires exactly 5 bytes and sync `55`. |
+| 3 | A failed probe automatically ran `forceIntelligentModeRescue()`: DTR reset pulse plus blind `SetBoot(2)`. A "RESCUE SMART" button did the same. | code | No code path writes the boot mode. `setLegacyDumbMode`, `setIntelligentMode`, `forceIntelligentModeRescue` return failure unless the adapter is built with `allowBootModeWrites = true` (default false; the app never sets it). |
+| 4 | `runSmartEngineWakeUp()` (the correct 0x84 path) was dead code. | grep | The connect flow now calls it. |
+| 5 | The screen turned green "Interface Connected" as soon as the serial port was open, with no ECU contact. | code | Green is reserved for a session. The smart path shows yellow and the real result. |
+| 6 | The `0x81` second attempt contradicted the KB (RETRACTED, never revive). | KB vs code | Removed; the single canonical request is repeated once, only after total silence. |
+| 7 | No separate reason for echo-only, silent cable, bad checksum, unexpected frame. | code | `usb/UsbConnectionState.kt`: `UsbConnectResult` (13 causes), `B03RxClassifier`, `UsbConnectionTracker` (forward-only states, logged as `USB_STATE`). |
+| 8 | Stale cable bytes could be matched to the 0x84 reply. | code | The 0x84 exchange flushes the FTDI buffers and the stream decoder first. The proven M1 probe sequence is unchanged (no flush added). |
+
+Checked and found sound: `KLineByteReader` (256-byte packet reads, queue), extended-length parsing, tester-echo rejection (source `F1`), checksum validation, `readKwpPayload` (bounded 512 bytes, deadline-driven, no endless loop), `HexB03StreamDecoder` (drops the S-frame echo because it expects marker `4D`). `KwpFrameParser.extractAll` was added for several frames in one packet.
+
+Open (not changed): HexB03Adapter has no mutex around concurrent commands; the UI serialises them through `connectInProgress` and the disabled button. `readMeasuringGroup` treats `7F xx 78` (response pending) as an unexpected reply; it should wait for the next frame before M3.
+
+Conflicts between notes, resolved toward the canonical KB: ECU 01 address byte `01` (not `81`); `0x55` in the 0x84 reply may be written by the cable itself (UNKNOWN), so `0x55` + plausible key bytes means only "ECU answered 5-baud init" (`ECU_INIT_ANSWERED`), never "connected". Only a checksum-valid KWP frame from source `01` (direct K-Line path) reaches `CONNECTION_ESTABLISHED`.
+
+### Next car test (stationary, ignition ON, engine off)
+
+1. Phone: install the debug APK, open the app, accept the USB permission dialog. Plug the cable into the phone first, then into the OBD port. The app waits for the cable and connects by itself; Connect also works.
+2. Watch `adb logcat -s USB_STATE B03_M1 B03_M2 VCDS_DUMB VCDS_SLOW_INIT`, or share the file with "SHARE DIAGNOSTICS" in the result dialog (or long-press the upload button).
+3. Expected `B03_M1` lines: `TX 53 04 02 ..`/`RX 4D ..` (probe), identify reply with `ROSSTECH`, then `TX 53 07 84 03 01 00 D2`.
+4. Reading the result:
+   - `RESULT ECU_INIT_ANSWERED`, `RX 4D 09 84 .. .. KB1 KB2 55 ..` with KB1/KB2 not `00 00`/`FF FF`: PASS for the 0x84 step. Not yet a session.
+   - `RESULT ADAPTER_ECHO_ONLY` and then `VCDS_SLOW_INIT`: the cable is transparent; `CONNECTION_ESTABLISHED` with a `VCDS_PROBE ... verified by ECU KWP frame` line is PASS for M2.
+   - `INTERFACE_NOT_POWERED`: no byte at all. Plug phone first, then car; ignition ON.
+   - `INIT_TIMEOUT`: probe worked, 0x84 got no frame in 3.6 s (twice). FAIL; send the log.
+   - `ECU_NOT_RESPONDING`: the cable replied on 0x84 without sync. FAIL; send the log (the reply byte is new evidence).
+   - `UNSUPPORTED_PROTOCOL`: KB `01 8A` (KW1281).
+   - `INVALID_CHECKSUM` / `UNEXPECTED_ADAPTER_RESPONSE`: FAIL; the raw bytes are in the dialog and the log.
+5. Whatever happens, no `0E` (SetBoot) frame may appear in the log. If one does, that is a bug.
+
 ## M2 code fixes (2026-10-01) — not yet tested on the car
 
 Found by code review, not by a car log. Status: **UNVERIFIED on hardware**.
@@ -32,7 +68,7 @@ Found by code review, not by a car log. Status: **UNVERIFIED on hardware**.
 
 - The user's own `C:\Ross-Tech\VCDS\VCDS.CFG` (as reported) has `HexIntel=1`, `ForceK=0`, so VCDS drives this cable in **intelligent mode**, not dumb.
 - Branch `reverse/vcds-ghidra` (306ba40, `reverse/IMPLEMENTATION_SPEC.md`) documents opcode `0x84` (HC::Init5Baud): the cable MCU performs the 5-baud wake-up itself. Request `53 07 84 03 <addr> 00 xx`, reply `4D 09 84 BH BL KB1 KB2 55 xx`, timeout 3300 ms. Status: **PROVEN_STATIC only**.
-- Spec defects found on review: the address-parity rule is self-contradictory (0x01->0x81 but 0x03 unchanged, which is even parity), so the app tries `0x81` and then `0x01`. Opcode `0x85` is named differently in two reverse docs. The group 011 formula types are mislabeled. The app keeps its scaler-driven decoder.
+- Spec defects found on review: the address-parity rule is self-contradictory (0x01->0x81 but 0x03 unchanged, which is even parity), the canonical KB (VCDS_AI_ENTRYPOINT.md section 5) retracts `0x81`, so the app sends only `0x01`. Opcode `0x85` is named differently in two reverse docs. The group 011 formula types are mislabeled. The app keeps its scaler-driven decoder.
 - The app now runs intelligent mode first: probe `0x02/0x04`, then `0x84` for 01, then a read-only `1A 9B` as an S-frame. The phone **never sends SetBoot** anymore. An earlier build's `SetBoot(0)` left this cable booting in dumb mode, and Windows VCDS Options -> Test with "Boot in intelligent mode" ticked restores it.
 
 ### Cable power and plug order (2026-10-01, screenshots 13:39)
@@ -50,7 +86,7 @@ Found by code review, not by a car log. Status: **UNVERIFIED on hardware**.
 ### Spec V2 adopted, "10400 baud bug" claim rejected (2026-10-01)
 
 - The claim that ReadBoot was sent at 10400 baud is FALSE. In 36ffc51 the port opens at 10400, then switches 9600 -> 19200 -> 115200 before ReadBoot. The 13:45 restore screenshot shows 115200 and 9600+DTR returning only the echo.
-- Adopted from `audit/vcds-ghidra-proof` `reverse/IMPLEMENTATION_SPEC_V2.md` / `RED_TEAM_REVIEW.md`: the 0x84 address byte for 01 is `0x01` (0x81 kept as fallback), and the request is `53 07 84 03 01 00 D2`. Sending KWP services as raw adapter opcodes (`21 0B`, `1A 9B`, `3E`) is UNKNOWN and quarantined, so the app no longer sends them. The smart M2 gate is the ECU's own `55` + KB1/KB2 in the 0x84 reply.
+- Adopted from `audit/vcds-ghidra-proof` `reverse/IMPLEMENTATION_SPEC_V2.md` / `RED_TEAM_REVIEW.md`: the 0x84 address byte for 01 is `0x01` (the `0x81` fallback was removed on 2026-10-01 because the KB lists it as RETRACTED), and the request is `53 07 84 03 01 00 D2`. Sending KWP services as raw adapter opcodes (`21 0B`, `1A 9B`, `3E`) is UNKNOWN and quarantined, so the app no longer sends them. The smart M2 gate is the ECU's own `55` + KB1/KB2 in the 0x84 reply.
 - The restore attempt also tries plain 9600 (the VCDS open baud per spec V2).
 
 Next car test, stationary, ignition on: Connect, then save `connection_diagnostics.log` with the `VCDS_DUMB`, `VCDS_SLOW_INIT` and `B03_M2` lines.
