@@ -21,6 +21,13 @@ Found by code review, not by a car log. Status: **UNVERIFIED on hardware**.
 4. **DTR.** Neither DTR level is proven for dumb mode. The M1 link that works uses DTR clear, and DTR# is believed to drive ATmega reset (INFERRED). Attempts 1 and 2 now use DTR clear and attempt 3 uses DTR set. The log line `VCDS_SLOW_INIT ... dtr=ON|OFF klineEcho=true|false` records which level was used.
 5. Failure messages now separate these cases: no K-Line echo (cable not passing K-Line), echo but no sync (ignition off or ECU not on K-Line), KW1281 keywords `01 8A` (not supported, no retry), and a W4 miss.
 
+### Car runs 2026-10-01 (screenshots, build 7e84ab1 / 36ffc51)
+
+- After phone-side `SetBoot(0)` the smart probe `0x02` stays silent, also after a full re-plug (USB first, then OBD).
+- `HC::ReadBoot` gets no frame. RX holds exactly our request `53 04 0D 5A` (115200 baud), so the cable loops our TX back unchanged. The cable is now **transparent (dumb) and persists across re-plug**. Still UNVERIFIED: whether that loopback comes from the real OBD pin-7 K-Line or from inside the cable.
+- Five-baud init to `01`, with DTR off/off/on: echo `[00 00]`, which matches the two LOW periods of address `0x01` in 7O1. No `0x55` sync. The control init to `0x33` also gets no sync.
+- Open question: does the BREAK waveform reach the car's K-Line? Test it with the cable unplugged from OBD. If echo `[00 00]` and `53 04 0D 5A` still appear, the loopback is internal.
+
 Next car test, stationary, ignition on: Connect, then save `connection_diagnostics.log` with the `VCDS_DUMB`, `VCDS_SLOW_INIT` and `B03_M2` lines.
 
 Read this before changing the project.
