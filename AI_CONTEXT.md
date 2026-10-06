@@ -55,6 +55,12 @@ Found by code review, not by a car log. Status: **UNVERIFIED on hardware**.
 
 Next car test, stationary, ignition on: Connect, then save `connection_diagnostics.log` with the `VCDS_DUMB`, `VCDS_SLOW_INIT` and `B03_M2` lines.
 
+### Windows VCDS on the phone via QEMU (2026-10-06)
+
+- `tools/qemu-android/` (guide: `README.uk.md`): Termux QEMU x86_64 runs Windows 7 SP1 **x64** and gets the FA24 through `termux-usb` fd -> `-add-fd` -> `usb-host,hostdevice=/dev/fdset/1`, with an LD_PRELOAD shim that turns off libusb device discovery.
+- x64 is required: `VCDS.exeL` 26.3 and `RTUS64.dll` are x64 (`pe_manifest.json`). A Windows 7 x86 guest cannot run this VCDS.
+- Purpose: one-time intelligent-mode restore (VCDS Options -> Test) without a PC. Status: **UNVERIFIED on the phone**; first gate is `usb-smoke-test.sh` (`SMOKE PASS`/`FAIL`).
+
 Read this before changing the project.
 
 ## Ground truth
