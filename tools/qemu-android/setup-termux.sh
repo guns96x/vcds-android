@@ -15,7 +15,7 @@ qemu-system-x86_64 --version | head -1
 qemu-system-x86_64 -device help 2>/dev/null | grep -q '"usb-host"' \
     && echo "usb-host: є" || echo "УВАГА: цей QEMU зібрано без usb-host — проброс кабелю не спрацює"
 
-if ! termux-usb -l >/dev/null 2>&1; then
+if ! timeout 15 termux-usb -l >/dev/null 2>&1; then
     echo "УВАГА: termux-usb не відповідає. Постав застосунок Termux:API з того ж джерела, що й Termux (F-Droid або GitHub)."
 fi
 

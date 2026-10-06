@@ -12,7 +12,13 @@ export QA_MODE
 
 DEV="${2:-}"
 if [ -z "$DEV" ]; then
-    mapfile -t DEVS < <(termux-usb -l | tr -d '[]", ' | grep '^/dev/bus/usb/' || true)
+    echo "Шукаю USB-пристрої (termux-usb -l)..."
+    LIST="$(timeout 15 termux-usb -l)" || {
+        [ $? -eq 124 ] && qa_die "termux-usb -l висить 15 с: застосунок Termux:API не відповідає (не встановлений, з іншого джерела, ніж Termux, або заблокований енергозбереженням)"
+        qa_die "termux-usb -l завершився з помилкою"
+    }
+    echo "$LIST"
+    mapfile -t DEVS < <(echo "$LIST" | tr -d '[]", ' | grep '^/dev/bus/usb/' || true)
     case "${#DEVS[@]}" in
         0) qa_die "Android не бачить жодного USB-пристрою. Перевір OTG-перехідник і що кабель вставлено в телефон." ;;
         1) DEV="${DEVS[0]}" ;;
